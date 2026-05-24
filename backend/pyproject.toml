@@ -1,0 +1,23 @@
+[project]
+name = "kwdt-data-lens-backend"
+version = "0.1.0"
+description = "MVP backend for KWDT Data Lens."
+requires-python = ">=3.12"
+dependencies = [
+    "Django>=5.0,<6.0",
+    "djangorestframework>=3.15,<4.0",
+    "psycopg[binary]>=3.1,<4.0",
+    "gunicorn>=22.0,<24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
