@@ -35,6 +35,20 @@ export interface DataEnvelope<T> {
   errors: ApiErrorItem[];
 }
 
+export interface AuthUser {
+  id: number;
+  username: string;
+  email: string;
+  is_staff: boolean;
+  is_superuser: boolean;
+  roles: string[];
+}
+
+export interface LoginResponse {
+  token: string;
+  user: AuthUser;
+}
+
 export interface Community {
   id: number;
   name: string;

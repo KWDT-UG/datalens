@@ -2,6 +2,7 @@ import {
   BellIcon,
   ClipboardListIcon,
   CogIcon,
+  OutlinedArrowAltCircleRightIcon,
   CubesIcon,
   HomeIcon,
   SearchIcon,
@@ -9,9 +10,11 @@ import {
   UserCircleIcon,
   UsersIcon
 } from '@patternfly/react-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { NavLink, Outlet } from 'react-router-dom';
 
 import { useHealthQuery } from '../api/queries';
+import { useAuth } from '../auth/AuthContext';
 
 const navItems = [
   { label: 'Dashboard', to: '/dashboard', icon: HomeIcon },
@@ -32,6 +35,14 @@ function ApiStatus() {
 }
 
 export function AppShell() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+
+  async function handleLogout() {
+    await auth.logout();
+    queryClient.clear();
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Primary navigation">
@@ -56,10 +67,13 @@ export function AppShell() {
           </label>
           <div className="topbar__user">
             <ApiStatus />
-            <span>User</span>
+            <span>{auth.user?.username ?? 'User'}</span>
             <NavLink to="/profile" aria-label="Open profile">
               <UserCircleIcon />
             </NavLink>
+            <button className="icon-button" type="button" onClick={handleLogout} aria-label="Sign out" title="Sign out">
+              <OutlinedArrowAltCircleRightIcon />
+            </button>
           </div>
         </header>
         <main className="workspace__content">

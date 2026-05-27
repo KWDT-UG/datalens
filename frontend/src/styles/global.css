@@ -146,6 +146,41 @@ a {
   color: #e8e8e8;
 }
 
+.topbar__user .icon-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.auth-loading,
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.login-panel {
+  display: grid;
+  width: min(420px, 100%);
+  gap: 24px;
+  padding: 32px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.login-panel__eyebrow {
+  margin-bottom: 8px;
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.login-form {
+  display: grid;
+  gap: 18px;
+}
+
 .api-status {
   display: inline-flex;
   align-items: center;
