@@ -1,6 +1,20 @@
 import type { ApiErrorItem } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+const AUTH_TOKEN_KEY = 'datalens.authToken';
+export const UNAUTHORIZED_EVENT = 'datalens:unauthorized';
+
+export function getAuthToken() {
+  return window.localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token: string) {
+  window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+export function clearAuthToken() {
+  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+}
 
 export class ApiClientError extends Error {
   status: number;
@@ -64,10 +78,12 @@ async function apiRequest<T, TBody = never>(
   path: string,
   { body, method = 'GET', params }: ApiRequestOptions<TBody>
 ): Promise<T> {
+  const token = getAuthToken();
   const response = await fetch(buildUrl(path, params), {
     method,
     headers: {
       Accept: 'application/json',
+      ...(token ? { Authorization: `Token ${token}` } : {}),
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' })
     },
     body: body === undefined ? undefined : JSON.stringify(body)
@@ -76,6 +92,10 @@ async function apiRequest<T, TBody = never>(
   const payload = response.status === 204 ? null : await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearAuthToken();
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    }
     const errors = extractErrors(payload);
     const message = errors[0]?.detail ?? `Request failed with status ${response.status}`;
     throw new ApiClientError(message, response.status, errors);
