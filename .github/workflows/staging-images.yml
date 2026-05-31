@@ -1,16 +1,13 @@
 name: Staging Images
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
   workflow_dispatch:
 
 env:
-  DOCKER_IMAGE_REPOSITORY: ${{ vars.DOCKER_IMAGE_REPOSITORY }}
+  DOCKER_IMAGE_REPOSITORY: ${{ vars.DOCKER_IMAGE_REPOSITORY || secrets.DOCKER_IMAGE_REPOSITORY }}
 
 jobs:
   backend-checks:
@@ -73,7 +70,7 @@ jobs:
     needs:
       - backend-checks
       - frontend-checks
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Check out repository
@@ -82,10 +79,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Validate Docker image configuration
+        run: |
+          if [ -z "$DOCKER_IMAGE_REPOSITORY" ]; then
+            echo "DOCKER_IMAGE_REPOSITORY must be set as a repository variable or secret."
+            exit 1
+          fi
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Generate Docker metadata
@@ -127,7 +131,7 @@ jobs:
     needs:
       - backend-checks
       - frontend-checks
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Check out repository
@@ -136,10 +140,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Validate Docker image configuration
+        run: |
+          if [ -z "$DOCKER_IMAGE_REPOSITORY" ]; then
+            echo "DOCKER_IMAGE_REPOSITORY must be set as a repository variable or secret."
+            exit 1
+          fi
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Generate Docker metadata
