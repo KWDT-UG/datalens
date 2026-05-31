@@ -237,3 +237,20 @@ updates enabled. Use an `Anytime` maintenance window if staging should redeploy
 as soon as Railway detects the new pushed tag. Production should remain
 manually promoted to a specific immutable `*-sha-<git-sha>` tag or image digest
 from a known-good staging run.
+
+The staging workflow publishes the backend image before the frontend image.
+This lets Railway redeploy the backend first, then restart the frontend Nginx
+proxy after the backend's private-network address has settled.
+
+The backend image starts Gunicorn with:
+
+```bash
+gunicorn config.wsgi:application --bind [::]:${PORT:-8000}
+```
+
+On Railway, make sure the frontend service's `BACKEND_UPSTREAM` points to the
+backend service's internal hostname and the same port, for example:
+
+```text
+BACKEND_UPSTREAM=http://backend.railway.internal:8000
+```
