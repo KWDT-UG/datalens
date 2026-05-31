@@ -15,3 +15,5 @@ RUN pip install --no-cache-dir -r requirements/dev.txt
 COPY . .
 
 EXPOSE 8000
+
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind [::]:${PORT:-8000}"]
