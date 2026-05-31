@@ -40,6 +40,8 @@ services:
     build:
       context: ./frontend
       target: production
+    environment:
+      BACKEND_UPSTREAM: ${BACKEND_UPSTREAM:-http://backend:8000}
     profiles:
       - production
     ports:
