@@ -195,21 +195,28 @@ Makefile   local Docker Compose workflow commands
 
 ## Staging Images
 
-Merges to `main` run the GitHub Actions workflow in
-`.github/workflows/staging-images.yml`. The workflow runs backend and frontend
-checks first, then publishes Docker Hub images only after those checks pass.
+Pull requests to `main` run the GitHub Actions workflow in
+`.github/workflows/ci.yml`. Merges to `main` run
+`.github/workflows/staging-images.yml`, which runs the full backend Django test
+suite and frontend checks first, then publishes Docker Hub images only after
+those checks pass.
 
-Required GitHub repository secrets:
+Required GitHub repository variable:
 
 ```text
 DOCKERHUB_USERNAME
-DOCKERHUB_TOKEN
 ```
 
-Optional GitHub repository variable:
+Required GitHub repository variable or secret:
 
 ```text
 DOCKER_IMAGE_REPOSITORY=dmjx/datalens
+```
+
+Required GitHub repository secret:
+
+```text
+DOCKERHUB_TOKEN
 ```
 
 Published staging image references:
