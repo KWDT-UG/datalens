@@ -192,3 +192,37 @@ frontend/  React/Vite app, Dockerfile, and Nginx production config
 docs/      product handoff and implementation notes
 Makefile   local Docker Compose workflow commands
 ```
+
+## Staging Images
+
+Merges to `main` run the GitHub Actions workflow in
+`.github/workflows/staging-images.yml`. The workflow runs backend and frontend
+checks first, then publishes Docker Hub images only after those checks pass.
+
+Required GitHub repository secrets:
+
+```text
+DOCKERHUB_USERNAME
+DOCKERHUB_TOKEN
+```
+
+Optional GitHub repository variable:
+
+```text
+DOCKER_IMAGE_REPOSITORY=dmjx/datalens
+```
+
+Published staging image references:
+
+```text
+dmjx/datalens:backend-staging
+dmjx/datalens:frontend-staging
+dmjx/datalens:backend-sha-<git-sha>
+dmjx/datalens:frontend-sha-<git-sha>
+```
+
+Railway staging should point at the moving `*-staging` tags with image auto
+updates enabled. Use an `Anytime` maintenance window if staging should redeploy
+as soon as Railway detects the new pushed tag. Production should remain
+manually promoted to a specific immutable `*-sha-<git-sha>` tag or image digest
+from a known-good staging run.
