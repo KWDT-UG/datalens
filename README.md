@@ -219,6 +219,10 @@ Required GitHub repository secret:
 DOCKERHUB_TOKEN
 ```
 
+`DOCKERHUB_TOKEN` should be a Docker Hub access token with permission to push to
+the configured image repository. The workflow passes this token to
+`docker/login-action` as the Docker login password.
+
 Published staging image references:
 
 ```text
