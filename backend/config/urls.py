@@ -4,6 +4,14 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from apps.common.auth import LoginView, LogoutView, MeView
+from apps.common.admin_api import (
+    AcceptInvitationView,
+    AdminInvitationDetailView,
+    AdminInvitationListCreateView,
+    AdminRoleListView,
+    AdminUserDetailView,
+    AdminUserListCreateView,
+)
 from apps.common.sync import SyncPullView, SyncPushView
 from apps.communities.views import CommunityViewSet
 from apps.groups.views import GroupViewSet
@@ -67,6 +75,28 @@ urlpatterns = [
     path("api/v1/auth/login/", LoginView.as_view(), name="auth-login"),
     path("api/v1/auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("api/v1/auth/me/", MeView.as_view(), name="auth-me"),
+    path(
+        "api/v1/auth/accept-invitation/",
+        AcceptInvitationView.as_view(),
+        name="accept-invitation",
+    ),
+    path("api/v1/admin/users/", AdminUserListCreateView.as_view(), name="admin-user-list"),
+    path(
+        "api/v1/admin/users/<int:user_id>/",
+        AdminUserDetailView.as_view(),
+        name="admin-user-detail",
+    ),
+    path("api/v1/admin/roles/", AdminRoleListView.as_view(), name="admin-role-list"),
+    path(
+        "api/v1/admin/invitations/",
+        AdminInvitationListCreateView.as_view(),
+        name="admin-invitation-list",
+    ),
+    path(
+        "api/v1/admin/invitations/<int:invitation_id>/",
+        AdminInvitationDetailView.as_view(),
+        name="admin-invitation-detail",
+    ),
     path("api/v1/", include(router.urls)),
     path("api/v1/sync/pull/", SyncPullView.as_view(), name="sync-pull"),
     path("api/v1/sync/push/", SyncPushView.as_view(), name="sync-push"),

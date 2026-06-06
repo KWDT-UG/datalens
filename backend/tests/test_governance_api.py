@@ -4,7 +4,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.common.models import MembershipStatus
+from apps.common.models import MembershipStatus, UserRole
+from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.members.models import Member
@@ -23,6 +24,7 @@ class GovernanceApiTests(TestCase):
             username="governance.user",
             password="test-password",
         )
+        assign_role(cls.user, UserRole.FIELD_OFFICER)
         cls.community = Community.objects.create(name="Governance")
         cls.other_community = Community.objects.create(name="Alternate")
         cls.group = Group.objects.create(

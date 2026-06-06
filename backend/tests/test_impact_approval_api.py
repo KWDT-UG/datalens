@@ -12,7 +12,9 @@ from apps.common.models import (
     ApprovalStatus,
     ImpactMethod,
     ResourcePartyType,
+    UserRole,
 )
+from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.members.models import Member
@@ -26,6 +28,7 @@ class ImpactApprovalApiTests(TestCase):
             username="impact.user",
             password="test-password",
         )
+        assign_role(cls.user, UserRole.MONITORING_EVALUATION_MANAGER)
         cls.admin_user = get_user_model().objects.create_superuser(
             username="admin.user",
             email="admin@example.com",
@@ -193,4 +196,4 @@ class ImpactApprovalApiTests(TestCase):
             {"review_notes": "Nope"},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

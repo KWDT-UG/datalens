@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 
 import { useArchiveRecordsMutation, useResourcesQuery } from '../api/queries';
 import type { Resource } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
+import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
 import { ListActionError } from '../components/ListActionError';
 import { ResourceCreateDialog } from '../components/ResourceCreateDialog';
@@ -36,6 +38,10 @@ function formatThemes(resource: Resource) {
 }
 
 export function ResourcesPage() {
+  const { user } = useAuth();
+  const canManage = hasCapability(user, capabilities.manageResources);
+  const canArchive = hasCapability(user, capabilities.archiveResources);
+  const canExport = hasCapability(user, capabilities.export);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
@@ -53,22 +59,22 @@ export function ResourcesPage() {
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
   const pageCount = useMemo(() => Math.max(1, Math.ceil((query.data?.count ?? 0) / pageSize)), [query.data]);
   const listActions = [
-    {
+    ...(canExport ? [{
       label: 'Export current page',
       disabled: resources.length === 0,
       onSelect: exportResources
-    },
-    {
+    }] : []),
+    ...(canArchive ? [{
       label: 'Clear selection',
       disabled: selectedIds.length === 0,
       onSelect: () => setSelectedIds([])
-    },
-    {
+    }] : []),
+    ...(canArchive ? [{
       label: `Archive selected (${selectedIds.length})`,
       disabled: selectedIds.length === 0 || archiveResources.isPending,
       onSelect: () => void archiveSelectedResources(),
       tone: 'danger' as const
-    }
+    }] : [])
   ];
 
   function exportResources() {
@@ -120,10 +126,12 @@ export function ResourcesPage() {
           <p className="page-header__description">Resource records loaded from the MVP API.</p>
         </div>
         <div className="page-actions">
-          <button className="button button--primary" type="button" onClick={() => setCreateOpen(true)}>
-            Create resource
-          </button>
-          <ActionMenu items={listActions} variant="secondary" />
+          {canManage ? (
+            <button className="button button--primary" type="button" onClick={() => setCreateOpen(true)}>
+              Create resource
+            </button>
+          ) : null}
+          {listActions.length > 0 ? <ActionMenu items={listActions} variant="secondary" /> : null}
         </div>
       </div>
 
@@ -144,18 +152,18 @@ export function ResourcesPage() {
       </div>
 
       <div className="toolbar">
-        <button
+        {canArchive ? <button
           className={`select-button ${allVisibleSelected ? 'is-selected' : ''}`}
           type="button"
           aria-label={allVisibleSelected ? 'Clear visible rows' : 'Select visible rows'}
           aria-pressed={allVisibleSelected}
           onClick={() => setSelectedIds((current) => toggleVisibleSelection(current, visibleIds))}
-        />
-        <ActionMenu items={listActions} />
-        <button className="text-action" type="button" onClick={exportResources} disabled={resources.length === 0}>
+        /> : null}
+        {listActions.length > 0 ? <ActionMenu items={listActions} /> : null}
+        {canExport ? <button className="text-action" type="button" onClick={exportResources} disabled={resources.length === 0}>
           <UploadIcon aria-hidden="true" />
           Export list
-        </button>
+        </button> : null}
         <span className="toolbar__spacer" />
         <PaginationLabel
           page={page}
@@ -196,12 +204,12 @@ export function ResourcesPage() {
               {resources.map((resource) => (
                 <tr key={resource.id}>
                   <td>
-                    <input
+                    {canArchive ? <input
                       type="checkbox"
                       checked={selectedIds.includes(resource.id)}
                       aria-label={`Select ${resource.name}`}
                       onChange={() => toggleSelected(resource.id)}
-                    />
+                    /> : null}
                   </td>
                   <td>{resource.name}</td>
                   <td>{resource.community}</td>
@@ -216,13 +224,13 @@ export function ResourcesPage() {
                   <td>{formatDate(resource.acquired_on)}</td>
                   <td>
                     <div className="row-actions">
-                      <button
+                      {canManage ? <button
                         className="button button--secondary"
                         type="button"
                         onClick={() => setEditingResource(resource)}
                       >
                         Edit
-                      </button>
+                      </button> : null}
                     </div>
                   </td>
                 </tr>
@@ -232,7 +240,7 @@ export function ResourcesPage() {
         </div>
       ) : null}
 
-      {createOpen ? (
+      {canManage && createOpen ? (
         <ResourceCreateDialog
           onClose={() => setCreateOpen(false)}
           onCreated={() => {
@@ -242,7 +250,7 @@ export function ResourcesPage() {
         />
       ) : null}
 
-      {editingResource ? (
+      {canManage && editingResource ? (
         <ResourceCreateDialog
           resource={editingResource}
           onClose={() => setEditingResource(null)}

@@ -3,6 +3,8 @@ from django.core.management.base import BaseCommand, CommandError
 from django.test import Client
 
 from apps.approvals.models import ApprovalRequest
+from apps.common.models import UserRole
+from apps.common.permissions import assign_role
 from apps.common.seed_data import seed_demo_data
 from apps.communities.models import Community
 from apps.groups.models import Group
@@ -38,6 +40,11 @@ class Command(BaseCommand):
             help="Optional username to force-login for authenticated settings.",
         )
         parser.add_argument(
+            "--create-user",
+            action="store_true",
+            help="Create or update the named user as a Programme Manager for local smoke checks.",
+        )
+        parser.add_argument(
             "--host",
             default="127.0.0.1",
             help="Host header used by the Django test client.",
@@ -48,10 +55,25 @@ class Command(BaseCommand):
             seed_demo_data()
 
         client = Client(HTTP_ACCEPT="application/json", HTTP_HOST=options["host"])
+        if options["create_user"] and not options["username"]:
+            raise CommandError("--create-user requires --username.")
+
         if options["username"]:
             user = get_user_model().objects.filter(username=options["username"]).first()
+            if user is None and options["create_user"]:
+                user = get_user_model().objects.create_user(
+                    username=options["username"],
+                    password=None,
+                )
             if user is None:
                 raise CommandError(f"User '{options['username']}' was not found.")
+            if options["create_user"]:
+                role = (
+                    UserRole.SYSTEM_ADMINISTRATOR
+                    if user.is_superuser
+                    else UserRole.PROGRAMME_MANAGER
+                )
+                assign_role(user, role)
             client.force_login(user)
 
         context = self._demo_context()

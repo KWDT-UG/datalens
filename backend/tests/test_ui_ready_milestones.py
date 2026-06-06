@@ -6,7 +6,13 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.common.models import ImpactMethod, ResourcePartyType, UserRole
+from apps.common.models import (
+    ImpactMethod,
+    ResourcePartyType,
+    UserProfile,
+    UserRole,
+    WorkforceType,
+)
 from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
@@ -22,7 +28,17 @@ class UiReadyMilestoneTests(TestCase):
             email="ui@example.com",
             password="test-password",
         )
-        assign_role(cls.user, UserRole.PROGRAM_MANAGER)
+        assign_role(cls.user, UserRole.PROGRAMME_MANAGER)
+        UserProfile.objects.create(
+            user=cls.user,
+            workforce_type=WorkforceType.STAFF,
+            position_title="Programme Manager",
+        )
+        cls.other_user = get_user_model().objects.create_user(
+            username="other.user",
+            email="other@example.com",
+            password="test-password",
+        )
         cls.community = Community.objects.create(name="UI Community")
         cls.group = Group.objects.create(
             community=cls.community,
@@ -61,15 +77,138 @@ class UiReadyMilestoneTests(TestCase):
         )
         self.assertEqual(login_response.status_code, status.HTTP_200_OK)
         token = login_response.data["data"]["token"]
-        self.assertIn(UserRole.PROGRAM_MANAGER, login_response.data["data"]["user"]["roles"])
+        self.assertIn(UserRole.PROGRAMME_MANAGER, login_response.data["data"]["user"]["roles"])
+        self.assertIn(
+            "review_approvals",
+            login_response.data["data"]["user"]["capabilities"],
+        )
 
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
         me_response = self.client.get(reverse("auth-me"))
         self.assertEqual(me_response.status_code, status.HTTP_200_OK)
         self.assertEqual(me_response.data["data"]["user"]["username"], "ui.user")
+        self.assertEqual(
+            me_response.data["data"]["user"]["position_title"],
+            "Programme Manager",
+        )
 
         logout_response = self.client.post(reverse("auth-logout"))
         self.assertEqual(logout_response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_current_user_can_update_profile_details(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            reverse("auth-me"),
+            {
+                "first_name": "Updated",
+                "last_name": "Manager",
+                "email": "updated.manager@example.com",
+                "position_title": "Senior Programme Manager",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.user.datalens_profile.refresh_from_db()
+        self.assertEqual(self.user.first_name, "Updated")
+        self.assertEqual(self.user.last_name, "Manager")
+        self.assertEqual(self.user.email, "updated.manager@example.com")
+        self.assertEqual(
+            self.user.datalens_profile.position_title,
+            "Senior Programme Manager",
+        )
+        self.assertEqual(
+            response.data["data"]["user"]["workforce_type"],
+            WorkforceType.STAFF,
+        )
+        self.assertEqual(
+            response.data["data"]["user"]["roles"],
+            [UserRole.PROGRAMME_MANAGER],
+        )
+
+    def test_profile_update_rejects_duplicate_email(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            reverse("auth-me"),
+            {"email": "OTHER@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+
+    def test_profile_update_allows_blank_email(self):
+        self.other_user.email = ""
+        self.other_user.save(update_fields=["email"])
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            reverse("auth-me"),
+            {"email": "", "first_name": "Updated"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "")
+        self.assertEqual(self.user.first_name, "Updated")
+
+    def test_current_user_can_change_password_with_current_password(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            reverse("auth-me"),
+            {
+                "current_password": "test-password",
+                "new_password": "A-New-Strong-Password-2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("A-New-Strong-Password-2026!"))
+
+    def test_password_change_rejects_incorrect_current_password(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            reverse("auth-me"),
+            {
+                "current_password": "incorrect-password",
+                "new_password": "A-New-Strong-Password-2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("current_password", response.data)
+
+    def test_profile_update_rejects_administrator_controlled_fields(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            reverse("auth-me"),
+            {
+                "role": UserRole.SYSTEM_ADMINISTRATOR,
+                "workforce_type": WorkforceType.CONTRACTOR,
+                "is_active": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.user.datalens_profile.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        self.assertEqual(self.user.datalens_profile.workforce_type, WorkforceType.STAFF)
+        self.assertEqual(
+            set(self.user.groups.values_list("name", flat=True)),
+            {UserRole.PROGRAMME_MANAGER},
+        )
 
     def test_resource_thematic_area_endpoint_and_filter(self):
         self.client.force_authenticate(self.user)

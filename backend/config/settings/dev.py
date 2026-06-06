@@ -7,6 +7,7 @@ ALLOWED_HOSTS = env_list(  # noqa: F405
     ["localhost", "127.0.0.1", "0.0.0.0", "backend"],
 )
 
-REST_FRAMEWORK["DEFAULT_PERMISSION_CLASSES"] = [  # noqa: F405
-    "rest_framework.permissions.AllowAny",
-]
+if env_bool("DATALENS_ALLOW_ANONYMOUS_API", False):  # noqa: F405
+    REST_FRAMEWORK["DEFAULT_PERMISSION_CLASSES"] = [  # noqa: F405
+        "rest_framework.permissions.AllowAny",
+    ]

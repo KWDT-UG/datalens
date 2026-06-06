@@ -16,6 +16,7 @@ type AuthContextValue = {
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<AuthUser>;
   user: AuthUser | null;
 };
 
@@ -28,6 +29,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearAuthState = useCallback(() => {
     clearAuthToken();
     setUser(null);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const response = await apiGet<DataEnvelope<{ user: AuthUser }>>('/api/v1/auth/me/');
+    setUser(response.data.user);
+    return response.data.user;
   }, []);
 
   useEffect(() => {
@@ -46,12 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let isMounted = true;
-    apiGet<DataEnvelope<{ user: AuthUser }>>('/api/v1/auth/me/')
-      .then((response) => {
-        if (isMounted) {
-          setUser(response.data.user);
-        }
-      })
+    refreshUser()
       .catch(() => {
         clearAuthState();
       })
@@ -64,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [clearAuthState]);
+  }, [clearAuthState, refreshUser]);
 
   const login = useCallback(async (username: string, password: string) => {
     const response = await apiPost<DataEnvelope<LoginResponse>, { username: string; password: string }>(
@@ -93,9 +95,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login,
       logout,
+      refreshUser,
       user
     }),
-    [isLoading, login, logout, user]
+    [isLoading, login, logout, refreshUser, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

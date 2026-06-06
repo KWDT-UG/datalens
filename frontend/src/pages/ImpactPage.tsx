@@ -10,6 +10,8 @@ import {
   useImpactSummaryQuery
 } from '../api/queries';
 import type { ImpactRecord } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
+import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
 import { ImpactRecordCreateDialog } from '../components/CommunityBreakdownCreateDialogs';
 import { ListActionError } from '../components/ListActionError';
@@ -50,6 +52,10 @@ function impactExportRows(records: ImpactRecord[]) {
 }
 
 export function ImpactPage() {
+  const { user } = useAuth();
+  const canManage = hasCapability(user, capabilities.manageImpact);
+  const canArchive = hasCapability(user, capabilities.archiveImpact);
+  const canExport = hasCapability(user, capabilities.export);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [community, setCommunity] = useState('');
@@ -84,12 +90,12 @@ export function ImpactPage() {
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
   const summary = summaryQuery.data?.data;
   const listActions = [
-    {
+    ...(canExport ? [{
       label: 'Export current page',
       disabled: records.length === 0,
       onSelect: exportRecords
-    },
-    {
+    }] : []),
+    ...(canArchive ? [{
       label: 'Clear selection',
       disabled: selectedIds.length === 0,
       onSelect: () => setSelectedIds([])
@@ -99,7 +105,7 @@ export function ImpactPage() {
       disabled: selectedIds.length === 0 || archiveRecords.isPending,
       onSelect: () => void archiveSelectedRecords(),
       tone: 'danger' as const
-    }
+    }] : [])
   ];
 
   function exportRecords() {
@@ -132,7 +138,7 @@ export function ImpactPage() {
           <h1>Impact</h1>
           <p className="page-header__description">Impact records and reporting summaries from the MVP API.</p>
         </div>
-        <ActionMenu items={listActions} variant="secondary" />
+        {listActions.length > 0 ? <ActionMenu items={listActions} variant="secondary" /> : null}
       </div>
 
       <div className="toolbar toolbar--top">
@@ -220,18 +226,18 @@ export function ImpactPage() {
       </div>
 
       <div className="toolbar">
-        <button
+        {canArchive ? <button
           className={`select-button ${allVisibleSelected ? 'is-selected' : ''}`}
           type="button"
           aria-label={allVisibleSelected ? 'Clear visible rows' : 'Select visible rows'}
           aria-pressed={allVisibleSelected}
           onClick={() => setSelectedIds((current) => toggleVisibleSelection(current, visibleIds))}
-        />
-        <ActionMenu items={listActions} />
-        <button className="text-action" type="button" onClick={exportRecords} disabled={records.length === 0}>
+        /> : null}
+        {listActions.length > 0 ? <ActionMenu items={listActions} /> : null}
+        {canExport ? <button className="text-action" type="button" onClick={exportRecords} disabled={records.length === 0}>
           <UploadIcon aria-hidden="true" />
           Export list
-        </button>
+        </button> : null}
         <span className="toolbar__spacer" />
         <PaginationLabel
           page={page}
@@ -272,12 +278,12 @@ export function ImpactPage() {
               {records.map((impact) => (
                 <tr key={impact.id}>
                   <td>
-                    <input
+                    {canArchive ? <input
                       type="checkbox"
                       checked={selectedIds.includes(impact.id)}
                       aria-label={`Select impact record ${impact.id}`}
                       onChange={() => toggleSelected(impact.id)}
-                    />
+                    /> : null}
                   </td>
                   <td>{formatDate(impact.as_of_date)}</td>
                   <td>{formatLabel(impact.period_type)}</td>
@@ -290,13 +296,13 @@ export function ImpactPage() {
                   <td>{formatDate(impact.updated_at)}</td>
                   <td>
                     <div className="row-actions">
-                      <button
+                      {canManage ? <button
                         className="button button--secondary"
                         type="button"
                         onClick={() => setEditingImpactRecord(impact)}
                       >
                         Edit
-                      </button>
+                      </button> : null}
                     </div>
                   </td>
                 </tr>
@@ -306,7 +312,7 @@ export function ImpactPage() {
         </div>
       ) : null}
 
-      {editingImpactRecord ? (
+      {canManage && editingImpactRecord ? (
         <ImpactRecordCreateDialog
           communityId={community ? Number(community) : undefined}
           impactRecord={editingImpactRecord}

@@ -5,7 +5,8 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.approvals.models import ApprovalRequest
-from apps.common.models import ApprovalActionType, ResourcePartyType
+from apps.common.models import ApprovalActionType, ResourcePartyType, UserRole
+from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.impacts.models import ImpactRecord
@@ -27,6 +28,7 @@ class ApiHardeningTests(TestCase):
             username="hardening.user",
             password="test-password",
         )
+        assign_role(cls.user, UserRole.FIELD_OFFICER)
         cls.admin_user = get_user_model().objects.create_superuser(
             username="hardening.admin",
             email="hardening.admin@example.com",

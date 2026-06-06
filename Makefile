@@ -59,7 +59,7 @@ seed-demo-data:
 	$(BACKEND) python manage.py seed_demo_data
 
 smoke-api:
-	$(BACKEND) python manage.py smoke_api --seed-demo-data
+	$(BACKEND) python manage.py smoke_api --seed-demo-data --username api-smoke --create-user
 
 frontend-install:
 	cd frontend && npm install

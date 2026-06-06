@@ -4,7 +4,7 @@ from apps.common.permissions import GROUP_NAME_BY_ROLE, ensure_role_groups
 
 
 class Command(BaseCommand):
-    help = "Create the Django auth groups used for Data Lens role placeholders."
+    help = "Create the Django auth groups used for Data Lens MVP roles."
 
     def handle(self, *args, **options):
         ensure_role_groups()

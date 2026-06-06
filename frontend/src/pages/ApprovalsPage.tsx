@@ -7,6 +7,8 @@ import {
   useReviewApprovalMutation
 } from '../api/queries';
 import type { ApprovalRequest, ApprovalStatus } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
+import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
 import { ListActionError } from '../components/ListActionError';
 import { StatusBadge } from '../components/StatusBadge';
@@ -55,6 +57,11 @@ function approvalExportRows(records: ApprovalRequest[]) {
 }
 
 export function ApprovalsPage() {
+  const { user } = useAuth();
+  const canReviewAll = hasCapability(user, capabilities.reviewApprovals);
+  const canReviewImpact = hasCapability(user, capabilities.reviewImpactApprovals);
+  const canArchive = hasCapability(user, capabilities.archiveOperations);
+  const canExport = hasCapability(user, capabilities.export);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<ApprovalStatus | 'all'>('pending');
@@ -77,12 +84,12 @@ export function ApprovalsPage() {
   const pageCount = useMemo(() => Math.max(1, Math.ceil((query.data?.count ?? 0) / pageSize)), [query.data]);
   const actionError = approveApproval.error ?? rejectApproval.error ?? supersedeApproval.error ?? archiveApprovals.error;
   const listActions = [
-    {
+    ...(canExport ? [{
       label: 'Export current page',
       disabled: approvals.length === 0,
       onSelect: exportApprovals
-    },
-    {
+    }] : []),
+    ...(canArchive ? [{
       label: 'Clear selection',
       disabled: selectedIds.length === 0,
       onSelect: () => setSelectedIds([])
@@ -92,7 +99,7 @@ export function ApprovalsPage() {
       disabled: selectedIds.length === 0 || archiveApprovals.isPending,
       onSelect: () => void archiveSelectedApprovals(),
       tone: 'danger' as const
-    }
+    }] : [])
   ];
 
   function exportApprovals() {
@@ -141,7 +148,7 @@ export function ApprovalsPage() {
           <h1>Approvals</h1>
           <p className="page-header__description">Review queued create, update, and archive requests.</p>
         </div>
-        <ActionMenu items={listActions} variant="secondary" />
+        {listActions.length > 0 ? <ActionMenu items={listActions} variant="secondary" /> : null}
       </div>
 
       <div className="metric-grid">
@@ -196,18 +203,18 @@ export function ApprovalsPage() {
       </div>
 
       <div className="toolbar">
-        <button
+        {canArchive ? <button
           className={`select-button ${allVisibleSelected ? 'is-selected' : ''}`}
           type="button"
           aria-label={allVisibleSelected ? 'Clear visible rows' : 'Select visible rows'}
           aria-pressed={allVisibleSelected}
           onClick={() => setSelectedIds((current) => toggleVisibleSelection(current, visibleIds))}
-        />
-        <ActionMenu items={listActions} />
-        <button className="text-action" type="button" onClick={exportApprovals} disabled={approvals.length === 0}>
+        /> : null}
+        {listActions.length > 0 ? <ActionMenu items={listActions} /> : null}
+        {canExport ? <button className="text-action" type="button" onClick={exportApprovals} disabled={approvals.length === 0}>
           <UploadIcon aria-hidden="true" />
           Export list
-        </button>
+        </button> : null}
         <span className="toolbar__spacer" />
         <PaginationLabel
           page={page}
@@ -245,15 +252,17 @@ export function ApprovalsPage() {
             <tbody>
               {approvals.map((approval) => {
                 const isPending = approval.status === 'pending';
+                const canReview =
+                  canReviewAll || (canReviewImpact && approval.entity_type === 'impact_record');
                 return (
                   <tr key={approval.id}>
                     <td>
-                      <input
+                      {canArchive ? <input
                         type="checkbox"
                         checked={selectedIds.includes(approval.id)}
                         aria-label={`Select approval request ${approval.id}`}
                         onChange={() => toggleSelected(approval.id)}
-                      />
+                      /> : null}
                     </td>
                     <td>
                       {formatLabel(approval.entity_type)} #{approval.entity_id ?? 'new'}
@@ -267,7 +276,7 @@ export function ApprovalsPage() {
                     <td>{formatDate(approval.reviewed_at)}</td>
                     <td>{summarizePayload(approval.submitted_payload)}</td>
                     <td>
-                      <div className="row-actions">
+                      {canReview ? <div className="row-actions">
                         <button
                           className="button button--muted"
                           type="button"
@@ -292,7 +301,7 @@ export function ApprovalsPage() {
                         >
                           Supersede
                         </button>
-                      </div>
+                      </div> : <span>View only</span>}
                     </td>
                   </tr>
                 );

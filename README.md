@@ -27,7 +27,7 @@ Implemented in this foundation pass:
 - DRF CRUD endpoints under `/api/v1/`
 - structured API error payloads with a normalized `errors` list
 - exact filtering, search, and whitelisted ordering on implemented list endpoints
-- role placeholders for field officer, program manager, admin, and leadership
+- eight KWDT-aligned MVP roles with centralized capability enforcement
 - token/session/basic auth endpoints for UI integration
 - approval review actions that can apply supported create/update/delete payloads
 - offline sync endpoints for pull and conflict-detecting push/apply
@@ -173,10 +173,9 @@ GET /api/v1/sync/pull/
 POST /api/v1/sync/push/
 ```
 
-Local development settings allow unauthenticated API browsing for fast
-verification. UI code should use the token auth endpoints documented in
-`docs/ui-integration-readiness.md`; shared base settings enforce role-aware
-authenticated access.
+Local development enforces role-aware authentication. Set
+`DATALENS_ALLOW_ANONYMOUS_API=true` only for disposable demo environments.
+UI integration details are documented in `docs/ui-integration-readiness.md`.
 
 For frontend integration details, see:
 

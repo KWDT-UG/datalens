@@ -1,18 +1,24 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { ProtectedRoute } from './auth/ProtectedRoute';
+import { CapabilityRoute } from './auth/CapabilityRoute';
+import { capabilities } from './auth/permissions';
 import { AppShell } from './components/AppShell';
 import { ApprovalsPage } from './pages/ApprovalsPage';
+import { AdminPage } from './pages/AdminPage';
+import { AcceptInvitationPage } from './pages/AcceptInvitationPage';
 import { CommunitiesPage } from './pages/CommunitiesPage';
 import { CommunityDetailPage } from './pages/CommunityDetailPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ImpactPage } from './pages/ImpactPage';
 import { LoginPage } from './pages/LoginPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { ResourcesPage } from './pages/ResourcesPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  { path: '/accept-invite', element: <AcceptInvitationPage /> },
   {
     path: '/',
     element: <ProtectedRoute />,
@@ -30,11 +36,24 @@ export const router = createBrowserRouter([
           },
           { path: 'resources', element: <ResourcesPage /> },
           { path: 'impact', element: <ImpactPage /> },
-          { path: 'approvals', element: <ApprovalsPage /> },
+          {
+            element: (
+              <CapabilityRoute
+                anyOf={[
+                  capabilities.reviewApprovals,
+                  capabilities.reviewImpactApprovals
+                ]}
+              />
+            ),
+            children: [{ path: 'approvals', element: <ApprovalsPage /> }]
+          },
           { path: 'reports', element: <PlaceholderPage title="Reports" /> },
           { path: 'donors', element: <PlaceholderPage title="Donors" /> },
-          { path: 'profile', element: <PlaceholderPage title="Profile" /> },
-          { path: 'admin', element: <PlaceholderPage title="Admin" /> }
+          { path: 'profile', element: <ProfilePage /> },
+          {
+            element: <CapabilityRoute anyOf={[capabilities.manageUsers]} />,
+            children: [{ path: 'admin', element: <AdminPage /> }]
+          }
         ]
       }
     ]
