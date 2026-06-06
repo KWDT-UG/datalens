@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 
 import { useArchiveRecordsMutation, useCommunitiesQuery } from '../api/queries';
 import type { Community } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
+import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
 import { CommunityCreateDialog } from '../components/CommunityCreateDialog';
 import { ListActionError } from '../components/ListActionError';
@@ -19,6 +21,10 @@ function formatLocation(community: Community) {
 }
 
 export function CommunitiesPage() {
+  const { user } = useAuth();
+  const canManage = hasCapability(user, capabilities.manageOperations);
+  const canArchive = hasCapability(user, capabilities.archiveOperations);
+  const canExport = hasCapability(user, capabilities.export);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [view, setView] = useState<'table' | 'card'>('table');
@@ -31,22 +37,22 @@ export function CommunitiesPage() {
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
   const pageCount = useMemo(() => Math.max(1, Math.ceil((query.data?.count ?? 0) / pageSize)), [query.data]);
   const listActions = [
-    {
+    ...(canExport ? [{
       label: 'Export current page',
       disabled: communities.length === 0,
       onSelect: exportCommunities
-    },
-    {
+    }] : []),
+    ...(canArchive ? [{
       label: 'Clear selection',
       disabled: selectedIds.length === 0,
       onSelect: () => setSelectedIds([])
-    },
-    {
+    }] : []),
+    ...(canArchive ? [{
       label: `Archive selected (${selectedIds.length})`,
       disabled: selectedIds.length === 0 || archiveCommunities.isPending,
       onSelect: () => void archiveSelectedCommunities(),
       tone: 'danger' as const
-    }
+    }] : [])
   ];
 
   function exportCommunities() {
@@ -97,10 +103,12 @@ export function CommunitiesPage() {
           <p className="page-header__description">List of communities</p>
         </div>
         <div className="page-actions">
-          <button className="button button--primary" type="button" onClick={() => setCreateOpen(true)}>
-            Create community
-          </button>
-          <ActionMenu items={listActions} variant="secondary" />
+          {canManage ? (
+            <button className="button button--primary" type="button" onClick={() => setCreateOpen(true)}>
+              Create community
+            </button>
+          ) : null}
+          {listActions.length > 0 ? <ActionMenu items={listActions} variant="secondary" /> : null}
         </div>
       </div>
 
@@ -137,18 +145,22 @@ export function CommunitiesPage() {
       </div>
 
       <div className="toolbar">
-        <button
-          className={`select-button ${allVisibleSelected ? 'is-selected' : ''}`}
-          type="button"
-          aria-label={allVisibleSelected ? 'Clear visible rows' : 'Select visible rows'}
-          aria-pressed={allVisibleSelected}
-          onClick={() => setSelectedIds((current) => toggleVisibleSelection(current, visibleIds))}
-        />
-        <ActionMenu items={listActions} />
-        <button className="text-action" type="button" onClick={exportCommunities} disabled={communities.length === 0}>
-          <UploadIcon aria-hidden="true" />
-          Export list
-        </button>
+        {canArchive ? (
+          <button
+            className={`select-button ${allVisibleSelected ? 'is-selected' : ''}`}
+            type="button"
+            aria-label={allVisibleSelected ? 'Clear visible rows' : 'Select visible rows'}
+            aria-pressed={allVisibleSelected}
+            onClick={() => setSelectedIds((current) => toggleVisibleSelection(current, visibleIds))}
+          />
+        ) : null}
+        {listActions.length > 0 ? <ActionMenu items={listActions} /> : null}
+        {canExport ? (
+          <button className="text-action" type="button" onClick={exportCommunities} disabled={communities.length === 0}>
+            <UploadIcon aria-hidden="true" />
+            Export list
+          </button>
+        ) : null}
         <span className="toolbar__spacer" />
         <PaginationLabel
           page={page}
@@ -188,12 +200,14 @@ export function CommunitiesPage() {
               {communities.map((community) => (
                 <tr key={community.id}>
                   <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(community.id)}
-                      aria-label={`Select ${community.name}`}
-                      onChange={() => toggleSelected(community.id)}
-                    />
+                    {canArchive ? (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(community.id)}
+                        aria-label={`Select ${community.name}`}
+                        onChange={() => toggleSelected(community.id)}
+                      />
+                    ) : null}
                   </td>
                   <td>
                     <Link to={`/communities/${community.id}/groups`}>{community.name}</Link>
@@ -232,7 +246,7 @@ export function CommunitiesPage() {
         </div>
       ) : null}
 
-      {createOpen ? <CommunityCreateDialog onClose={() => setCreateOpen(false)} /> : null}
+      {canManage && createOpen ? <CommunityCreateDialog onClose={() => setCreateOpen(false)} /> : null}
     </section>
   );
 }

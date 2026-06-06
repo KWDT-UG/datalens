@@ -1,15 +1,24 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+import secrets
+
+from django.contrib.auth import get_user_model
 
 from apps.approvals.models import ApprovalRequest
 from apps.common.models import (
     ApprovalActionType,
     BeneficiaryRelationshipType,
     ImpactMethod,
+    InvitationStatus,
     ResourceEventType,
     ResourcePartyType,
     ResourceStatus,
     ResourceType,
+    UserProfile,
+    UserInvitation,
+    UserRole,
+    WorkforceType,
 )
+from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.impacts.models import ImpactRecord
@@ -51,6 +60,89 @@ REFERENCE_THEMATIC_AREAS = [
         "name": "Economic Empowerment",
         "description": "Livelihoods, savings groups, enterprise, and productive assets.",
     },
+]
+
+DEMO_USER_SPECS = [
+    (
+        "demo.field.officer",
+        "Amina",
+        "Field",
+        "amina.field@example.test",
+        UserRole.FIELD_OFFICER,
+        WorkforceType.STAFF,
+        "Field Officer - Mukono District",
+        True,
+    ),
+    (
+        "demo.programme.manager",
+        "Joan",
+        "Programme",
+        "joan.programme@example.test",
+        UserRole.PROGRAMME_MANAGER,
+        WorkforceType.STAFF,
+        "Programme Officer - Economic Empowerment",
+        True,
+    ),
+    (
+        "demo.executive",
+        "Margaret",
+        "Executive",
+        "margaret.executive@example.test",
+        UserRole.EXECUTIVE_LEADERSHIP,
+        WorkforceType.STAFF,
+        "Executive Director / Coordinator",
+        True,
+    ),
+    (
+        "demo.finance",
+        "Viola",
+        "Finance",
+        "viola.finance@example.test",
+        UserRole.FINANCE_ADMINISTRATOR,
+        WorkforceType.STAFF,
+        "Finance & Administration Officer",
+        True,
+    ),
+    (
+        "demo.me",
+        "Benjamin",
+        "Evaluation",
+        "benjamin.me@example.test",
+        UserRole.MONITORING_EVALUATION_MANAGER,
+        WorkforceType.STAFF,
+        "Monitoring & Evaluation Officer",
+        True,
+    ),
+    (
+        "demo.communications.intern",
+        "Mildred",
+        "Communications",
+        "mildred.communications@example.test",
+        UserRole.COMMUNICATIONS_VIEWER,
+        WorkforceType.INTERN,
+        "Communications Intern",
+        True,
+    ),
+    (
+        "demo.procurement.contractor",
+        "Zoe",
+        "Procurement",
+        "zoe.procurement@example.test",
+        UserRole.RESOURCE_PROCUREMENT_OFFICER,
+        WorkforceType.CONTRACTOR,
+        "Procurement Support Contractor",
+        True,
+    ),
+    (
+        "demo.system.volunteer",
+        "Alex",
+        "Systems",
+        "alex.systems@example.test",
+        UserRole.SYSTEM_ADMINISTRATOR,
+        WorkforceType.VOLUNTEER,
+        "Data Systems Volunteer",
+        False,
+    ),
 ]
 
 
@@ -99,6 +191,87 @@ def seed_demo_data():
         )
         count_result(was_created)
         return instance
+
+    demo_users = {}
+    for username, first_name, last_name, email, role, workforce_type, title, is_active in DEMO_USER_SPECS:
+        user, was_created = get_user_model().objects.update_or_create(
+            username=username,
+            defaults={
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": email,
+                "is_active": is_active,
+            },
+        )
+        demo_users[username] = user
+        if was_created:
+            user.set_unusable_password()
+            user.save(update_fields=["password"])
+        count_result(was_created)
+        assign_role(user, role)
+        _profile, profile_created = UserProfile.objects.update_or_create(
+            user=user,
+            defaults={
+                "workforce_type": workforce_type,
+                "position_title": title,
+            },
+        )
+        count_result(profile_created)
+
+    invitation_specs = [
+        {
+            "email": "candidate.intern@example.test",
+            "first_name": "Pat",
+            "last_name": "Intern",
+            "workforce_type": WorkforceType.INTERN,
+            "position_title": "Community Data Intern",
+            "role": UserRole.FIELD_OFFICER,
+            "status": InvitationStatus.PENDING,
+            "accepted_user": None,
+            "accepted_at": None,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
+        },
+        {
+            "email": "alex.systems@example.test",
+            "first_name": "Alex",
+            "last_name": "Systems",
+            "workforce_type": WorkforceType.VOLUNTEER,
+            "position_title": "Data Systems Volunteer",
+            "role": UserRole.SYSTEM_ADMINISTRATOR,
+            "status": InvitationStatus.ACCEPTED,
+            "accepted_user": demo_users["demo.system.volunteer"],
+            "accepted_at": datetime.now(timezone.utc),
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
+        },
+        {
+            "email": "revoked.contractor@example.test",
+            "first_name": "Chris",
+            "last_name": "Contractor",
+            "workforce_type": WorkforceType.CONTRACTOR,
+            "position_title": "Short-term Data Contractor",
+            "role": UserRole.RESOURCE_PROCUREMENT_OFFICER,
+            "status": InvitationStatus.REVOKED,
+            "accepted_user": None,
+            "accepted_at": None,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
+        },
+    ]
+    invited_by_user_id = demo_users["demo.system.volunteer"].id
+    for invitation_spec in invitation_specs:
+        invitation, was_created = UserInvitation.objects.get_or_create(
+            email=invitation_spec["email"],
+            defaults={
+                "token_hash": secrets.token_hex(32),
+                "invited_by_user_id": invited_by_user_id,
+                **invitation_spec,
+            },
+        )
+        if not was_created:
+            for field, value in invitation_spec.items():
+                setattr(invitation, field, value)
+            invitation.invited_by_user_id = invited_by_user_id
+            invitation.save()
+        count_result(was_created)
 
     community = upsert(
         Community,
@@ -640,4 +813,6 @@ def seed_demo_data():
         "resource_status_event_id": status_event.id,
         "impact_record_id": impact_record.id,
         "approval_request_id": approval_request.id,
+        "user_count": get_user_model().objects.count(),
+        "invitation_count": UserInvitation.objects.count(),
     }

@@ -12,7 +12,9 @@ from apps.common.models import (
     ResourcePartyType,
     ResourceStatus,
     ResourceType,
+    UserRole,
 )
+from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.institutions.models import Institution
@@ -34,6 +36,7 @@ class ResourceApiTests(TestCase):
             username="resource.user",
             password="test-password",
         )
+        assign_role(cls.user, UserRole.RESOURCE_PROCUREMENT_OFFICER)
         cls.community = Community.objects.create(name="Resources")
         cls.other_community = Community.objects.create(name="Other")
         cls.group = Group.objects.create(

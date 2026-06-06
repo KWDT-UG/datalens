@@ -5,6 +5,14 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from apps.approvals.models import ApprovalRequest
+from apps.common.models import (
+    InvitationStatus,
+    UserInvitation,
+    UserProfile,
+    UserRole,
+    WorkforceType,
+)
+from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.impacts.models import ImpactRecord
@@ -71,12 +79,36 @@ class ManagementCommandTests(TestCase):
         self.assertEqual(ResourceStatusEvent.objects.count(), 11)
         self.assertEqual(ImpactRecord.objects.count(), 7)
         self.assertEqual(ApprovalRequest.objects.count(), 3)
+        self.assertEqual(
+            get_user_model().objects.filter(username__startswith="demo.").count(),
+            8,
+        )
+        self.assertEqual(UserProfile.objects.count(), 8)
+        self.assertTrue(
+            UserProfile.objects.filter(workforce_type=WorkforceType.INTERN).exists()
+        )
+        self.assertTrue(
+            UserProfile.objects.filter(workforce_type=WorkforceType.VOLUNTEER).exists()
+        )
+        self.assertTrue(
+            UserProfile.objects.filter(workforce_type=WorkforceType.CONTRACTOR).exists()
+        )
+        self.assertEqual(UserInvitation.objects.count(), 3)
+        self.assertSetEqual(
+            set(UserInvitation.objects.values_list("status", flat=True)),
+            {
+                InvitationStatus.PENDING,
+                InvitationStatus.ACCEPTED,
+                InvitationStatus.REVOKED,
+            },
+        )
 
     def test_smoke_api_command_checks_seeded_endpoints(self):
         user = get_user_model().objects.create_user(
             username="smoke.user",
             password="test-password",
         )
+        assign_role(user, UserRole.PROGRAMME_MANAGER)
         stdout = StringIO()
 
         call_command(
@@ -91,3 +123,22 @@ class ManagementCommandTests(TestCase):
         self.assertIn("OK   communities", output)
         self.assertIn("OK   resource-detail", output)
         self.assertIn("API smoke check passed.", output)
+
+    def test_smoke_api_command_can_create_role_scoped_user(self):
+        stdout = StringIO()
+
+        call_command(
+            "smoke_api",
+            "--seed-demo-data",
+            "--username",
+            "created.smoke.user",
+            "--create-user",
+            stdout=stdout,
+        )
+
+        user = get_user_model().objects.get(username="created.smoke.user")
+        self.assertEqual(
+            set(user.groups.values_list("name", flat=True)),
+            {UserRole.PROGRAMME_MANAGER},
+        )
+        self.assertIn("API smoke check passed.", stdout.getvalue())

@@ -36,6 +36,8 @@ import { ActionMenu } from '../components/ActionMenu';
 import { ListActionError } from '../components/ListActionError';
 import { ResourceCreateDialog } from '../components/ResourceCreateDialog';
 import { StatusBadge } from '../components/StatusBadge';
+import { useAuth } from '../auth/AuthContext';
+import { capabilities, hasCapability } from '../auth/permissions';
 import { downloadCsv, toggleVisibleSelection } from '../utils/listActions';
 import { PaginationLabel } from './CommunitiesPage';
 
@@ -324,8 +326,27 @@ const tableConfigs: Record<
 };
 
 export function CommunityDetailPage() {
+  const { user } = useAuth();
   const { communityId, section = 'groups' } = useParams();
   const activeSection = isSectionKey(section) ? section : 'groups';
+  const manageCapability =
+    activeSection === 'resources'
+      ? capabilities.manageResources
+      : activeSection === 'impact'
+        ? capabilities.manageImpact
+        : capabilities.manageOperations;
+  const archiveCapability =
+    activeSection === 'resources'
+      ? capabilities.archiveResources
+      : activeSection === 'impact'
+        ? capabilities.archiveImpact
+        : capabilities.archiveOperations;
+  const canManage = hasCapability(user, manageCapability);
+  const canArchive = hasCapability(user, archiveCapability);
+  const canExport = hasCapability(user, capabilities.export);
+  const visibleSections = user?.roles.includes('communications_viewer')
+    ? sections.filter((item) => !['members', 'institutions'].includes(item.key))
+    : sections;
   const sectionConfig = sections.find((item) => item.key === activeSection) ?? sections[0];
   const tableConfig = tableConfigs[activeSection];
   const [search, setSearch] = useState('');
@@ -375,12 +396,12 @@ export function CommunityDetailPage() {
   const visibleIds = rows.map((row) => row.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
   const listActions = [
-    {
+    ...(canExport ? [{
       label: 'Export current page',
       disabled: records.length === 0,
       onSelect: exportRecords
-    },
-    {
+    }] : []),
+    ...(canArchive ? [{
       label: 'Clear selection',
       disabled: selectedIds.length === 0,
       onSelect: () => setSelectedIds([])
@@ -390,7 +411,7 @@ export function CommunityDetailPage() {
       disabled: selectedIds.length === 0 || archiveRecords.isPending,
       onSelect: () => void archiveSelectedRecords(),
       tone: 'danger' as const
-    }
+    }] : [])
   ];
 
   useEffect(() => {
@@ -436,7 +457,7 @@ export function CommunityDetailPage() {
   }
 
   function renderCreateDialog() {
-    if (!community || !createOpen) {
+    if (!community || !createOpen || !canManage) {
       return null;
     }
 
@@ -469,7 +490,7 @@ export function CommunityDetailPage() {
   }
 
   function renderEditDialog() {
-    if (!community) {
+    if (!community || !canManage) {
       return null;
     }
 
@@ -505,6 +526,9 @@ export function CommunityDetailPage() {
   }
 
   function renderRowActions(rowId: number) {
+    if (!canManage) {
+      return null;
+    }
     if (activeSection === 'resources') {
       const resource = (records as Resource[]).find((item) => item.id === rowId);
       if (!resource) {
@@ -591,7 +615,7 @@ export function CommunityDetailPage() {
             <h2>Breakdown</h2>
             <div className="breakdown__body">
               <nav className="breakdown-nav" aria-label="Community breakdown">
-                {sections.map((item) => {
+                {visibleSections.map((item) => {
                   const count = item.countField ? Number(community[item.countField as CountField] ?? 0) : 0;
                   return (
                     <NavLink key={item.key} to={`/communities/${community.id}/${item.key}`}>
@@ -604,13 +628,13 @@ export function CommunityDetailPage() {
 
               <div className="breakdown-table">
                 <div className="toolbar">
-                  <button
+                  {canArchive ? <button
                     className={`select-button ${allVisibleSelected ? 'is-selected' : ''}`}
                     type="button"
                     aria-label={allVisibleSelected ? 'Clear visible rows' : 'Select visible rows'}
                     aria-pressed={allVisibleSelected}
                     onClick={() => setSelectedIds((current) => toggleVisibleSelection(current, visibleIds))}
-                  />
+                  /> : null}
                   <label className="search-field">
                     <SearchIcon aria-hidden="true" />
                     <input
@@ -624,15 +648,15 @@ export function CommunityDetailPage() {
                       }}
                     />
                   </label>
-                  <ActionMenu items={listActions} />
-                  <button className="text-action" type="button" onClick={exportRecords} disabled={records.length === 0}>
+                  {listActions.length > 0 ? <ActionMenu items={listActions} /> : null}
+                  {canExport ? <button className="text-action" type="button" onClick={exportRecords} disabled={records.length === 0}>
                     <UploadIcon aria-hidden="true" />
                     Export list
-                  </button>
-                  <button className="button button--primary" type="button" onClick={() => setCreateOpen(true)}>
+                  </button> : null}
+                  {canManage ? <button className="button button--primary" type="button" onClick={() => setCreateOpen(true)}>
                     <PlusIcon aria-hidden="true" />
                     {createLabels[activeSection]}
-                  </button>
+                  </button> : null}
                   <span className="toolbar__spacer" />
                   <PaginationLabel
                     page={page}
@@ -662,24 +686,24 @@ export function CommunityDetailPage() {
                           {tableConfig.columns.map((column) => (
                             <th key={column}>{column}</th>
                           ))}
-                          {activeSection === 'resources' || activeSection === 'impact' ? <th>Actions</th> : null}
+                          {(activeSection === 'resources' || activeSection === 'impact') && canManage ? <th>Actions</th> : null}
                         </tr>
                       </thead>
                       <tbody>
                         {rows.map((row) => (
                           <tr key={row.id}>
                             <td>
-                              <input
+                              {canArchive ? <input
                                 type="checkbox"
                                 checked={selectedIds.includes(row.id)}
                                 aria-label={`Select ${row.label}`}
                                 onChange={() => toggleSelected(row.id)}
-                              />
+                              /> : null}
                             </td>
                             {row.cells.map((cell, index) => (
                               <td key={`${row.id}-${tableConfig.columns[index]}`}>{cell}</td>
                             ))}
-                            {activeSection === 'resources' || activeSection === 'impact' ? (
+                            {(activeSection === 'resources' || activeSection === 'impact') && canManage ? (
                               <td>{renderRowActions(row.id)}</td>
                             ) : null}
                           </tr>

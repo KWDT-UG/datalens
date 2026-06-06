@@ -5,7 +5,12 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from apps.common.models import ApprovalStatus
-from apps.common.permissions import ApprovalReviewAccess
+from apps.common.permissions import (
+    ApprovalReviewAccess,
+    REVIEW_APPROVALS,
+    REVIEW_IMPACT_APPROVALS,
+    user_has_capability,
+)
 from apps.common.viewsets import (
     ActionPermissionMixin,
     AuditFieldsMixin,
@@ -36,6 +41,24 @@ class ApprovalRequestViewSet(
         "supersede": [ApprovalReviewAccess],
     }
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user_has_capability(user, REVIEW_APPROVALS):
+            return queryset
+        if user_has_capability(user, REVIEW_IMPACT_APPROVALS):
+            return queryset.filter(entity_type="impact_record")
+        if user.is_authenticated:
+            return queryset.filter(submitted_by_user_id=user.pk)
+        return queryset.none()
+
+    def validate_reviewer(self, approval_request):
+        user_id = self.request.user.pk if self.request.user.is_authenticated else None
+        if user_id is not None and approval_request.submitted_by_user_id == user_id:
+            raise ValidationError(
+                {"reviewer": "Users cannot review their own approval requests."}
+            )
+
     def perform_create(self, serializer):
         user_id = self.request.user.pk if self.request.user.is_authenticated else None
         serializer.save(
@@ -47,6 +70,7 @@ class ApprovalRequestViewSet(
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         approval_request = self.get_object()
+        self.validate_reviewer(approval_request)
         if approval_request.status != ApprovalStatus.PENDING:
             raise ValidationError(
                 {"status": "Only pending approval requests can be approved."}
@@ -77,6 +101,7 @@ class ApprovalRequestViewSet(
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         approval_request = self.get_object()
+        self.validate_reviewer(approval_request)
         if approval_request.status != ApprovalStatus.PENDING:
             raise ValidationError(
                 {"status": "Only pending approval requests can be rejected."}
@@ -103,6 +128,7 @@ class ApprovalRequestViewSet(
     @action(detail=True, methods=["post"])
     def supersede(self, request, pk=None):
         approval_request = self.get_object()
+        self.validate_reviewer(approval_request)
         if approval_request.status != ApprovalStatus.PENDING:
             raise ValidationError(
                 {"status": "Only pending approval requests can be superseded."}

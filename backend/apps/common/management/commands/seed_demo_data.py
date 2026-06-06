@@ -24,6 +24,8 @@ class Command(BaseCommand):
                     f"cooperatives={result['cooperative_count']}, "
                     f"resources={result['resource_count']}, "
                     f"impact_records={result['impact_record_count']}, "
+                    f"users={result['user_count']}, "
+                    f"invitations={result['invitation_count']}, "
                     f"community_id={result['community_id']}, "
                     f"resource_id={result['resource_id']}, "
                     f"approval_request_id={result['approval_request_id']}"

@@ -4,7 +4,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.common.models import InstitutionType, MemberStatus, ResourcePartyType
+from apps.common.models import InstitutionType, MemberStatus, ResourcePartyType, UserRole
+from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.institutions.models import Institution
@@ -20,6 +21,7 @@ class CoreApiTests(TestCase):
             username="field.officer",
             password="test-password",
         )
+        assign_role(cls.user, UserRole.FIELD_OFFICER)
         cls.community = Community.objects.create(
             name="Primary Community",
             district_name="Kampala",

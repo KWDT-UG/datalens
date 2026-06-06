@@ -39,14 +39,102 @@ export interface AuthUser {
   id: number;
   username: string;
   email: string;
+  first_name: string;
+  last_name: string;
+  workforce_type: string | null;
+  position_title: string;
+  is_active: boolean;
   is_staff: boolean;
   is_superuser: boolean;
   roles: string[];
+  capabilities: string[];
+}
+
+export interface ProfileUpdateInput {
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  position_title?: string;
+  current_password?: string;
+  new_password?: string;
 }
 
 export interface LoginResponse {
   token: string;
   user: AuthUser;
+}
+
+export interface AdminAccount {
+  id: number;
+  username: string;
+  email: string;
+  is_active: boolean;
+  is_staff: boolean;
+  is_superuser: boolean;
+  role: string | null;
+  workforce_type: string | null;
+  position_title: string;
+  first_name: string;
+  last_name: string;
+  last_login: string | null;
+  date_joined: string;
+}
+
+export interface AdminRoleDefinition {
+  value: string;
+  label: string;
+  capabilities: string[];
+  group_name: string;
+}
+
+export interface AdminAccountCreateInput {
+  username: string;
+  email?: string;
+  password: string;
+  role: string;
+  first_name?: string;
+  last_name?: string;
+  workforce_type: string;
+  position_title?: string;
+  is_active: boolean;
+}
+
+export interface AdminAccountUpdateInput {
+  email?: string;
+  password?: string;
+  role?: string;
+  first_name?: string;
+  last_name?: string;
+  workforce_type?: string;
+  position_title?: string;
+  is_active?: boolean;
+}
+
+export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired' | string;
+
+export interface AdminInvitation {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  workforce_type: string;
+  position_title: string;
+  role: string;
+  status: InvitationStatus;
+  invited_by_user_id: number;
+  invited_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_user_id: number | null;
+}
+
+export interface AdminInvitationCreateInput {
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  workforce_type: string;
+  position_title?: string;
+  role: string;
 }
 
 export interface Community {

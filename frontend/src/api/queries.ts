@@ -2,7 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 import type {
+  AdminAccount,
+  AdminAccountCreateInput,
+  AdminAccountUpdateInput,
+  AdminInvitation,
+  AdminInvitationCreateInput,
+  AdminRoleDefinition,
   ApprovalRequest,
+  AuthUser,
   Committee,
   CommitteeCreateInput,
   Community,
@@ -24,9 +31,112 @@ import type {
   Member,
   MemberCreateInput,
   PaginatedResponse,
+  ProfileUpdateInput,
   Resource,
   ResourceCreateInput
 } from './types';
+
+export function useUpdateProfileMutation() {
+  return useMutation({
+    mutationFn: (payload: ProfileUpdateInput) =>
+      apiPatch<DataEnvelope<{ user: AuthUser }>, ProfileUpdateInput>(
+        '/api/v1/auth/me/',
+        payload
+      )
+  });
+}
+
+export function useAdminUsersQuery(search = '') {
+  return useQuery({
+    queryKey: ['admin-users', search],
+    queryFn: () =>
+      apiGet<DataEnvelope<{ users: AdminAccount[] }>>('/api/v1/admin/users/', {
+        search
+      })
+  });
+}
+
+export function useAdminRolesQuery() {
+  return useQuery({
+    queryKey: ['admin-roles'],
+    queryFn: () =>
+      apiGet<DataEnvelope<{ roles: AdminRoleDefinition[] }>>('/api/v1/admin/roles/')
+  });
+}
+
+export function useCreateAdminUserMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: AdminAccountCreateInput) =>
+      apiPost<DataEnvelope<{ user: AdminAccount }>, AdminAccountCreateInput>(
+        '/api/v1/admin/users/',
+        payload
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+  });
+}
+
+export function useUpdateAdminUserMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: AdminAccountUpdateInput }) =>
+      apiPatch<DataEnvelope<{ user: AdminAccount }>, AdminAccountUpdateInput>(
+        `/api/v1/admin/users/${id}/`,
+        payload
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+  });
+}
+
+export function useAdminInvitationsQuery() {
+  return useQuery({
+    queryKey: ['admin-invitations'],
+    queryFn: () =>
+      apiGet<DataEnvelope<{ invitations: AdminInvitation[] }>>(
+        '/api/v1/admin/invitations/'
+      )
+  });
+}
+
+export function useCreateAdminInvitationMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: AdminInvitationCreateInput) =>
+      apiPost<
+        DataEnvelope<{ invitation: AdminInvitation; invitation_url: string }>,
+        AdminInvitationCreateInput
+      >('/api/v1/admin/invitations/', payload),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['admin-invitations'] })
+  });
+}
+
+export function useRevokeAdminInvitationMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiPatch<
+        DataEnvelope<{ invitation: AdminInvitation }>,
+        { status: 'revoked' }
+      >(`/api/v1/admin/invitations/${id}/`, { status: 'revoked' }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['admin-invitations'] })
+  });
+}
+
+export function useAcceptInvitationMutation() {
+  return useMutation({
+    mutationFn: (payload: { token: string; username: string; password: string }) =>
+      apiPost<DataEnvelope<{ user: AdminAccount }>, typeof payload>(
+        '/api/v1/auth/accept-invitation/',
+        payload
+      )
+  });
+}
 
 export function useHealthQuery() {
   return useQuery({
