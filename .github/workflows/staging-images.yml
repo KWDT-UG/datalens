@@ -10,6 +10,8 @@ env:
   DOCKER_IMAGE_REPOSITORY: ${{ vars.DOCKER_IMAGE_REPOSITORY || secrets.DOCKER_IMAGE_REPOSITORY }}
   DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  RAILWAY_BACKEND_SERVICE: ${{ vars.RAILWAY_BACKEND_SERVICE }}
+  RAILWAY_FRONTEND_SERVICE: ${{ vars.RAILWAY_FRONTEND_SERVICE }}
 
 jobs:
   backend-checks:
@@ -208,3 +210,62 @@ jobs:
             echo "- Commit tag: \`${DOCKER_IMAGE_REPOSITORY}:frontend-sha-${GITHUB_SHA}\`"
             echo "- Image digest: \`${{ steps.build.outputs.digest }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  redeploy-backend:
+    name: Redeploy Railway backend
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-push-backend
+    if: github.ref == 'refs/heads/main'
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    steps:
+      - name: Validate Railway configuration
+        run: |
+          missing=0
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN must be set as a repository secret."
+            missing=1
+          fi
+          if [ -z "$RAILWAY_BACKEND_SERVICE" ]; then
+            echo "RAILWAY_BACKEND_SERVICE must be set as a repository variable."
+            missing=1
+          fi
+          exit "$missing"
+
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli
+
+      - name: Redeploy backend from backend-staging
+        run: railway redeploy --service "$RAILWAY_BACKEND_SERVICE" --yes
+
+  redeploy-frontend:
+    name: Redeploy Railway frontend
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-push-frontend
+      - redeploy-backend
+    if: github.ref == 'refs/heads/main'
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    steps:
+      - name: Validate Railway configuration
+        run: |
+          missing=0
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN must be set as a repository secret."
+            missing=1
+          fi
+          if [ -z "$RAILWAY_FRONTEND_SERVICE" ]; then
+            echo "RAILWAY_FRONTEND_SERVICE must be set as a repository variable."
+            missing=1
+          fi
+          exit "$missing"
+
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli
+
+      - name: Redeploy frontend from frontend-staging
+        run: railway redeploy --service "$RAILWAY_FRONTEND_SERVICE" --yes
