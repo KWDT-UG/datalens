@@ -12,9 +12,10 @@ import { CommunityDetailPage } from './pages/CommunityDetailPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ImpactPage } from './pages/ImpactPage';
 import { LoginPage } from './pages/LoginPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { ReportsPage } from './pages/ReportsPage';
 import { ResourcesPage } from './pages/ResourcesPage';
+import { SearchPage } from './pages/SearchPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
           },
           { path: 'resources', element: <ResourcesPage /> },
           { path: 'impact', element: <ImpactPage /> },
+          { path: 'search', element: <SearchPage /> },
           {
             element: (
               <CapabilityRoute
@@ -47,8 +49,7 @@ export const router = createBrowserRouter([
             ),
             children: [{ path: 'approvals', element: <ApprovalsPage /> }]
           },
-          { path: 'reports', element: <PlaceholderPage title="Reports" /> },
-          { path: 'donors', element: <PlaceholderPage title="Donors" /> },
+          { path: 'reports', element: <ReportsPage /> },
           { path: 'profile', element: <ProfilePage /> },
           {
             element: <CapabilityRoute anyOf={[capabilities.manageUsers]} />,

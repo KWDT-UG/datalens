@@ -1,15 +1,26 @@
 import { Link } from 'react-router-dom';
 
-import { useCommunitiesQuery } from '../api/queries';
+import { useDashboardQuery } from '../api/queries';
+import { useAuth } from '../auth/AuthContext';
+import { canReviewApprovals } from '../auth/permissions';
+
+function formatCount(value?: number) {
+  return new Intl.NumberFormat().format(value ?? 0);
+}
+
+function formatLabel(value: string) {
+  return value.replace(/_/g, ' ');
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString();
+}
 
 export function DashboardPage() {
-  const communities = useCommunitiesQuery({ page: 1, ordering: 'name' });
-  const totalCommunities = communities.data?.count ?? 0;
-  const visibleRows = communities.data?.results ?? [];
-
-  const memberTotal = visibleRows.reduce((sum, community) => sum + (community.member_count ?? 0), 0);
-  const resourceTotal = visibleRows.reduce((sum, community) => sum + (community.resource_count ?? 0), 0);
-  const groupTotal = visibleRows.reduce((sum, community) => sum + (community.group_count ?? 0), 0);
+  const { user } = useAuth();
+  const dashboard = useDashboardQuery();
+  const data = dashboard.data?.data;
+  const metrics = data?.metrics;
 
   return (
     <section className="page-panel">
@@ -18,40 +29,81 @@ export function DashboardPage() {
           <p className="eyebrow">Overview</p>
           <h1>Dashboard</h1>
           <p className="page-header__description">
-            A first pass at the operational summary, backed by the existing community API.
+            Current operational totals, impact, approvals, and recent record activity.
           </p>
         </div>
-        <Link className="button button--primary" to="/communities">
-          View communities
+        <Link className="button button--primary" to="/reports">
+          Open reports
         </Link>
       </div>
 
-      <div className="metric-grid">
-        <article className="metric-card">
-          <span>Total communities</span>
-          <strong>{totalCommunities}</strong>
-        </article>
-        <article className="metric-card">
-          <span>Groups shown</span>
-          <strong>{groupTotal}</strong>
-        </article>
-        <article className="metric-card">
-          <span>Members shown</span>
-          <strong>{memberTotal}</strong>
-        </article>
-        <article className="metric-card">
-          <span>Resources shown</span>
-          <strong>{resourceTotal}</strong>
-        </article>
-      </div>
+      {dashboard.isLoading ? <div className="state-box">Loading dashboard...</div> : null}
+      {dashboard.isError ? (
+        <div className="state-box state-box--error">Unable to load dashboard metrics.</div>
+      ) : null}
 
-      <div className="content-strip">
-        <h2>Recent activity</h2>
-        <p>
-          Activity and approval feeds will attach here as the UI milestones expand beyond the
-          foundation.
-        </p>
-      </div>
+      {data ? (
+        <>
+          <div className="metric-grid">
+            <article className="metric-card">
+              <span>Communities</span>
+              <strong>{formatCount(metrics?.community_count)}</strong>
+            </article>
+            <article className="metric-card">
+              <span>Groups</span>
+              <strong>{formatCount(metrics?.group_count)}</strong>
+            </article>
+            <article className="metric-card">
+              <span>Active members</span>
+              <strong>{formatCount(metrics?.active_member_count)}</strong>
+            </article>
+            <article className="metric-card">
+              <span>Resources</span>
+              <strong>{formatCount(metrics?.resource_count)}</strong>
+            </article>
+            <article className="metric-card">
+              <span>Beneficiaries recorded</span>
+              <strong>{formatCount(metrics?.beneficiary_count)}</strong>
+            </article>
+            <article className="metric-card">
+              <span>Pending approvals</span>
+              <strong>{formatCount(metrics?.pending_approval_count)}</strong>
+              {canReviewApprovals(user) ? <Link to="/approvals">Review queue</Link> : null}
+            </article>
+          </div>
+
+          <div className="report-grid">
+            <section className="content-strip">
+              <h2>Resource status</h2>
+              {data.resource_status.length === 0 ? <p>No resources recorded yet.</p> : null}
+              {data.resource_status.map((row) => (
+                <div className="report-row" key={row.status}>
+                  <span>{formatLabel(row.status)}</span>
+                  <strong>{formatCount(row.count)}</strong>
+                </div>
+              ))}
+            </section>
+
+            <section className="content-strip">
+              <h2>Recent activity</h2>
+              {data.recent_activity.length === 0 ? <p>No recent activity.</p> : null}
+              {data.recent_activity.map((activity) => (
+                <Link
+                  className="activity-row"
+                  key={`${activity.type}-${activity.id}`}
+                  to={activity.path}
+                >
+                  <span>
+                    <strong>{activity.label}</strong>
+                    <small>{activity.community_name}</small>
+                  </span>
+                  <time dateTime={activity.updated_at}>{formatDate(activity.updated_at)}</time>
+                </Link>
+              ))}
+            </section>
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }

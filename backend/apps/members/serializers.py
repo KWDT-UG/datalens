@@ -5,12 +5,17 @@ from .models import Member
 
 
 class MemberSerializer(serializers.ModelSerializer):
+    community_name = serializers.CharField(source="community.name", read_only=True)
+    group_name = serializers.CharField(source="group.name", read_only=True)
+
     class Meta:
         model = Member
         fields = [
             "id",
             "community",
+            "community_name",
             "group",
+            "group_name",
             "member_number",
             "first_name",
             "last_name",

@@ -761,7 +761,10 @@ def seed_demo_data():
             "impact_record",
             impact_record.id,
             ApprovalActionType.CREATE,
-            {"beneficiary_count": impact_record.beneficiary_count},
+            {
+                "resource": impact_record.resource_id,
+                "beneficiary_count": impact_record.beneficiary_count,
+            },
             {"created": True},
         ),
     ]

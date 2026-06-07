@@ -16,6 +16,7 @@ import type {
   CommunityCreateInput,
   Cooperative,
   CooperativeCreateInput,
+  DashboardData,
   DataEnvelope,
   Group,
   GroupCreateInput,
@@ -146,12 +147,20 @@ export function useHealthQuery() {
   });
 }
 
+export function useDashboardQuery() {
+  return useQuery({
+    queryKey: ['dashboard'],
+    queryFn: () => apiGet<DataEnvelope<DashboardData>>('/api/v1/dashboard/'),
+    staleTime: 30_000
+  });
+}
+
 export function useCommunitiesQuery(params: {
   page: number;
   page_size?: number;
   search?: string;
   ordering?: string;
-}) {
+}, enabled = true) {
   return useQuery({
     queryKey: ['communities', params],
     queryFn: () =>
@@ -160,7 +169,8 @@ export function useCommunitiesQuery(params: {
         page_size: params.page_size,
         search: params.search,
         ordering: params.ordering
-      })
+      }),
+    enabled
   });
 }
 
@@ -178,8 +188,35 @@ export function useCreateCommunityMutation() {
   return useMutation({
     mutationFn: (payload: CommunityCreateInput) =>
       apiPost<Community, CommunityCreateInput>('/api/v1/communities/', payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['communities'] })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['communities'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    }
   });
+}
+
+function invalidateOperationalQueries(queryClient: ReturnType<typeof useQueryClient>, key: string) {
+  queryClient.invalidateQueries({ queryKey: [key] });
+  queryClient.invalidateQueries({ queryKey: ['communities'] });
+  queryClient.invalidateQueries({ queryKey: ['community'] });
+  queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+}
+
+function useUpdateListMutation<T, TPayload>(key: string, path: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<TPayload> }) =>
+      apiPatch<T, Partial<TPayload>>(`${path}${id}/`, payload),
+    onSuccess: () => invalidateOperationalQueries(queryClient, key)
+  });
+}
+
+export function useUpdateCommunityMutation() {
+  return useUpdateListMutation<Community, CommunityCreateInput>(
+    'communities',
+    '/api/v1/communities/'
+  );
 }
 
 function useListQuery<T>(key: string, path: string, params: ListParams, enabled = true) {
@@ -199,6 +236,7 @@ function useCreateListMutation<T, TPayload>(key: string, path: string) {
       queryClient.invalidateQueries({ queryKey: [key] });
       queryClient.invalidateQueries({ queryKey: ['communities'] });
       queryClient.invalidateQueries({ queryKey: ['community'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     }
   });
 }
@@ -212,6 +250,7 @@ export function useArchiveRecordsMutation(key: string, path: string) {
       queryClient.invalidateQueries({ queryKey: [key] });
       queryClient.invalidateQueries({ queryKey: ['communities'] });
       queryClient.invalidateQueries({ queryKey: ['community'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     }
   });
 }
@@ -224,12 +263,20 @@ export function useCreateMemberMutation() {
   return useCreateListMutation<Member, MemberCreateInput>('members', '/api/v1/members/');
 }
 
+export function useUpdateMemberMutation() {
+  return useUpdateListMutation<Member, MemberCreateInput>('members', '/api/v1/members/');
+}
+
 export function useGroupsQuery(params: ListParams, enabled = true) {
   return useListQuery<Group>('groups', '/api/v1/groups/', params, enabled);
 }
 
 export function useCreateGroupMutation() {
   return useCreateListMutation<Group, GroupCreateInput>('groups', '/api/v1/groups/');
+}
+
+export function useUpdateGroupMutation() {
+  return useUpdateListMutation<Group, GroupCreateInput>('groups', '/api/v1/groups/');
 }
 
 export function useInstitutionsQuery(params: ListParams, enabled = true) {
@@ -240,6 +287,13 @@ export function useCreateInstitutionMutation() {
   return useCreateListMutation<Institution, InstitutionCreateInput>('institutions', '/api/v1/institutions/');
 }
 
+export function useUpdateInstitutionMutation() {
+  return useUpdateListMutation<Institution, InstitutionCreateInput>(
+    'institutions',
+    '/api/v1/institutions/'
+  );
+}
+
 export function useCommitteesQuery(params: ListParams, enabled = true) {
   return useListQuery<Committee>('committees', '/api/v1/committees/', params, enabled);
 }
@@ -248,12 +302,26 @@ export function useCreateCommitteeMutation() {
   return useCreateListMutation<Committee, CommitteeCreateInput>('committees', '/api/v1/committees/');
 }
 
+export function useUpdateCommitteeMutation() {
+  return useUpdateListMutation<Committee, CommitteeCreateInput>(
+    'committees',
+    '/api/v1/committees/'
+  );
+}
+
 export function useCooperativesQuery(params: ListParams, enabled = true) {
   return useListQuery<Cooperative>('cooperatives', '/api/v1/cooperatives/', params, enabled);
 }
 
 export function useCreateCooperativeMutation() {
   return useCreateListMutation<Cooperative, CooperativeCreateInput>('cooperatives', '/api/v1/cooperatives/');
+}
+
+export function useUpdateCooperativeMutation() {
+  return useUpdateListMutation<Cooperative, CooperativeCreateInput>(
+    'cooperatives',
+    '/api/v1/cooperatives/'
+  );
 }
 
 export function useResourcesQuery(params: ListParams, enabled = true) {
@@ -270,6 +338,7 @@ export function useCreateResourceMutation() {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
       queryClient.invalidateQueries({ queryKey: ['communities'] });
       queryClient.invalidateQueries({ queryKey: ['community'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     }
   });
 }
@@ -288,6 +357,7 @@ export function useUpdateResourceMutation() {
       queryClient.invalidateQueries({ queryKey: ['impact-summary'] });
       queryClient.invalidateQueries({ queryKey: ['impact-by-community'] });
       queryClient.invalidateQueries({ queryKey: ['impact-by-resource'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     }
   });
 }
@@ -318,10 +388,23 @@ export function useImpactByResourceQuery(params: Record<string, string | number 
 }
 
 export function useCreateImpactRecordMutation() {
-  return useCreateListMutation<ImpactRecord, ImpactRecordCreateInput>(
-    'impact-records',
-    '/api/v1/impact-records/'
-  );
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: ImpactRecordCreateInput) =>
+      apiPost<ImpactRecord, ImpactRecordCreateInput>(
+        '/api/v1/impact-records/',
+        payload
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['impact-records'] });
+      queryClient.invalidateQueries({ queryKey: ['impact-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['impact-by-community'] });
+      queryClient.invalidateQueries({ queryKey: ['impact-by-resource'] });
+      queryClient.invalidateQueries({ queryKey: ['community'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    }
+  });
 }
 
 export function useUpdateImpactRecordMutation() {
@@ -336,6 +419,7 @@ export function useUpdateImpactRecordMutation() {
       queryClient.invalidateQueries({ queryKey: ['impact-by-community'] });
       queryClient.invalidateQueries({ queryKey: ['impact-by-resource'] });
       queryClient.invalidateQueries({ queryKey: ['community'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     }
   });
 }
@@ -361,6 +445,10 @@ export function useReviewApprovalMutation(action: 'approve' | 'reject' | 'supers
       queryClient.invalidateQueries({ queryKey: ['members'] });
       queryClient.invalidateQueries({ queryKey: ['groups'] });
       queryClient.invalidateQueries({ queryKey: ['impact-records'] });
+      queryClient.invalidateQueries({ queryKey: ['impact-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['impact-by-community'] });
+      queryClient.invalidateQueries({ queryKey: ['impact-by-resource'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     }
   });
 }

@@ -11,7 +11,9 @@ import {
   UsersIcon
 } from '@patternfly/react-icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useHealthQuery } from '../api/queries';
 import { useAuth } from '../auth/AuthContext';
@@ -28,7 +30,6 @@ const navItems = [
   { label: 'Impact', to: '/impact', icon: TableIcon },
   { label: 'Approvals', to: '/approvals', icon: BellIcon, show: canReviewApprovals },
   { label: 'Reports', to: '/reports', icon: ClipboardListIcon },
-  { label: 'Donors', to: '/donors', icon: UsersIcon },
   {
     label: 'Admin',
     to: '/admin',
@@ -48,10 +49,27 @@ function ApiStatus() {
 export function AppShell() {
   const auth = useAuth();
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [search, setSearch] = useState('');
   const displayName =
     [auth.user?.first_name, auth.user?.last_name].filter(Boolean).join(' ') ||
     auth.user?.username ||
     'User';
+
+  useEffect(() => {
+    if (location.pathname === '/search') {
+      setSearch(new URLSearchParams(location.search).get('q') ?? '');
+    }
+  }, [location.pathname, location.search]);
+
+  function handleSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = search.trim();
+    if (query) {
+      navigate(`/search?q=${encodeURIComponent(query)}`);
+    }
+  }
 
   async function handleLogout() {
     await auth.logout();
@@ -76,10 +94,16 @@ export function AppShell() {
       </aside>
       <div className="workspace">
         <header className="topbar">
-          <label className="global-search">
+          <form className="global-search" role="search" onSubmit={handleSearch}>
             <SearchIcon aria-hidden="true" />
-            <input type="search" placeholder="Search" aria-label="Global search" />
-          </label>
+            <input
+              type="search"
+              value={search}
+              placeholder="Search communities, people, and resources"
+              aria-label="Global search"
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </form>
           <div className="topbar__user">
             <ApiStatus />
             <span>{displayName}</span>

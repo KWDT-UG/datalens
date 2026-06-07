@@ -4,11 +4,14 @@ from .models import Institution
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
+    community_name = serializers.CharField(source="community.name", read_only=True)
+
     class Meta:
         model = Institution
         fields = [
             "id",
             "community",
+            "community_name",
             "code",
             "name",
             "institution_type",

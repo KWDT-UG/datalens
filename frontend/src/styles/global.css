@@ -678,6 +678,91 @@ h2 {
   margin-bottom: 24px;
 }
 
+.activity-row,
+.search-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.activity-row:last-child,
+.search-result:last-child {
+  border-bottom: 0;
+}
+
+.activity-row > span {
+  display: grid;
+  gap: 3px;
+}
+
+.activity-row small,
+.search-result span,
+.activity-row time {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.activity-row time {
+  flex: 0 0 auto;
+}
+
+.search-summary {
+  color: var(--muted);
+}
+
+.search-results-grid,
+.report-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.search-results-grid .content-strip h2 {
+  display: flex;
+  justify-content: space-between;
+}
+
+.search-results-grid .content-strip h2 span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.search-result {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.report-card h2,
+.report-card p {
+  margin: 0;
+}
+
+.report-card p {
+  min-height: 48px;
+  color: var(--muted);
+}
+
+.report-card .button {
+  justify-self: start;
+}
+
 .report-row {
   display: flex;
   align-items: center;
@@ -987,6 +1072,34 @@ h2 {
   color: var(--green);
 }
 
+.review-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.review-summary div {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.review-summary dt {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.review-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
 .record-form__actions {
   display: flex;
   justify-content: flex-end;
@@ -1131,6 +1244,10 @@ h2 {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .review-summary {
     grid-template-columns: 1fr;
   }
 }

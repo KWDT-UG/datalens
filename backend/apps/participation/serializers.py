@@ -10,11 +10,14 @@ from .models import (
 
 
 class CommitteeSerializer(serializers.ModelSerializer):
+    community_name = serializers.CharField(source="community.name", read_only=True)
+
     class Meta:
         model = Committee
         fields = [
             "id",
             "community",
+            "community_name",
             "name",
             "committee_type",
             "status",
@@ -111,11 +114,14 @@ class CommitteeMembershipSerializer(serializers.ModelSerializer):
 
 
 class CooperativeSerializer(serializers.ModelSerializer):
+    community_name = serializers.CharField(source="community.name", read_only=True)
+
     class Meta:
         model = Cooperative
         fields = [
             "id",
             "community",
+            "community_name",
             "name",
             "cooperative_type",
             "status",

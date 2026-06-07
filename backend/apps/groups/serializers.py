@@ -5,11 +5,14 @@ from .models import Group
 
 
 class GroupSerializer(serializers.ModelSerializer):
+    community_name = serializers.CharField(source="community.name", read_only=True)
+
     class Meta:
         model = Group
         fields = [
             "id",
             "community",
+            "community_name",
             "code",
             "name",
             "status",

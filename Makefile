@@ -2,7 +2,7 @@ COMPOSE ?= docker compose
 BACKEND ?= $(COMPOSE) run --rm backend
 FRONTEND ?= $(COMPOSE) run --rm frontend
 
-.PHONY: help bootstrap build up down logs migrate makemigrations superuser test check shell init-roles seed-reference-data seed-demo-data smoke-api frontend-install frontend-build frontend-lint frontend-dev
+.PHONY: help bootstrap build up down logs migrate makemigrations superuser test check shell init-roles seed-reference-data seed-demo-data smoke-api frontend-install frontend-build frontend-lint frontend-test frontend-dev
 
 help:
 	@echo "KWDT Data Lens commands"
@@ -24,6 +24,7 @@ help:
 	@echo "  make frontend-install  Install frontend dependencies"
 	@echo "  make frontend-build    Build the frontend"
 	@echo "  make frontend-lint     Type-check the frontend"
+	@echo "  make frontend-test     Run frontend unit/component tests"
 	@echo "  make frontend-dev      Start only the frontend dev service"
 
 bootstrap:
@@ -69,6 +70,9 @@ frontend-build:
 
 frontend-lint:
 	cd frontend && npm run lint
+
+frontend-test:
+	cd frontend && npm run test:run
 
 frontend-dev:
 	$(COMPOSE) up frontend

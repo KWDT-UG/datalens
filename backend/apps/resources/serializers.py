@@ -42,7 +42,9 @@ class ThematicAreaSerializer(serializers.ModelSerializer):
 
 
 class ResourceThematicAreaReadSerializer(serializers.ModelSerializer):
-    thematic_area_id = serializers.IntegerField(source="thematic_area.id", read_only=True)
+    thematic_area_id = serializers.IntegerField(
+        source="thematic_area.id", read_only=True
+    )
     code = serializers.CharField(source="thematic_area.code", read_only=True)
     name = serializers.CharField(source="thematic_area.name", read_only=True)
 
@@ -88,7 +90,9 @@ class ResourceThematicAreaSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, attrs):
-        resource = attrs.get("resource", self.instance.resource if self.instance else None)
+        resource = attrs.get(
+            "resource", self.instance.resource if self.instance else None
+        )
         thematic_area = attrs.get(
             "thematic_area",
             self.instance.thematic_area if self.instance else None,
@@ -102,7 +106,11 @@ class ResourceThematicAreaSerializer(serializers.ModelSerializer):
                 queryset = queryset.exclude(pk=self.instance.pk)
             if queryset.exists():
                 raise serializers.ValidationError(
-                    {"thematic_area": "This thematic area is already linked to the resource."}
+                    {
+                        "thematic_area": (
+                            "This thematic area is already linked to the resource."
+                        )
+                    }
                 )
         return attrs
 
@@ -126,6 +134,7 @@ class ResourceThematicAreaSerializer(serializers.ModelSerializer):
 
 
 class ResourceSerializer(serializers.ModelSerializer):
+    community_name = serializers.CharField(source="community.name", read_only=True)
     thematic_areas = ResourceThematicAreaReadSerializer(
         source="thematic_links",
         many=True,
@@ -149,6 +158,7 @@ class ResourceSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "community",
+            "community_name",
             "owner_type",
             "owner_id",
             "resource_type",
@@ -216,7 +226,8 @@ class ResourceSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {
                         "primary_thematic_area_id": (
-                            "Primary thematic area must be included in thematic_area_ids."
+                            "Primary thematic area must be included in "
+                            "thematic_area_ids."
                         )
                     }
                 )
@@ -225,7 +236,8 @@ class ResourceSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {
                         "primary_thematic_area_id": (
-                            "thematic_area_ids are required when creating a primary thematic area."
+                            "thematic_area_ids are required when creating a "
+                            "primary thematic area."
                         )
                     }
                 )
@@ -239,7 +251,8 @@ class ResourceSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {
                         "primary_thematic_area_id": (
-                            "Primary thematic area must already be linked to the resource."
+                            "Primary thematic area must already be linked to "
+                            "the resource."
                         )
                     }
                 )
@@ -268,9 +281,9 @@ class ResourceSerializer(serializers.ModelSerializer):
         if thematic_areas is None:
             thematic_areas = [
                 link.thematic_area
-                for link in instance.thematic_links.filter(is_deleted=False).select_related(
-                    "thematic_area"
-                )
+                for link in instance.thematic_links.filter(
+                    is_deleted=False
+                ).select_related("thematic_area")
             ]
 
         instance.thematic_links.all().delete()
@@ -278,7 +291,8 @@ class ResourceSerializer(serializers.ModelSerializer):
             ResourceThematicArea.objects.create(
                 resource=instance,
                 thematic_area=thematic_area,
-                is_primary=primary_area is not None and thematic_area.id == primary_area.id,
+                is_primary=primary_area is not None
+                and thematic_area.id == primary_area.id,
             )
 
 

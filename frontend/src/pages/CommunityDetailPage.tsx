@@ -33,6 +33,7 @@ import {
   MemberCreateDialog
 } from '../components/CommunityBreakdownCreateDialogs';
 import { ActionMenu } from '../components/ActionMenu';
+import { CommunityCreateDialog } from '../components/CommunityCreateDialog';
 import { ListActionError } from '../components/ListActionError';
 import { ResourceCreateDialog } from '../components/ResourceCreateDialog';
 import { StatusBadge } from '../components/StatusBadge';
@@ -315,7 +316,7 @@ const tableConfigs: Record<
         cells: [
           formatDate(impact.as_of_date),
           formatLabel(impact.period_type),
-          `Resource #${impact.resource}`,
+          impact.resource_name ?? 'Resource',
           formatCount(impact.beneficiary_count),
           formatCount(impact.household_count),
           formatCount(impact.member_count),
@@ -342,6 +343,7 @@ export function CommunityDetailPage() {
         ? capabilities.archiveImpact
         : capabilities.archiveOperations;
   const canManage = hasCapability(user, manageCapability);
+  const canManageCommunity = hasCapability(user, capabilities.manageOperations);
   const canArchive = hasCapability(user, archiveCapability);
   const canExport = hasCapability(user, capabilities.export);
   const visibleSections = user?.roles.includes('communications_viewer')
@@ -352,6 +354,12 @@ export function CommunityDetailPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editCommunityOpen, setEditCommunityOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editingInstitution, setEditingInstitution] = useState<Institution | null>(null);
+  const [editingCommittee, setEditingCommittee] = useState<Committee | null>(null);
+  const [editingCooperative, setEditingCooperative] = useState<Cooperative | null>(null);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [editingImpactRecord, setEditingImpactRecord] = useState<ImpactRecord | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -418,6 +426,12 @@ export function CommunityDetailPage() {
     setPage(1);
     setSearch('');
     setCreateOpen(false);
+    setEditCommunityOpen(false);
+    setEditingGroup(null);
+    setEditingMember(null);
+    setEditingInstitution(null);
+    setEditingCommittee(null);
+    setEditingCooperative(null);
     setEditingResource(null);
     setEditingImpactRecord(null);
     setSelectedIds([]);
@@ -508,6 +522,76 @@ export function CommunityDetailPage() {
       );
     }
 
+    if (editingGroup) {
+      return (
+        <GroupCreateDialog
+          communityId={community.id}
+          group={editingGroup}
+          onClose={() => setEditingGroup(null)}
+          onCreated={() => {
+            setEditingGroup(null);
+            handleCreated();
+          }}
+        />
+      );
+    }
+
+    if (editingMember) {
+      return (
+        <MemberCreateDialog
+          communityId={community.id}
+          member={editingMember}
+          onClose={() => setEditingMember(null)}
+          onCreated={() => {
+            setEditingMember(null);
+            handleCreated();
+          }}
+        />
+      );
+    }
+
+    if (editingInstitution) {
+      return (
+        <InstitutionCreateDialog
+          communityId={community.id}
+          institution={editingInstitution}
+          onClose={() => setEditingInstitution(null)}
+          onCreated={() => {
+            setEditingInstitution(null);
+            handleCreated();
+          }}
+        />
+      );
+    }
+
+    if (editingCommittee) {
+      return (
+        <CommitteeCreateDialog
+          communityId={community.id}
+          committee={editingCommittee}
+          onClose={() => setEditingCommittee(null)}
+          onCreated={() => {
+            setEditingCommittee(null);
+            handleCreated();
+          }}
+        />
+      );
+    }
+
+    if (editingCooperative) {
+      return (
+        <CooperativeCreateDialog
+          communityId={community.id}
+          cooperative={editingCooperative}
+          onClose={() => setEditingCooperative(null)}
+          onCreated={() => {
+            setEditingCooperative(null);
+            handleCreated();
+          }}
+        />
+      );
+    }
+
     if (editingImpactRecord) {
       return (
         <ImpactRecordCreateDialog
@@ -528,6 +612,66 @@ export function CommunityDetailPage() {
   function renderRowActions(rowId: number) {
     if (!canManage) {
       return null;
+    }
+    if (activeSection === 'groups') {
+      const group = (records as Group[]).find((item) => item.id === rowId);
+      return group ? (
+        <button
+          className="button button--secondary"
+          type="button"
+          onClick={() => setEditingGroup(group)}
+        >
+          Edit
+        </button>
+      ) : null;
+    }
+    if (activeSection === 'members') {
+      const member = (records as Member[]).find((item) => item.id === rowId);
+      return member ? (
+        <button
+          className="button button--secondary"
+          type="button"
+          onClick={() => setEditingMember(member)}
+        >
+          Edit
+        </button>
+      ) : null;
+    }
+    if (activeSection === 'institutions') {
+      const institution = (records as Institution[]).find((item) => item.id === rowId);
+      return institution ? (
+        <button
+          className="button button--secondary"
+          type="button"
+          onClick={() => setEditingInstitution(institution)}
+        >
+          Edit
+        </button>
+      ) : null;
+    }
+    if (activeSection === 'committees') {
+      const committee = (records as Committee[]).find((item) => item.id === rowId);
+      return committee ? (
+        <button
+          className="button button--secondary"
+          type="button"
+          onClick={() => setEditingCommittee(committee)}
+        >
+          Edit
+        </button>
+      ) : null;
+    }
+    if (activeSection === 'cooperatives') {
+      const cooperative = (records as Cooperative[]).find((item) => item.id === rowId);
+      return cooperative ? (
+        <button
+          className="button button--secondary"
+          type="button"
+          onClick={() => setEditingCooperative(cooperative)}
+        >
+          Edit
+        </button>
+      ) : null;
     }
     if (activeSection === 'resources') {
       const resource = (records as Resource[]).find((item) => item.id === rowId);
@@ -582,9 +726,15 @@ export function CommunityDetailPage() {
               <h1>{community.name}</h1>
               <p>{community.notes || 'Community description'}</p>
             </div>
-            <button className="button button--primary" type="button">
-              Send e-mail
-            </button>
+            {canManageCommunity ? (
+              <button
+                className="button button--primary"
+                type="button"
+                onClick={() => setEditCommunityOpen(true)}
+              >
+                Edit community
+              </button>
+            ) : null}
           </div>
 
           <div className="address-card">
@@ -686,7 +836,7 @@ export function CommunityDetailPage() {
                           {tableConfig.columns.map((column) => (
                             <th key={column}>{column}</th>
                           ))}
-                          {(activeSection === 'resources' || activeSection === 'impact') && canManage ? <th>Actions</th> : null}
+                          {canManage ? <th>Actions</th> : null}
                         </tr>
                       </thead>
                       <tbody>
@@ -703,7 +853,7 @@ export function CommunityDetailPage() {
                             {row.cells.map((cell, index) => (
                               <td key={`${row.id}-${tableConfig.columns[index]}`}>{cell}</td>
                             ))}
-                            {(activeSection === 'resources' || activeSection === 'impact') && canManage ? (
+                            {canManage ? (
                               <td>{renderRowActions(row.id)}</td>
                             ) : null}
                           </tr>
@@ -717,6 +867,13 @@ export function CommunityDetailPage() {
           </div>
           {renderCreateDialog()}
           {renderEditDialog()}
+          {canManageCommunity && editCommunityOpen ? (
+            <CommunityCreateDialog
+              community={community}
+              onClose={() => setEditCommunityOpen(false)}
+              onSaved={() => setEditCommunityOpen(false)}
+            />
+          ) : null}
         </>
       ) : null}
     </section>

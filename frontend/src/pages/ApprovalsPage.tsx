@@ -3,13 +3,16 @@ import { useMemo, useState } from 'react';
 
 import {
   useApprovalRequestsQuery,
-  useArchiveRecordsMutation,
-  useReviewApprovalMutation
+  useArchiveRecordsMutation
 } from '../api/queries';
 import type { ApprovalRequest, ApprovalStatus } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
+import {
+  ApprovalReviewDialog,
+  type ApprovalReviewAction
+} from '../components/ApprovalReviewDialog';
 import { ListActionError } from '../components/ListActionError';
 import { StatusBadge } from '../components/StatusBadge';
 import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/listActions';
@@ -66,6 +69,10 @@ export function ApprovalsPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<ApprovalStatus | 'all'>('pending');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [reviewTarget, setReviewTarget] = useState<{
+    action: ApprovalReviewAction;
+    approval: ApprovalRequest;
+  } | null>(null);
   const query = useApprovalRequestsQuery({
     page,
     page_size: pageSize,
@@ -73,16 +80,13 @@ export function ApprovalsPage() {
     status: status === 'all' ? undefined : status,
     ordering: '-submitted_at'
   });
-  const approveApproval = useReviewApprovalMutation('approve');
-  const rejectApproval = useReviewApprovalMutation('reject');
-  const supersedeApproval = useReviewApprovalMutation('supersede');
   const archiveApprovals = useArchiveRecordsMutation('approval-requests', '/api/v1/approval-requests/');
   const approvals = query.data?.results ?? [];
   const pendingCount = approvals.filter((approval) => approval.status === 'pending').length;
   const visibleIds = approvals.map((approval) => approval.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
   const pageCount = useMemo(() => Math.max(1, Math.ceil((query.data?.count ?? 0) / pageSize)), [query.data]);
-  const actionError = approveApproval.error ?? rejectApproval.error ?? supersedeApproval.error ?? archiveApprovals.error;
+  const actionError = archiveApprovals.error;
   const listActions = [
     ...(canExport ? [{
       label: 'Export current page',
@@ -116,22 +120,6 @@ export function ApprovalsPage() {
       setSelectedIds([]);
     } catch {
       // The archive error state is rendered below.
-    }
-  }
-
-  async function reviewApproval(id: number, action: 'approve' | 'reject' | 'supersede') {
-    const reviewNotes = window.prompt('Review notes', '');
-    if (reviewNotes === null) {
-      return;
-    }
-
-    const mutation =
-      action === 'approve' ? approveApproval : action === 'reject' ? rejectApproval : supersedeApproval;
-
-    try {
-      await mutation.mutateAsync({ id, review_notes: reviewNotes });
-    } catch {
-      // The review error state is rendered below.
     }
   }
 
@@ -268,7 +256,7 @@ export function ApprovalsPage() {
                       {formatLabel(approval.entity_type)} #{approval.entity_id ?? 'new'}
                     </td>
                     <td>{formatLabel(approval.action_type)}</td>
-                    <td>Community #{approval.community}</td>
+                    <td>{approval.community_name ?? 'Not recorded'}</td>
                     <td>
                       <StatusBadge status={approval.status} />
                     </td>
@@ -280,24 +268,24 @@ export function ApprovalsPage() {
                         <button
                           className="button button--muted"
                           type="button"
-                          disabled={!isPending || approveApproval.isPending}
-                          onClick={() => void reviewApproval(approval.id, 'approve')}
+                          disabled={!isPending}
+                          onClick={() => setReviewTarget({ action: 'approve', approval })}
                         >
                           Approve
                         </button>
                         <button
                           className="button button--secondary"
                           type="button"
-                          disabled={!isPending || rejectApproval.isPending}
-                          onClick={() => void reviewApproval(approval.id, 'reject')}
+                          disabled={!isPending}
+                          onClick={() => setReviewTarget({ action: 'reject', approval })}
                         >
                           Reject
                         </button>
                         <button
                           className="button button--secondary"
                           type="button"
-                          disabled={!isPending || supersedeApproval.isPending}
-                          onClick={() => void reviewApproval(approval.id, 'supersede')}
+                          disabled={!isPending}
+                          onClick={() => setReviewTarget({ action: 'supersede', approval })}
                         >
                           Supersede
                         </button>
@@ -309,6 +297,15 @@ export function ApprovalsPage() {
             </tbody>
           </table>
         </div>
+      ) : null}
+
+      {reviewTarget ? (
+        <ApprovalReviewDialog
+          key={`${reviewTarget.approval.id}-${reviewTarget.action}`}
+          action={reviewTarget.action}
+          approval={reviewTarget.approval}
+          onClose={() => setReviewTarget(null)}
+        />
       ) : null}
     </section>
   );

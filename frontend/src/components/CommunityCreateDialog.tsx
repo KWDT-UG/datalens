@@ -1,12 +1,17 @@
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 
-import { useCreateCommunityMutation } from '../api/queries';
-import type { CommunityCreateInput } from '../api/types';
+import {
+  useCreateCommunityMutation,
+  useUpdateCommunityMutation
+} from '../api/queries';
+import type { Community, CommunityCreateInput } from '../api/types';
 import { FormDialog, FormErrorSummary } from './FormDialog';
 
 type CommunityCreateDialogProps = {
+  community?: Community;
   onClose: () => void;
+  onSaved?: (community: Community) => void;
 };
 
 const statusOptions = [
@@ -15,43 +20,66 @@ const statusOptions = [
   { value: 'archived', label: 'Archived' }
 ];
 
-export function CommunityCreateDialog({ onClose }: CommunityCreateDialogProps) {
+export function CommunityCreateDialog({
+  community,
+  onClose,
+  onSaved
+}: CommunityCreateDialogProps) {
   const navigate = useNavigate();
   const createCommunity = useCreateCommunityMutation();
+  const updateCommunity = useUpdateCommunityMutation();
+  const isEditing = Boolean(community);
   const {
     formState: { errors },
     handleSubmit,
     register
   } = useForm<CommunityCreateInput>({
     defaultValues: {
-      country: 'Uganda',
-      status: 'active'
+      area_name: community?.area_name ?? '',
+      country: community?.country ?? 'Uganda',
+      district_name: community?.district_name ?? '',
+      name: community?.name ?? '',
+      notes: community?.notes ?? '',
+      region_name: community?.region_name ?? '',
+      status: community?.status ?? 'active'
     }
   });
+  const mutationError = createCommunity.error ?? updateCommunity.error;
+  const isPending = createCommunity.isPending || updateCommunity.isPending;
 
   return (
     <FormDialog
       open
-      title="Create community"
-      description="Start the community record with its identifying details."
+      title={isEditing ? 'Edit community' : 'Create community'}
+      description={
+        isEditing
+          ? 'Update this community’s identifying details.'
+          : 'Start the community record with its identifying details.'
+      }
       onClose={onClose}
     >
       <form
         className="record-form"
         onSubmit={handleSubmit(async (values) => {
           try {
-            const community = await createCommunity.mutateAsync({
+            const payload = {
               ...values,
               name: values.name.trim()
-            });
+            };
+            const savedCommunity = community
+              ? await updateCommunity.mutateAsync({ id: community.id, payload })
+              : await createCommunity.mutateAsync(payload);
+            onSaved?.(savedCommunity);
             onClose();
-            navigate(`/communities/${community.id}/groups`);
+            if (!community) {
+              navigate(`/communities/${savedCommunity.id}/groups`);
+            }
           } catch {
             // The mutation error state is rendered below.
           }
         })}
       >
-        <FormErrorSummary error={createCommunity.error} />
+        <FormErrorSummary error={mutationError} />
 
         <div className="form-grid">
           <label className="form-field">
@@ -106,8 +134,8 @@ export function CommunityCreateDialog({ onClose }: CommunityCreateDialogProps) {
           <button className="button button--secondary" type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="button button--primary" type="submit" disabled={createCommunity.isPending}>
-            {createCommunity.isPending ? 'Saving...' : 'Create community'}
+          <button className="button button--primary" type="submit" disabled={isPending}>
+            {isPending ? 'Saving...' : isEditing ? 'Save community' : 'Create community'}
           </button>
         </footer>
       </form>

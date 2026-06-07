@@ -9,8 +9,10 @@ from .models import ImpactRecord
 from .serializers import ImpactRecordSerializer
 
 
-class ImpactRecordViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, ModelViewSet):
-    queryset = ImpactRecord.objects.select_related("resource").all()
+class ImpactRecordViewSet(
+    AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, ModelViewSet
+):
+    queryset = ImpactRecord.objects.select_related("resource__community").all()
     serializer_class = ImpactRecordSerializer
     filter_fields = ("resource", "beneficiary_type", "period_type", "method")
     search_fields = ("resource__name", "notes", "period_type")
@@ -43,10 +45,7 @@ class ImpactRecordViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, 
         )
         return Response(
             {
-                "data": {
-                    key: value or 0
-                    for key, value in totals.items()
-                },
+                "data": {key: value or 0 for key, value in totals.items()},
                 "meta": {"group_by": None},
                 "errors": [],
             }

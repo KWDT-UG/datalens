@@ -36,9 +36,10 @@ export function FormDialog({ children, description, onClose, open, title }: Form
 
 type FormErrorSummaryProps = {
   error: unknown;
+  title?: string;
 };
 
-export function FormErrorSummary({ error }: FormErrorSummaryProps) {
+export function FormErrorSummary({ error, title = 'Save failed' }: FormErrorSummaryProps) {
   if (!error) {
     return null;
   }
@@ -50,7 +51,7 @@ export function FormErrorSummary({ error }: FormErrorSummaryProps) {
 
   return (
     <div className="form-alert form-alert--error" role="alert">
-      <strong>Save failed</strong>
+      <strong>{title}</strong>
       {items.map((item) => (
         <span key={`${item.attr ?? 'record'}-${item.detail}`}>
           {item.attr ? `${item.attr}: ` : ''}
