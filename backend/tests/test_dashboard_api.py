@@ -1,0 +1,123 @@
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from apps.approvals.models import ApprovalRequest
+from apps.common.models import (
+    ApprovalActionType,
+    ApprovalStatus,
+    MemberStatus,
+    ResourcePartyType,
+    UserRole,
+)
+from apps.common.permissions import assign_role
+from apps.communities.models import Community
+from apps.groups.models import Group
+from apps.impacts.models import ImpactRecord
+from apps.members.models import Member
+from apps.resources.models import Resource
+
+
+class DashboardApiTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(
+            username="dashboard.manager",
+            password="test-password",
+        )
+        assign_role(cls.user, UserRole.PROGRAMME_MANAGER)
+        cls.other_user = get_user_model().objects.create_user(
+            username="dashboard.other",
+            password="test-password",
+        )
+        cls.community = Community.objects.create(name="Dashboard Community")
+        cls.group = Group.objects.create(
+            community=cls.community,
+            code="DASH-1",
+            name="Dashboard Group",
+        )
+        Member.objects.create(
+            community=cls.community,
+            group=cls.group,
+            first_name="Active",
+            last_name="Member",
+            status=MemberStatus.ACTIVE,
+        )
+        Member.objects.create(
+            community=cls.community,
+            group=cls.group,
+            first_name="Inactive",
+            last_name="Member",
+            status=MemberStatus.INACTIVE,
+        )
+        cls.resource = Resource.objects.create(
+            community=cls.community,
+            owner_type=ResourcePartyType.GROUP,
+            owner_id=cls.group.id,
+            name="Dashboard Resource",
+        )
+        ImpactRecord.objects.create(
+            resource=cls.resource,
+            beneficiary_count=25,
+            household_count=8,
+        )
+        ApprovalRequest.objects.create(
+            community=cls.community,
+            entity_type="resource",
+            entity_id=cls.resource.id,
+            action_type=ApprovalActionType.UPDATE,
+            status=ApprovalStatus.PENDING,
+            submitted_by_user_id=cls.other_user.id,
+        )
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_dashboard_requires_authentication(self):
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_dashboard_returns_operation_wide_totals_and_recent_activity(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        metrics = response.data["data"]["metrics"]
+        expected = {
+            "community_count": 1,
+            "group_count": 1,
+            "active_member_count": 1,
+            "resource_count": 1,
+            "pending_approval_count": 1,
+            "beneficiary_count": 25,
+            "household_count": 8,
+        }
+        for field, value in expected.items():
+            with self.subTest(field=field):
+                self.assertEqual(metrics[field], value)
+
+        activity_types = {
+            item["type"] for item in response.data["data"]["recent_activity"]
+        }
+        self.assertIn("community", activity_types)
+        self.assertIn("resource", activity_types)
+
+    def test_non_reviewer_pending_count_is_limited_to_own_requests(self):
+        field_user = get_user_model().objects.create_user(
+            username="dashboard.field",
+            password="test-password",
+        )
+        assign_role(field_user, UserRole.FIELD_OFFICER)
+        self.client.force_authenticate(field_user)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["data"]["metrics"]["pending_approval_count"],
+            0,
+        )

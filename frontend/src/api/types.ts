@@ -156,6 +156,33 @@ export interface Community {
   updated_at?: string;
 }
 
+export interface DashboardMetrics {
+  community_count: number;
+  group_count: number;
+  active_member_count: number;
+  institution_count: number;
+  resource_count: number;
+  pending_approval_count: number;
+  beneficiary_count: number;
+  household_count: number;
+}
+
+export interface DashboardActivity {
+  type: string;
+  id: number;
+  label: string;
+  community_id: number;
+  community_name: string;
+  updated_at: string;
+  path: string;
+}
+
+export interface DashboardData {
+  metrics: DashboardMetrics;
+  resource_status: Array<{ status: string; count: number }>;
+  recent_activity: DashboardActivity[];
+}
+
 export interface CommunityCreateInput {
   name: string;
   area_name?: string;
@@ -169,11 +196,14 @@ export interface CommunityCreateInput {
 export interface Group {
   id: number;
   community: number;
+  community_name?: string;
   code?: string;
   name: string;
   status?: RecordStatus;
   formed_on?: string | null;
+  closed_on?: string | null;
   meeting_day?: string;
+  notes?: string;
 }
 
 export interface GroupCreateInput {
@@ -190,15 +220,24 @@ export interface GroupCreateInput {
 export interface Member {
   id: number;
   community: number;
+  community_name?: string;
   group: number;
+  group_name?: string;
   first_name: string;
   last_name: string;
   email?: string;
   phone?: string;
   status?: RecordStatus;
   member_number?: string;
+  middle_name?: string;
   preferred_name?: string;
+  gender?: string;
+  date_of_birth?: string | null;
+  address_text?: string;
   joined_on?: string | null;
+  left_on?: string | null;
+  deceased_on?: string | null;
+  notes?: string;
 }
 
 export interface MemberCreateInput {
@@ -216,12 +255,15 @@ export interface MemberCreateInput {
   address_text?: string;
   status?: RecordStatus;
   joined_on?: string;
+  left_on?: string;
+  deceased_on?: string;
   notes?: string;
 }
 
 export interface Institution {
   id: number;
   community: number;
+  community_name?: string;
   code?: string;
   name: string;
   institution_type?: string;
@@ -229,6 +271,8 @@ export interface Institution {
   contact_name?: string;
   phone?: string;
   email?: string;
+  location_text?: string;
+  notes?: string;
 }
 
 export interface InstitutionCreateInput {
@@ -247,9 +291,11 @@ export interface InstitutionCreateInput {
 export interface Committee {
   id: number;
   community: number;
+  community_name?: string;
   name: string;
   committee_type?: string;
   status?: RecordStatus;
+  description?: string;
   formed_on?: string | null;
   closed_on?: string | null;
 }
@@ -267,9 +313,11 @@ export interface CommitteeCreateInput {
 export interface Cooperative {
   id: number;
   community: number;
+  community_name?: string;
   name: string;
   cooperative_type?: string;
   status?: RecordStatus;
+  description?: string;
   formed_on?: string | null;
   closed_on?: string | null;
 }
@@ -295,6 +343,7 @@ export interface ResourceThematicArea {
 export interface Resource {
   id: number;
   community: number;
+  community_name?: string;
   name: string;
   description?: string;
   resource_type: string;
@@ -334,6 +383,9 @@ export interface ResourceCreateInput {
 export interface ImpactRecord {
   id: number;
   resource: number;
+  resource_name?: string;
+  community?: number;
+  community_name?: string;
   beneficiary_type?: string | null;
   beneficiary_id?: number | null;
   period_type: string;
@@ -386,6 +438,7 @@ export interface ImpactRecordCreateInput {
 export interface ApprovalRequest {
   id: number;
   community: number;
+  community_name?: string;
   entity_type: string;
   entity_id?: number | null;
   action_type: string;

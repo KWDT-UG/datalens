@@ -212,7 +212,7 @@ export function ResourcesPage() {
                     /> : null}
                   </td>
                   <td>{resource.name}</td>
-                  <td>{resource.community}</td>
+                  <td>{resource.community_name ?? 'Not recorded'}</td>
                   <td>{formatLabel(resource.resource_type)}</td>
                   <td>{`${formatLabel(resource.owner_type)} #${resource.owner_id ?? 'unknown'}`}</td>
                   <td>{formatQuantity(resource)}</td>

@@ -287,7 +287,7 @@ export function ImpactPage() {
                   </td>
                   <td>{formatDate(impact.as_of_date)}</td>
                   <td>{formatLabel(impact.period_type)}</td>
-                  <td>Resource #{impact.resource}</td>
+                  <td>{impact.resource_name ?? 'Resource'}</td>
                   <td>{formatCount(impact.beneficiary_count)}</td>
                   <td>{formatCount(impact.household_count)}</td>
                   <td>{formatCount(impact.member_count)}</td>

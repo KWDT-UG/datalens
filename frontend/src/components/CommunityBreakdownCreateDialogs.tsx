@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 
 import {
@@ -9,15 +10,25 @@ import {
   useCreateMemberMutation,
   useGroupsQuery,
   useResourcesQuery,
-  useUpdateImpactRecordMutation
+  useUpdateCommitteeMutation,
+  useUpdateCooperativeMutation,
+  useUpdateGroupMutation,
+  useUpdateImpactRecordMutation,
+  useUpdateInstitutionMutation,
+  useUpdateMemberMutation
 } from '../api/queries';
 import type {
+  Committee,
   CommitteeCreateInput,
+  Cooperative,
   CooperativeCreateInput,
+  Group,
   GroupCreateInput,
   ImpactRecord,
   ImpactRecordCreateInput,
+  Institution,
   InstitutionCreateInput,
+  Member,
   MemberCreateInput
 } from '../api/types';
 import { FormDialog, FormErrorSummary } from './FormDialog';
@@ -26,6 +37,17 @@ type CommunityScopedDialogProps = {
   communityId: number;
   onClose: () => void;
   onCreated: () => void;
+};
+
+type GroupDialogProps = CommunityScopedDialogProps & { group?: Group };
+type MemberDialogProps = CommunityScopedDialogProps & { member?: Member };
+type InstitutionDialogProps = CommunityScopedDialogProps & {
+  institution?: Institution;
+};
+type ParticipationDialogProps = CommunityScopedDialogProps & {
+  committee?: Committee;
+  cooperative?: Cooperative;
+  kind: 'committee' | 'cooperative';
 };
 
 type ImpactRecordDialogProps = {
@@ -103,28 +125,56 @@ function Actions({
   );
 }
 
-export function GroupCreateDialog({ communityId, onClose, onCreated }: CommunityScopedDialogProps) {
+export function GroupCreateDialog({
+  communityId,
+  group,
+  onClose,
+  onCreated
+}: GroupDialogProps) {
   const createGroup = useCreateGroupMutation();
+  const updateGroup = useUpdateGroupMutation();
+  const isEditing = Boolean(group);
   const {
     formState: { errors },
     handleSubmit,
     register
   } = useForm<GroupCreateInput>({
-    defaultValues: { community: communityId, status: 'active' }
+    defaultValues: {
+      closed_on: group?.closed_on ?? '',
+      code: group?.code ?? '',
+      community: communityId,
+      formed_on: group?.formed_on ?? '',
+      meeting_day: group?.meeting_day ?? '',
+      name: group?.name ?? '',
+      notes: group?.notes ?? '',
+      status: group?.status ?? 'active'
+    }
   });
+  const mutationError = createGroup.error ?? updateGroup.error;
+  const isPending = createGroup.isPending || updateGroup.isPending;
 
   return (
-    <FormDialog open title="Create group" description="Add a group to this community." onClose={onClose}>
+    <FormDialog
+      open
+      title={isEditing ? 'Edit group' : 'Create group'}
+      description={isEditing ? 'Update this group.' : 'Add a group to this community.'}
+      onClose={onClose}
+    >
       <form
         className="record-form"
         onSubmit={handleSubmit(async (values) => {
           try {
-            await createGroup.mutateAsync({
+            const payload = {
               ...values,
               code: values.code.trim(),
               name: values.name.trim(),
               ...optionalTextFields(values, ['closed_on', 'formed_on', 'meeting_day', 'notes'])
-            });
+            };
+            if (group) {
+              await updateGroup.mutateAsync({ id: group.id, payload });
+            } else {
+              await createGroup.mutateAsync(payload);
+            }
             onCreated();
             onClose();
           } catch {
@@ -132,7 +182,7 @@ export function GroupCreateDialog({ communityId, onClose, onCreated }: Community
           }
         })}
       >
-        <FormErrorSummary error={createGroup.error} />
+        <FormErrorSummary error={mutationError} />
         <div className="form-grid">
           <label className="form-field">
             <span>Group name</span>
@@ -171,30 +221,82 @@ export function GroupCreateDialog({ communityId, onClose, onCreated }: Community
           <span>Notes</span>
           <textarea rows={3} {...register('notes')} />
         </label>
-        <Actions isPending={createGroup.isPending} label="Create group" onClose={onClose} />
+        <Actions
+          isPending={isPending}
+          label={isEditing ? 'Save group' : 'Create group'}
+          onClose={onClose}
+        />
       </form>
     </FormDialog>
   );
 }
 
-export function MemberCreateDialog({ communityId, onClose, onCreated }: CommunityScopedDialogProps) {
+export function MemberCreateDialog({
+  communityId,
+  member,
+  onClose,
+  onCreated
+}: MemberDialogProps) {
   const createMember = useCreateMemberMutation();
+  const updateMember = useUpdateMemberMutation();
+  const isEditing = Boolean(member);
   const groupsQuery = useGroupsQuery({ community: communityId, page: 1, page_size: 100, ordering: 'name' });
   const {
     formState: { errors },
     handleSubmit,
-    register
+    register,
+    setValue
   } = useForm<Omit<MemberCreateInput, 'group'> & { group: string }>({
-    defaultValues: { community: communityId, group: '', status: 'active' }
+    defaultValues: {
+      address_text: member?.address_text ?? '',
+      community: communityId,
+      date_of_birth: member?.date_of_birth ?? '',
+      deceased_on: member?.deceased_on ?? '',
+      email: member?.email ?? '',
+      first_name: member?.first_name ?? '',
+      gender: member?.gender ?? '',
+      group: member ? String(member.group) : '',
+      joined_on: member?.joined_on ?? '',
+      last_name: member?.last_name ?? '',
+      left_on: member?.left_on ?? '',
+      member_number: member?.member_number ?? '',
+      middle_name: member?.middle_name ?? '',
+      notes: member?.notes ?? '',
+      phone: member?.phone ?? '',
+      preferred_name: member?.preferred_name ?? '',
+      status: member?.status ?? 'active'
+    }
   });
+  const mutationError = createMember.error ?? updateMember.error;
+  const isPending = createMember.isPending || updateMember.isPending;
+
+  useEffect(() => {
+    if (
+      member &&
+      (groupsQuery.data?.results ?? []).some(
+        (availableGroup) => availableGroup.id === member.group
+      )
+    ) {
+      setValue('group', String(member.group));
+    }
+  }, [groupsQuery.data, member, setValue]);
 
   return (
-    <FormDialog open title="Create member" description="Add a member to one group in this community." onClose={onClose}>
+    <FormDialog
+      open
+      title={isEditing ? 'Edit member' : 'Create member'}
+      description={
+        isEditing
+          ? 'Update this member’s details and current group.'
+          : 'Add a member to one group in this community.'
+      }
+      onClose={onClose}
+    >
       <form
         className="record-form"
         onSubmit={handleSubmit(async (values) => {
           try {
-            await createMember.mutateAsync({
+            const payload = {
               ...values,
               first_name: values.first_name.trim(),
               group: Number(values.group),
@@ -202,16 +304,23 @@ export function MemberCreateDialog({ communityId, onClose, onCreated }: Communit
               ...optionalTextFields(values, [
                 'address_text',
                 'date_of_birth',
+                'deceased_on',
                 'email',
                 'gender',
                 'joined_on',
+                'left_on',
                 'member_number',
                 'middle_name',
                 'notes',
                 'phone',
                 'preferred_name'
               ])
-            });
+            };
+            if (member) {
+              await updateMember.mutateAsync({ id: member.id, payload });
+            } else {
+              await createMember.mutateAsync(payload);
+            }
             onCreated();
             onClose();
           } catch {
@@ -219,7 +328,7 @@ export function MemberCreateDialog({ communityId, onClose, onCreated }: Communit
           }
         })}
       >
-        <FormErrorSummary error={createMember.error} />
+        <FormErrorSummary error={mutationError} />
         <div className="form-grid">
           <label className="form-field">
             <span>First name</span>
@@ -232,9 +341,19 @@ export function MemberCreateDialog({ communityId, onClose, onCreated }: Communit
             {errors.last_name ? <small>{errors.last_name.message}</small> : null}
           </label>
           <label className="form-field">
+            <span>Middle name</span>
+            <input {...register('middle_name')} />
+          </label>
+          <label className="form-field">
             <span>Group</span>
             <select {...register('group', { required: 'Select a group.' })}>
               <option value="">{groupsQuery.isLoading ? 'Loading groups...' : 'Select group'}</option>
+              {member &&
+              !(groupsQuery.data?.results ?? []).some(
+                (availableGroup) => availableGroup.id === member.group
+              ) ? (
+                <option value={member.group}>{member.group_name ?? 'Current group'}</option>
+              ) : null}
               {(groupsQuery.data?.results ?? []).map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name}
@@ -274,41 +393,93 @@ export function MemberCreateDialog({ communityId, onClose, onCreated }: Communit
             <input {...register('gender')} />
           </label>
           <label className="form-field">
+            <span>Date of birth</span>
+            <input type="date" {...register('date_of_birth')} />
+          </label>
+          <label className="form-field">
             <span>Joined on</span>
             <input type="date" {...register('joined_on')} />
           </label>
+          <label className="form-field">
+            <span>Left on</span>
+            <input type="date" {...register('left_on')} />
+          </label>
+          <label className="form-field">
+            <span>Deceased on</span>
+            <input type="date" {...register('deceased_on')} />
+          </label>
         </div>
+        <label className="form-field">
+          <span>Address</span>
+          <textarea rows={2} {...register('address_text')} />
+        </label>
         <label className="form-field">
           <span>Notes</span>
           <textarea rows={3} {...register('notes')} />
         </label>
-        <Actions isPending={createMember.isPending} label="Create member" onClose={onClose} />
+        <Actions
+          isPending={isPending}
+          label={isEditing ? 'Save member' : 'Create member'}
+          onClose={onClose}
+        />
       </form>
     </FormDialog>
   );
 }
 
-export function InstitutionCreateDialog({ communityId, onClose, onCreated }: CommunityScopedDialogProps) {
+export function InstitutionCreateDialog({
+  communityId,
+  institution,
+  onClose,
+  onCreated
+}: InstitutionDialogProps) {
   const createInstitution = useCreateInstitutionMutation();
+  const updateInstitution = useUpdateInstitutionMutation();
+  const isEditing = Boolean(institution);
   const {
     formState: { errors },
     handleSubmit,
     register
   } = useForm<InstitutionCreateInput>({
-    defaultValues: { community: communityId, institution_type: 'other', status: 'active' }
+    defaultValues: {
+      code: institution?.code ?? '',
+      community: communityId,
+      contact_name: institution?.contact_name ?? '',
+      email: institution?.email ?? '',
+      institution_type: institution?.institution_type ?? 'other',
+      location_text: institution?.location_text ?? '',
+      name: institution?.name ?? '',
+      notes: institution?.notes ?? '',
+      phone: institution?.phone ?? '',
+      status: institution?.status ?? 'active'
+    }
   });
+  const mutationError = createInstitution.error ?? updateInstitution.error;
+  const isPending = createInstitution.isPending || updateInstitution.isPending;
 
   return (
-    <FormDialog open title="Create institution" description="Add an institution to this community." onClose={onClose}>
+    <FormDialog
+      open
+      title={isEditing ? 'Edit institution' : 'Create institution'}
+      description={
+        isEditing ? 'Update this institution.' : 'Add an institution to this community.'
+      }
+      onClose={onClose}
+    >
       <form
         className="record-form"
         onSubmit={handleSubmit(async (values) => {
           try {
-            await createInstitution.mutateAsync({
+            const payload = {
               ...values,
               name: values.name.trim(),
               ...optionalTextFields(values, ['code', 'contact_name', 'email', 'location_text', 'notes', 'phone'])
-            });
+            };
+            if (institution) {
+              await updateInstitution.mutateAsync({ id: institution.id, payload });
+            } else {
+              await createInstitution.mutateAsync(payload);
+            }
             onCreated();
             onClose();
           } catch {
@@ -316,7 +487,7 @@ export function InstitutionCreateDialog({ communityId, onClose, onCreated }: Com
           }
         })}
       >
-        <FormErrorSummary error={createInstitution.error} />
+        <FormErrorSummary error={mutationError} />
         <div className="form-grid">
           <label className="form-field">
             <span>Institution name</span>
@@ -358,33 +529,71 @@ export function InstitutionCreateDialog({ communityId, onClose, onCreated }: Com
           <span>Notes</span>
           <textarea rows={2} {...register('notes')} />
         </label>
-        <Actions isPending={createInstitution.isPending} label="Create institution" onClose={onClose} />
+        <Actions
+          isPending={isPending}
+          label={isEditing ? 'Save institution' : 'Create institution'}
+          onClose={onClose}
+        />
       </form>
     </FormDialog>
   );
 }
 
 function ParticipationCreateDialog({
+  committee,
+  cooperative,
   kind,
   communityId,
   onClose,
   onCreated
-}: CommunityScopedDialogProps & { kind: 'committee' | 'cooperative' }) {
+}: ParticipationDialogProps) {
   const createCommittee = useCreateCommitteeMutation();
   const createCooperative = useCreateCooperativeMutation();
+  const updateCommittee = useUpdateCommitteeMutation();
+  const updateCooperative = useUpdateCooperativeMutation();
   const createRecord = kind === 'committee' ? createCommittee : createCooperative;
+  const record = kind === 'committee' ? committee : cooperative;
+  const isEditing = Boolean(record);
   const typeField = kind === 'committee' ? 'committee_type' : 'cooperative_type';
   const {
     formState: { errors },
     handleSubmit,
     register
   } = useForm<CommitteeCreateInput & CooperativeCreateInput>({
-    defaultValues: { community: communityId, status: 'active' }
+    defaultValues: {
+      closed_on: record?.closed_on ?? '',
+      community: communityId,
+      description: record?.description ?? '',
+      formed_on: record?.formed_on ?? '',
+      name: record?.name ?? '',
+      status: record?.status ?? 'active',
+      [typeField]:
+        kind === 'committee'
+          ? committee?.committee_type ?? ''
+          : cooperative?.cooperative_type ?? ''
+    }
   });
   const title = kind === 'committee' ? 'committee' : 'cooperative';
+  const mutationError =
+    createCommittee.error ??
+    createCooperative.error ??
+    updateCommittee.error ??
+    updateCooperative.error;
+  const isPending =
+    createCommittee.isPending ||
+    createCooperative.isPending ||
+    updateCommittee.isPending ||
+    updateCooperative.isPending;
 
   return (
-    <FormDialog open title={`Create ${title}`} description={`Add a ${title} to this community.`} onClose={onClose}>
+    <FormDialog
+      open
+      title={`${isEditing ? 'Edit' : 'Create'} ${title}`}
+      description={
+        isEditing ? `Update this ${title}.` : `Add a ${title} to this community.`
+      }
+      onClose={onClose}
+    >
       <form
         className="record-form"
         onSubmit={handleSubmit(async (values) => {
@@ -399,7 +608,21 @@ function ParticipationCreateDialog({
           };
 
           try {
-            await createRecord.mutateAsync(payload as CommitteeCreateInput & CooperativeCreateInput);
+            if (kind === 'committee' && committee) {
+              await updateCommittee.mutateAsync({
+                id: committee.id,
+                payload: payload as CommitteeCreateInput
+              });
+            } else if (kind === 'cooperative' && cooperative) {
+              await updateCooperative.mutateAsync({
+                id: cooperative.id,
+                payload: payload as CooperativeCreateInput
+              });
+            } else {
+              await createRecord.mutateAsync(
+                payload as CommitteeCreateInput & CooperativeCreateInput
+              );
+            }
             onCreated();
             onClose();
           } catch {
@@ -407,7 +630,7 @@ function ParticipationCreateDialog({
           }
         })}
       >
-        <FormErrorSummary error={createRecord.error} />
+        <FormErrorSummary error={mutationError} />
         <div className="form-grid">
           <label className="form-field">
             <span>Name</span>
@@ -441,17 +664,25 @@ function ParticipationCreateDialog({
           <span>Description</span>
           <textarea rows={3} {...register('description')} />
         </label>
-        <Actions isPending={createRecord.isPending} label={`Create ${title}`} onClose={onClose} />
+        <Actions
+          isPending={isPending}
+          label={`${isEditing ? 'Save' : 'Create'} ${title}`}
+          onClose={onClose}
+        />
       </form>
     </FormDialog>
   );
 }
 
-export function CommitteeCreateDialog(props: CommunityScopedDialogProps) {
+export function CommitteeCreateDialog(
+  props: CommunityScopedDialogProps & { committee?: Committee }
+) {
   return <ParticipationCreateDialog {...props} kind="committee" />;
 }
 
-export function CooperativeCreateDialog(props: CommunityScopedDialogProps) {
+export function CooperativeCreateDialog(
+  props: CommunityScopedDialogProps & { cooperative?: Cooperative }
+) {
   return <ParticipationCreateDialog {...props} kind="cooperative" />;
 }
 
@@ -473,7 +704,8 @@ export function ImpactRecordCreateDialog({
   const {
     formState: { errors },
     handleSubmit,
-    register
+    register,
+    setValue
   } = useForm<Omit<ImpactRecordCreateInput, 'resource'> & { resource: string }>({
     defaultValues: {
       as_of_date: impactRecord?.as_of_date ?? '',
@@ -491,6 +723,17 @@ export function ImpactRecordCreateDialog({
   });
   const mutationError = createImpact.error ?? updateImpact.error;
   const isPending = createImpact.isPending || updateImpact.isPending;
+
+  useEffect(() => {
+    if (
+      impactRecord &&
+      (resourcesQuery.data?.results ?? []).some(
+        (availableResource) => availableResource.id === impactRecord.resource
+      )
+    ) {
+      setValue('resource', String(impactRecord.resource));
+    }
+  }, [impactRecord, resourcesQuery.data, setValue]);
 
   return (
     <FormDialog
@@ -533,7 +776,9 @@ export function ImpactRecordCreateDialog({
               <option value="">{resourcesQuery.isLoading ? 'Loading resources...' : 'Select resource'}</option>
               {impactRecord &&
               !(resourcesQuery.data?.results ?? []).some((resource) => resource.id === impactRecord.resource) ? (
-                <option value={impactRecord.resource}>Resource #{impactRecord.resource}</option>
+                <option value={impactRecord.resource}>
+                  {impactRecord.resource_name ?? 'Current resource'}
+                </option>
               ) : null}
               {(resourcesQuery.data?.results ?? []).map((resource) => (
                 <option key={resource.id} value={resource.id}>

@@ -5,11 +5,24 @@ from .models import ImpactRecord
 
 
 class ImpactRecordSerializer(serializers.ModelSerializer):
+    resource_name = serializers.CharField(source="resource.name", read_only=True)
+    community = serializers.IntegerField(
+        source="resource.community_id",
+        read_only=True,
+    )
+    community_name = serializers.CharField(
+        source="resource.community.name",
+        read_only=True,
+    )
+
     class Meta:
         model = ImpactRecord
         fields = [
             "id",
             "resource",
+            "resource_name",
+            "community",
+            "community_name",
             "beneficiary_type",
             "beneficiary_id",
             "period_type",

@@ -190,6 +190,38 @@ class ImpactApprovalApiTests(TestCase):
         self.assertEqual(reject_response.status_code, status.HTTP_200_OK)
         self.assertEqual(reject_response.data["status"], ApprovalStatus.REJECTED)
 
+    def test_create_approval_payload_is_validated_before_submission(self):
+        invalid_response = self.client.post(
+            reverse("approval-request-list"),
+            {
+                "community": self.community.id,
+                "entity_type": "impact_record",
+                "action_type": ApprovalActionType.CREATE,
+                "submitted_payload": {"beneficiary_count": 12},
+            },
+            format="json",
+        )
+
+        self.assertEqual(invalid_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("submitted_payload", invalid_response.data)
+        self.assertIn("resource", invalid_response.data["submitted_payload"])
+
+        valid_response = self.client.post(
+            reverse("approval-request-list"),
+            {
+                "community": self.community.id,
+                "entity_type": "impact_record",
+                "action_type": ApprovalActionType.CREATE,
+                "submitted_payload": {
+                    "resource": self.resource.id,
+                    "beneficiary_count": 12,
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(valid_response.status_code, status.HTTP_201_CREATED)
+
     def test_approval_review_actions_require_admin(self):
         response = self.client.post(
             reverse("approval-request-approve", kwargs={"pk": self.approval.pk}),

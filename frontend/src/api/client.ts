@@ -1,4 +1,4 @@
-import type { ApiErrorItem } from './types';
+import type { ApiErrorItem, PaginatedResponse } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const AUTH_TOKEN_KEY = 'datalens.authToken';
@@ -66,6 +66,28 @@ export async function apiGet<T>(
   params?: Record<string, string | number | undefined>
 ): Promise<T> {
   return apiRequest<T>(path, { params });
+}
+
+export async function apiGetAllPages<T>(
+  path: string,
+  params: Record<string, string | number | undefined> = {}
+): Promise<T[]> {
+  const results: T[] = [];
+  let page = 1;
+
+  while (true) {
+    const response = await apiGet<PaginatedResponse<T>>(path, {
+      ...params,
+      page,
+      page_size: 200
+    });
+    results.push(...response.results);
+
+    if (!response.next) {
+      return results;
+    }
+    page += 1;
+  }
 }
 
 type ApiRequestOptions<TBody> = {

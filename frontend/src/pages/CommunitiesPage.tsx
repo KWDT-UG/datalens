@@ -29,6 +29,7 @@ export function CommunitiesPage() {
   const [page, setPage] = useState(1);
   const [view, setView] = useState<'table' | 'card'>('table');
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingCommunity, setEditingCommunity] = useState<Community | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const query = useCommunitiesQuery({ page, page_size: pageSize, search, ordering: 'name' });
   const archiveCommunities = useArchiveRecordsMutation('communities', '/api/v1/communities/');
@@ -194,6 +195,7 @@ export function CommunitiesPage() {
                 <th>Resources</th>
                 <th>Status</th>
                 <th>Last updated</th>
+                {canManage ? <th>Actions</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -222,6 +224,17 @@ export function CommunitiesPage() {
                     <StatusBadge status={community.status} />
                   </td>
                   <td>{community.updated_at ? new Date(community.updated_at).toLocaleDateString() : 'Not recorded'}</td>
+                  {canManage ? (
+                    <td>
+                      <button
+                        className="button button--secondary"
+                        type="button"
+                        onClick={() => setEditingCommunity(community)}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -247,6 +260,13 @@ export function CommunitiesPage() {
       ) : null}
 
       {canManage && createOpen ? <CommunityCreateDialog onClose={() => setCreateOpen(false)} /> : null}
+      {canManage && editingCommunity ? (
+        <CommunityCreateDialog
+          community={editingCommunity}
+          onClose={() => setEditingCommunity(null)}
+          onSaved={() => setEditingCommunity(null)}
+        />
+      ) : null}
     </section>
   );
 }
