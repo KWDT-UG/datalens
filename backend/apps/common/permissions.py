@@ -20,11 +20,17 @@ MANAGE_IMPACT = "manage_impact"
 ARCHIVE_OPERATIONS = "archive_operations"
 ARCHIVE_RESOURCES = "archive_resources"
 ARCHIVE_IMPACT = "archive_impact"
+RESTORE_OPERATIONS = "restore_operations"
+RESTORE_RESOURCES = "restore_resources"
+RESTORE_IMPACT = "restore_impact"
 SUBMIT_FOR_APPROVAL = "submit_for_approval"
 REVIEW_APPROVALS = "review_approvals"
 REVIEW_IMPACT_APPROVALS = "review_impact_approvals"
 REVIEW_FINANCE_APPROVALS = "review_finance_approvals"
 EXPORT = "export"
+VIEW_PERSONAL_DATA = "view_personal_data"
+VIEW_RESOURCE_FINANCIALS = "view_resource_financials"
+MANAGE_RESOURCE_FINANCIALS = "manage_resource_financials"
 MANAGE_USERS = "manage_users"
 MANAGE_ROLES = "manage_roles"
 MANAGE_SETTINGS = "manage_settings"
@@ -36,6 +42,7 @@ ROLE_CAPABILITIES = {
         MANAGE_RESOURCES,
         MANAGE_IMPACT,
         SUBMIT_FOR_APPROVAL,
+        VIEW_PERSONAL_DATA,
     },
     UserRole.PROGRAMME_MANAGER: {
         READ,
@@ -45,41 +52,58 @@ ROLE_CAPABILITIES = {
         ARCHIVE_OPERATIONS,
         ARCHIVE_RESOURCES,
         ARCHIVE_IMPACT,
+        RESTORE_OPERATIONS,
+        RESTORE_RESOURCES,
+        RESTORE_IMPACT,
         SUBMIT_FOR_APPROVAL,
         REVIEW_APPROVALS,
         EXPORT,
+        VIEW_PERSONAL_DATA,
     },
     UserRole.EXECUTIVE_LEADERSHIP: {
         READ,
         ARCHIVE_OPERATIONS,
         ARCHIVE_RESOURCES,
         ARCHIVE_IMPACT,
+        RESTORE_OPERATIONS,
+        RESTORE_RESOURCES,
+        RESTORE_IMPACT,
         REVIEW_APPROVALS,
         REVIEW_FINANCE_APPROVALS,
         EXPORT,
+        VIEW_PERSONAL_DATA,
+        VIEW_RESOURCE_FINANCIALS,
     },
     UserRole.FINANCE_ADMINISTRATOR: {
         READ,
         MANAGE_RESOURCES,
         ARCHIVE_RESOURCES,
+        RESTORE_RESOURCES,
         SUBMIT_FOR_APPROVAL,
         REVIEW_FINANCE_APPROVALS,
         EXPORT,
+        VIEW_RESOURCE_FINANCIALS,
+        MANAGE_RESOURCE_FINANCIALS,
     },
     UserRole.MONITORING_EVALUATION_MANAGER: {
         READ,
         MANAGE_IMPACT,
         ARCHIVE_IMPACT,
+        RESTORE_IMPACT,
         SUBMIT_FOR_APPROVAL,
         REVIEW_IMPACT_APPROVALS,
         EXPORT,
+        VIEW_PERSONAL_DATA,
     },
     UserRole.COMMUNICATIONS_VIEWER: {READ},
     UserRole.RESOURCE_PROCUREMENT_OFFICER: {
         READ,
         MANAGE_RESOURCES,
         ARCHIVE_RESOURCES,
+        RESTORE_RESOURCES,
         SUBMIT_FOR_APPROVAL,
+        VIEW_RESOURCE_FINANCIALS,
+        MANAGE_RESOURCE_FINANCIALS,
     },
     UserRole.SYSTEM_ADMINISTRATOR: {
         READ,
@@ -183,6 +207,15 @@ def required_archive_capability(view):
     return ARCHIVE_OPERATIONS
 
 
+def required_restore_capability(view):
+    basename = getattr(view, "basename", "")
+    if basename in IMPACT_BASENAMES:
+        return RESTORE_IMPACT
+    if basename in RESOURCE_BASENAMES:
+        return RESTORE_RESOURCES
+    return RESTORE_OPERATIONS
+
+
 class RoleActionAccess(IsAuthenticated):
     """Enforce the MVP capability matrix for API actions."""
 
@@ -197,6 +230,11 @@ class RoleActionAccess(IsAuthenticated):
                     and getattr(view, "action", "") not in COMMUNICATIONS_BLOCKED_ACTIONS
                 )
             return user_has_capability(request.user, READ)
+        if getattr(view, "action", "") == "restore":
+            return user_has_capability(
+                request.user,
+                required_restore_capability(view),
+            )
         if request.method == "DELETE":
             return (
                 user_has_capability(
@@ -212,6 +250,15 @@ class RoleActionAccess(IsAuthenticated):
                 )
             )
         return user_has_capability(request.user, required_write_capability(view))
+
+    def has_object_permission(self, request, view, obj):
+        from apps.common.scoping import scope_queryset_for_user
+
+        model = obj.__class__
+        return scope_queryset_for_user(
+            model.objects.filter(pk=obj.pk),
+            request.user,
+        ).exists()
 
 
 class ApprovalReviewAccess(RoleActionAccess):

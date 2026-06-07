@@ -15,6 +15,7 @@ from apps.approvals.serializers import ApprovalRequestSerializer
 from apps.approvals.services import APPROVAL_ENTITY_REGISTRY
 from apps.common.models import ApprovalActionType, ApprovalSubmissionSource
 from apps.common.permissions import SUBMIT_FOR_APPROVAL, user_has_capability
+from apps.common.scoping import enforce_change_scope, scope_queryset_for_user
 
 MAX_SYNC_RECORDS = 100
 
@@ -70,7 +71,10 @@ class SyncPullView(APIView):
                 continue
 
             model, serializer_class = registry_item
-            queryset = model.objects.all().order_by("updated_at", "id")
+            queryset = scope_queryset_for_user(
+                model.objects.all(),
+                request.user,
+            ).order_by("updated_at", "id")
             if hasattr(model, "is_deleted") and include_deleted not in {
                 "1",
                 "true",
@@ -82,6 +86,7 @@ class SyncPullView(APIView):
             data[current_type] = serializer_class(
                 queryset[:MAX_SYNC_RECORDS],
                 many=True,
+                context={"request": request},
             ).data
 
         response_status = status.HTTP_400_BAD_REQUEST if errors else status.HTTP_200_OK
@@ -146,7 +151,10 @@ class SyncPushView(APIView):
                 )
                 continue
             instance = (
-                model.objects.filter(pk=entity_id).first()
+                scope_queryset_for_user(
+                    model.objects.filter(pk=entity_id),
+                    request.user,
+                ).first()
                 if entity_id is not None
                 else None
             )
@@ -182,6 +190,32 @@ class SyncPushView(APIView):
                 continue
 
             try:
+                if entity_type == "resource":
+                    from apps.approvals.policy import resource_change_is_financial
+                    from apps.common.permissions import MANAGE_RESOURCE_FINANCIALS
+
+                    if resource_change_is_financial(
+                        action_type=action,
+                        payload=payload,
+                        instance=instance,
+                    ) and not user_has_capability(
+                        request.user,
+                        MANAGE_RESOURCE_FINANCIALS,
+                    ):
+                        raise ValidationError(
+                            {
+                                "value_amount": (
+                                    "User cannot change sensitive resource "
+                                    "financial values."
+                                )
+                            }
+                        )
+                enforce_change_scope(
+                    user=request.user,
+                    entity_type=entity_type,
+                    payload=payload,
+                    instance=instance,
+                )
                 self.validate_change(
                     action=action,
                     payload=payload,
@@ -237,7 +271,8 @@ class SyncPushView(APIView):
                             "action": action,
                             "status": "pending_approval",
                             "approval_request": ApprovalRequestSerializer(
-                                approval_request
+                                approval_request,
+                                context={"request": request},
                             ).data,
                         }
                     )

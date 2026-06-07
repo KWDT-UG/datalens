@@ -61,3 +61,12 @@ class ApprovalStateSerializerMixin(serializers.Serializer):
 
     def get_approval_history_count(self, obj):
         return self._approval_summary(obj)["count"]
+
+    def to_representation(self, instance):
+        from apps.common.privacy import sanitize_model_representation
+
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if request is None:
+            return data
+        return sanitize_model_representation(instance, data, request.user)

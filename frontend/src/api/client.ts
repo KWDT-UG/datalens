@@ -1,19 +1,15 @@
 import type { ApiErrorItem, PaginatedResponse } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
-const AUTH_TOKEN_KEY = 'datalens.authToken';
 export const UNAUTHORIZED_EVENT = 'datalens:unauthorized';
 
-export function getAuthToken() {
-  return window.localStorage.getItem(AUTH_TOKEN_KEY);
-}
-
-export function setAuthToken(token: string) {
-  window.localStorage.setItem(AUTH_TOKEN_KEY, token);
-}
-
-export function clearAuthToken() {
-  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+function getCookie(name: string) {
+  const prefix = `${encodeURIComponent(name)}=`;
+  const item = document.cookie
+    .split(';')
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(prefix));
+  return item ? decodeURIComponent(item.slice(prefix.length)) : '';
 }
 
 export class ApiClientError extends Error {
@@ -100,12 +96,13 @@ async function apiRequest<T, TBody = never>(
   path: string,
   { body, method = 'GET', params }: ApiRequestOptions<TBody>
 ): Promise<T> {
-  const token = getAuthToken();
+  const csrfToken = getCookie('csrftoken');
   const response = await fetch(buildUrl(path, params), {
     method,
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
-      ...(token ? { Authorization: `Token ${token}` } : {}),
+      ...(method === 'GET' || !csrfToken ? {} : { 'X-CSRFToken': csrfToken }),
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' })
     },
     body: body === undefined ? undefined : JSON.stringify(body)
@@ -115,7 +112,6 @@ async function apiRequest<T, TBody = never>(
 
   if (!response.ok) {
     if (response.status === 401) {
-      clearAuthToken();
       window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
     }
     const errors = extractErrors(payload);
@@ -128,6 +124,10 @@ async function apiRequest<T, TBody = never>(
 
 export async function apiPost<T, TBody>(path: string, body: TBody): Promise<T> {
   return apiRequest<T, TBody>(path, { body, method: 'POST' });
+}
+
+export async function initializeCsrf(): Promise<void> {
+  await apiGet('/api/v1/auth/csrf/');
 }
 
 export async function apiPatch<T, TBody>(path: string, body: TBody): Promise<T> {

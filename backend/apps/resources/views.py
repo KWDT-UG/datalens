@@ -57,7 +57,7 @@ class ResourceViewSet(
     serializer_class = ResourceSerializer
     filter_fields = ("community", "status", "resource_type", "owner_type")
     search_fields = ("name", "description", "serial_or_tag_number", "location_text")
-    ordering_fields = ("name", "acquired_on", "created_at", "value_amount")
+    ordering_fields = ("name", "acquired_on", "created_at")
 
     @action(detail=True, methods=["get", "post"])
     def beneficiaries(self, request, pk=None):

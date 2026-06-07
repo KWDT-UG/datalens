@@ -28,6 +28,7 @@ from apps.common.viewsets import (
     SimpleFilterMixin,
     SoftDeleteMixin,
 )
+from apps.common.scoping import enforce_change_scope
 
 from .models import ApprovalRequest
 from .policy import (
@@ -110,6 +111,12 @@ class ApprovalRequestViewSet(
                 "User cannot submit approval changes for this entity type."
             )
         target = approval_target(entity_type, entity_id)
+        enforce_change_scope(
+            user=self.request.user,
+            entity_type=entity_type,
+            payload=payload,
+            instance=target,
+        )
         decision = approval_policy_for_change(
             entity_type=entity_type,
             action_type=action_type,

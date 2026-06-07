@@ -184,6 +184,17 @@ class UserProfile(TimestampedModel):
         default=WorkforceType.STAFF,
     )
     position_title = models.CharField(max_length=160, blank=True)
+    assigned_districts = models.JSONField(default=list, blank=True)
+    assigned_communities = models.ManyToManyField(
+        "communities.Community",
+        blank=True,
+        related_name="assigned_user_profiles",
+    )
+    assigned_thematic_areas = models.ManyToManyField(
+        "resources.ThematicArea",
+        blank=True,
+        related_name="assigned_user_profiles",
+    )
 
     def __str__(self):
         return f"{self.user.get_username()} profile"

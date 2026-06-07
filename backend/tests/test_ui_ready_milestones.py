@@ -81,14 +81,15 @@ class UiReadyMilestoneTests(TestCase):
             format="json",
         )
         self.assertEqual(login_response.status_code, status.HTTP_200_OK)
-        token = login_response.data["data"]["token"]
+        self.assertNotIn("token", login_response.data["data"])
+        auth_cookie = login_response.cookies["datalens_auth"]
+        self.assertTrue(auth_cookie["httponly"])
         self.assertIn(UserRole.PROGRAMME_MANAGER, login_response.data["data"]["user"]["roles"])
         self.assertIn(
             "review_approvals",
             login_response.data["data"]["user"]["capabilities"],
         )
 
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
         me_response = self.client.get(reverse("auth-me"))
         self.assertEqual(me_response.status_code, status.HTTP_200_OK)
         self.assertEqual(me_response.data["data"]["user"]["username"], "ui.user")
@@ -99,6 +100,29 @@ class UiReadyMilestoneTests(TestCase):
 
         logout_response = self.client.post(reverse("auth-logout"))
         self.assertEqual(logout_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(logout_response.cookies["datalens_auth"].value, "")
+
+    def test_browser_login_requires_csrf_when_checks_are_enabled(self):
+        client = APIClient(enforce_csrf_checks=True)
+        login_payload = {
+            "username": "ui.user",
+            "password": "test-password",
+        }
+
+        denied = client.post(reverse("auth-login"), login_payload, format="json")
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+        csrf_response = client.get(reverse("auth-csrf"))
+        csrf_token = csrf_response.cookies["csrftoken"].value
+        accepted = client.post(
+            reverse("auth-login"),
+            login_payload,
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        self.assertIn("datalens_auth", accepted.cookies)
 
     def test_current_user_can_update_profile_details(self):
         self.client.force_authenticate(self.user)

@@ -12,7 +12,7 @@ from apps.common.admin_api import (
     AdminUserDetailView,
     AdminUserListCreateView,
 )
-from apps.common.auth import LoginView, LogoutView, MeView
+from apps.common.auth import CsrfTokenView, LoginView, LogoutView, MeView
 from apps.common.dashboard import DashboardView
 from apps.common.sync import SyncPullView, SyncPushView
 from apps.communities.views import CommunityViewSet
@@ -76,6 +76,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", health_check, name="health-check"),
     path("api/v1/auth/login/", LoginView.as_view(), name="auth-login"),
+    path("api/v1/auth/csrf/", CsrfTokenView.as_view(), name="auth-csrf"),
     path("api/v1/auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("api/v1/auth/me/", MeView.as_view(), name="auth-me"),
     path("api/v1/dashboard/", DashboardView.as_view(), name="dashboard"),

@@ -6,6 +6,10 @@ ALLOWED_HOSTS = env_list(  # noqa: F405
     "DJANGO_ALLOWED_HOSTS",
     ["localhost", "127.0.0.1", "0.0.0.0", "backend"],
 )
+CSRF_TRUSTED_ORIGINS = env_list(  # noqa: F405
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    ["http://localhost:5173", "http://127.0.0.1:5173"],
+)
 
 if env_bool("DATALENS_ALLOW_ANONYMOUS_API", False):  # noqa: F405
     REST_FRAMEWORK["DEFAULT_PERMISSION_CLASSES"] = [  # noqa: F405

@@ -6,17 +6,21 @@ import {
   useAdminInvitationsQuery,
   useAdminRolesQuery,
   useAdminUsersQuery,
+  useCommunitiesQuery,
   useCreateAdminInvitationMutation,
   useCreateAdminUserMutation,
   useRevokeAdminInvitationMutation,
-  useUpdateAdminUserMutation
+  useUpdateAdminUserMutation,
+  useThematicAreasQuery
 } from '../api/queries';
 import type {
   AdminAccount,
   AdminAccountCreateInput,
   AdminAccountUpdateInput,
   AdminInvitationCreateInput,
-  AdminRoleDefinition
+  AdminRoleDefinition,
+  Community,
+  ThematicArea
 } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { FormDialog, FormErrorSummary } from '../components/FormDialog';
@@ -47,6 +51,9 @@ type AdminAccountForm = {
   workforce_type: string;
   position_title: string;
   is_active: boolean;
+  assigned_districts: string;
+  assigned_community_ids: string[];
+  assigned_thematic_area_ids: string[];
 };
 
 type AccountDialogProps = {
@@ -54,9 +61,18 @@ type AccountDialogProps = {
   currentUserId?: number;
   onClose: () => void;
   roles: AdminRoleDefinition[];
+  communities: Community[];
+  thematicAreas: ThematicArea[];
 };
 
-function AccountDialog({ account, currentUserId, onClose, roles }: AccountDialogProps) {
+function AccountDialog({
+  account,
+  communities,
+  currentUserId,
+  onClose,
+  roles,
+  thematicAreas
+}: AccountDialogProps) {
   const createUser = useCreateAdminUserMutation();
   const updateUser = useUpdateAdminUserMutation();
   const isEditing = Boolean(account);
@@ -76,7 +92,12 @@ function AccountDialog({ account, currentUserId, onClose, roles }: AccountDialog
       last_name: account?.last_name ?? '',
       workforce_type: account?.workforce_type ?? 'staff',
       position_title: account?.position_title ?? '',
-      is_active: account?.is_active ?? true
+      is_active: account?.is_active ?? true,
+      assigned_districts: account?.assigned_districts?.join(', ') ?? '',
+      assigned_community_ids:
+        account?.assigned_community_ids?.map(String) ?? [],
+      assigned_thematic_area_ids:
+        account?.assigned_thematic_area_ids?.map(String) ?? []
     }
   });
 
@@ -102,6 +123,13 @@ function AccountDialog({ account, currentUserId, onClose, roles }: AccountDialog
                 last_name: values.last_name.trim(),
                 workforce_type: values.workforce_type,
                 position_title: values.position_title.trim(),
+                assigned_districts: values.assigned_districts
+                  .split(',')
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+                assigned_community_ids: values.assigned_community_ids.map(Number),
+                assigned_thematic_area_ids:
+                  values.assigned_thematic_area_ids.map(Number),
                 ...(values.password ? { password: values.password } : {}),
                 ...(!isCurrentUser
                   ? { role: values.role, is_active: values.is_active }
@@ -118,7 +146,14 @@ function AccountDialog({ account, currentUserId, onClose, roles }: AccountDialog
                 last_name: values.last_name.trim(),
                 workforce_type: values.workforce_type,
                 position_title: values.position_title.trim(),
-                is_active: values.is_active
+                is_active: values.is_active,
+                assigned_districts: values.assigned_districts
+                  .split(',')
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+                assigned_community_ids: values.assigned_community_ids.map(Number),
+                assigned_thematic_area_ids:
+                  values.assigned_thematic_area_ids.map(Number)
               };
               await createUser.mutateAsync(payload);
             }
@@ -200,6 +235,37 @@ function AccountDialog({ account, currentUserId, onClose, roles }: AccountDialog
           <label className="form-field">
             <span>Position / title</span>
             <input {...register('position_title')} />
+          </label>
+
+          <label className="form-field">
+            <span>Assigned districts</span>
+            <input
+              placeholder="District A, District B"
+              {...register('assigned_districts')}
+            />
+            <small>Comma-separated. Empty assignments retain organization-wide access.</small>
+          </label>
+
+          <label className="form-field">
+            <span>Assigned communities</span>
+            <select multiple size={5} {...register('assigned_community_ids')}>
+              {communities.map((community) => (
+                <option key={community.id} value={community.id}>
+                  {community.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="form-field">
+            <span>Assigned thematic areas</span>
+            <select multiple size={5} {...register('assigned_thematic_area_ids')}>
+              {thematicAreas.map((area) => (
+                <option key={area.id} value={area.id}>
+                  {area.name} ({area.code})
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="form-field form-field--checkbox">
@@ -335,11 +401,19 @@ export function AdminPage() {
   const [invitationUrl, setInvitationUrl] = useState('');
   const usersQuery = useAdminUsersQuery(search);
   const rolesQuery = useAdminRolesQuery();
+  const communitiesQuery = useCommunitiesQuery({
+    page: 1,
+    page_size: 200,
+    ordering: 'name'
+  });
+  const thematicAreasQuery = useThematicAreasQuery();
   const invitationsQuery = useAdminInvitationsQuery();
   const revokeInvitation = useRevokeAdminInvitationMutation();
   const updateUser = useUpdateAdminUserMutation();
   const accounts = usersQuery.data?.data.users ?? [];
   const roles = rolesQuery.data?.data.roles ?? [];
+  const communities = communitiesQuery.data?.results ?? [];
+  const thematicAreas = thematicAreasQuery.data?.results ?? [];
   const invitations = invitationsQuery.data?.data.invitations ?? [];
   const pendingInvitations = invitations.filter((invitation) => invitation.status === 'pending');
   const activeCount = accounts.filter((account) => account.is_active).length;
@@ -457,6 +531,7 @@ export function AdminPage() {
                 <th>Role</th>
                 <th>Workforce</th>
                 <th>Position</th>
+                <th>Assignments</th>
                 <th>Status</th>
                 <th>Last login</th>
                 <th>Joined</th>
@@ -478,6 +553,17 @@ export function AdminPage() {
                     <td>{role?.label ?? account.role ?? 'No role'}</td>
                     <td>{formatCapability(account.workforce_type ?? 'not recorded')}</td>
                     <td>{account.position_title || 'Not recorded'}</td>
+                    <td>
+                      {[
+                        ...(account.assigned_districts ?? []),
+                        ...(account.assigned_community_ids ?? []).map(
+                          (id) => communities.find((item) => item.id === id)?.name ?? `Community ${id}`
+                        ),
+                        ...(account.assigned_thematic_area_ids ?? []).map(
+                          (id) => thematicAreas.find((item) => item.id === id)?.code ?? `Theme ${id}`
+                        )
+                      ].join(', ') || 'Organization-wide'}
+                    </td>
                     <td>
                       <span className={`account-status account-status--${account.is_active ? 'active' : 'inactive'}`}>
                         {account.is_active ? 'Active' : 'Inactive'}
@@ -592,7 +678,9 @@ export function AdminPage() {
       {createOpen ? (
         <AccountDialog
           currentUserId={currentUser?.id}
+          communities={communities}
           roles={roles}
+          thematicAreas={thematicAreas}
           onClose={() => setCreateOpen(false)}
         />
       ) : null}
@@ -606,8 +694,10 @@ export function AdminPage() {
       {editingAccount ? (
         <AccountDialog
           account={editingAccount}
+          communities={communities}
           currentUserId={currentUser?.id}
           roles={roles}
+          thematicAreas={thematicAreas}
           onClose={() => setEditingAccount(null)}
         />
       ) : null}

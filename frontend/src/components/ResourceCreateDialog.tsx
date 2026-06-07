@@ -10,6 +10,8 @@ import {
   useMembersQuery,
   useUpdateResourceMutation
 } from '../api/queries';
+import { useOptionalAuth } from '../auth/AuthContext';
+import { capabilities, hasCapability } from '../auth/permissions';
 import {
   isApprovalSubmission,
   type ApprovalSubmission,
@@ -142,6 +144,10 @@ function ownerOptionsFor(
 }
 
 export function ResourceCreateDialog({ communityId, onClose, onCreated, resource }: ResourceCreateDialogProps) {
+  const auth = useOptionalAuth();
+  const canManageFinancials = auth
+    ? hasCapability(auth.user, capabilities.manageResourceFinancials)
+    : true;
   const createResource = useCreateResourceMutation();
   const updateResource = useUpdateResourceMutation();
   const [approvalSubmission, setApprovalSubmission] =
@@ -231,8 +237,12 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
             source_notes: omitBlank(values.source_notes),
             status: values.status,
             unit: omitBlank(values.unit),
-            value_amount: omitBlank(values.value_amount),
-            value_currency: omitBlank(values.value_currency)
+            ...(canManageFinancials
+              ? {
+                  value_amount: omitBlank(values.value_amount),
+                  value_currency: omitBlank(values.value_currency)
+                }
+              : {})
           };
 
           try {
@@ -371,15 +381,19 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
             <input {...register('unit')} />
           </label>
 
-          <label className="form-field">
-            <span>Value amount</span>
-            <input inputMode="decimal" {...register('value_amount')} />
-          </label>
+          {canManageFinancials ? (
+            <>
+              <label className="form-field">
+                <span>Value amount</span>
+                <input inputMode="decimal" {...register('value_amount')} />
+              </label>
 
-          <label className="form-field">
-            <span>Currency</span>
-            <input maxLength={3} {...register('value_currency')} />
-          </label>
+              <label className="form-field">
+                <span>Currency</span>
+                <input maxLength={3} {...register('value_currency')} />
+              </label>
+            </>
+          ) : null}
 
           <label className="form-field">
             <span>Acquired on</span>

@@ -35,7 +35,8 @@ import type {
   PaginatedResponse,
   ProfileUpdateInput,
   Resource,
-  ResourceCreateInput
+  ResourceCreateInput,
+  ThematicArea
 } from './types';
 
 export function useUpdateProfileMutation() {
@@ -63,6 +64,18 @@ export function useAdminRolesQuery() {
     queryKey: ['admin-roles'],
     queryFn: () =>
       apiGet<DataEnvelope<{ roles: AdminRoleDefinition[] }>>('/api/v1/admin/roles/')
+  });
+}
+
+export function useThematicAreasQuery() {
+  return useQuery({
+    queryKey: ['thematic-areas'],
+    queryFn: () =>
+      apiGet<PaginatedResponse<ThematicArea>>('/api/v1/thematic-areas/', {
+        page: 1,
+        page_size: 200,
+        ordering: 'name'
+      })
   });
 }
 
@@ -253,6 +266,16 @@ export function useArchiveRecordsMutation(key: string, path: string) {
       queryClient.invalidateQueries({ queryKey: ['community'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     }
+  });
+}
+
+export function useRestoreRecordsMutation(key: string, path: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: number[]) =>
+      Promise.all(ids.map((id) => apiPost(`${path}${id}/restore/`, {}))),
+    onSuccess: () => invalidateOperationalQueries(queryClient, key)
   });
 }
 

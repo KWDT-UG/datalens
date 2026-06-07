@@ -27,6 +27,7 @@ export interface ListParams extends Record<string, string | number | undefined> 
   search?: string;
   ordering?: string;
   community?: string | number;
+  include_deleted?: string | number;
 }
 
 export interface DataEnvelope<T> {
@@ -48,6 +49,9 @@ export interface AuthUser {
   is_superuser: boolean;
   roles: string[];
   capabilities: string[];
+  assigned_districts?: string[];
+  assigned_community_ids?: number[];
+  assigned_thematic_area_ids?: number[];
 }
 
 export interface ProfileUpdateInput {
@@ -60,7 +64,6 @@ export interface ProfileUpdateInput {
 }
 
 export interface LoginResponse {
-  token: string;
   user: AuthUser;
 }
 
@@ -78,6 +81,9 @@ export interface AdminAccount {
   last_name: string;
   last_login: string | null;
   date_joined: string;
+  assigned_districts?: string[];
+  assigned_community_ids?: number[];
+  assigned_thematic_area_ids?: number[];
 }
 
 export interface AdminRoleDefinition {
@@ -97,6 +103,9 @@ export interface AdminAccountCreateInput {
   workforce_type: string;
   position_title?: string;
   is_active: boolean;
+  assigned_districts?: string[];
+  assigned_community_ids?: number[];
+  assigned_thematic_area_ids?: number[];
 }
 
 export interface AdminAccountUpdateInput {
@@ -108,6 +117,9 @@ export interface AdminAccountUpdateInput {
   workforce_type?: string;
   position_title?: string;
   is_active?: boolean;
+  assigned_districts?: string[];
+  assigned_community_ids?: number[];
+  assigned_thematic_area_ids?: number[];
 }
 
 export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired' | string;
@@ -154,6 +166,7 @@ export interface Community {
   institution_count?: number;
   created_at?: string;
   updated_at?: string;
+  is_deleted?: boolean;
 }
 
 export interface DashboardMetrics {
@@ -340,6 +353,14 @@ export interface ResourceThematicArea {
   is_primary: boolean;
 }
 
+export interface ThematicArea {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  status?: RecordStatus;
+}
+
 export interface Resource {
   id: number;
   community: number;
@@ -363,6 +384,7 @@ export interface Resource {
   approval_status?: ApprovalStatus | null;
   pending_approval_request_id?: number | null;
   approval_history_count?: number;
+  is_deleted?: boolean;
 }
 
 export interface ResourceCreateInput {

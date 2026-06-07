@@ -82,6 +82,25 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
                 return str(value)
         return f"New {obj.entity_type.replace('_', ' ')}"
 
+    def to_representation(self, instance):
+        from apps.common.privacy import sanitize_approval_payload
+
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if request is None:
+            return data
+        data["submitted_payload"] = sanitize_approval_payload(
+            instance.entity_type,
+            data.get("submitted_payload"),
+            request.user,
+        )
+        data["diff_summary"] = sanitize_approval_payload(
+            instance.entity_type,
+            data.get("diff_summary"),
+            request.user,
+        )
+        return data
+
     def validate(self, attrs):
         entity_type = attrs.get(
             "entity_type",

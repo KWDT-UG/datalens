@@ -1,7 +1,10 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import serializers, status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -9,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.models import UserProfile
+from apps.common.authentication import enforce_csrf
 from apps.common.permissions import (
     ensure_role_groups,
     user_capabilities,
@@ -141,6 +145,17 @@ def serialize_user(user):
         "last_name": user.last_name,
         "workforce_type": profile.workforce_type if profile else None,
         "position_title": profile.position_title if profile else "",
+        "assigned_districts": profile.assigned_districts if profile else [],
+        "assigned_community_ids": (
+            list(profile.assigned_communities.values_list("pk", flat=True))
+            if profile
+            else []
+        ),
+        "assigned_thematic_area_ids": (
+            list(profile.assigned_thematic_areas.values_list("pk", flat=True))
+            if profile
+            else []
+        ),
         "is_active": user.is_active,
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
@@ -154,21 +169,32 @@ class LoginView(APIView):
     throttle_scope = "auth"
 
     def post(self, request):
+        enforce_csrf(request)
         serializer = LoginSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
         ensure_role_groups()
-        token, _created = Token.objects.get_or_create(user=user)
-        return Response(
+        Token.objects.filter(user=user).delete()
+        token = Token.objects.create(user=user)
+        response = Response(
             {
                 "data": {
-                    "token": token.key,
                     "user": serialize_user(user),
                 },
-                "meta": {"token_type": "Token"},
+                "meta": {"authentication": "HttpOnly cookie"},
                 "errors": [],
             }
         )
+        response.set_cookie(
+            settings.DATALENS_AUTH_COOKIE_NAME,
+            token.key,
+            max_age=settings.DATALENS_AUTH_COOKIE_MAX_AGE,
+            httponly=True,
+            secure=settings.DATALENS_AUTH_COOKIE_SECURE,
+            samesite=settings.DATALENS_AUTH_COOKIE_SAMESITE,
+            path="/",
+        )
+        return response
 
 
 class LogoutView(APIView):
@@ -176,7 +202,23 @@ class LogoutView(APIView):
 
     def post(self, request):
         Token.objects.filter(user=request.user).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        response.delete_cookie(
+            settings.DATALENS_AUTH_COOKIE_NAME,
+            path="/",
+            samesite=settings.DATALENS_AUTH_COOKIE_SAMESITE,
+        )
+        return response
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class CsrfTokenView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response(
+            {"data": {}, "meta": {"csrf_cookie": "set"}, "errors": []}
+        )
 
 
 class MeView(APIView):
