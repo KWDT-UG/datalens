@@ -23,6 +23,7 @@ ARCHIVE_IMPACT = "archive_impact"
 SUBMIT_FOR_APPROVAL = "submit_for_approval"
 REVIEW_APPROVALS = "review_approvals"
 REVIEW_IMPACT_APPROVALS = "review_impact_approvals"
+REVIEW_FINANCE_APPROVALS = "review_finance_approvals"
 EXPORT = "export"
 MANAGE_USERS = "manage_users"
 MANAGE_ROLES = "manage_roles"
@@ -54,6 +55,7 @@ ROLE_CAPABILITIES = {
         ARCHIVE_RESOURCES,
         ARCHIVE_IMPACT,
         REVIEW_APPROVALS,
+        REVIEW_FINANCE_APPROVALS,
         EXPORT,
     },
     UserRole.FINANCE_ADMINISTRATOR: {
@@ -61,6 +63,7 @@ ROLE_CAPABILITIES = {
         MANAGE_RESOURCES,
         ARCHIVE_RESOURCES,
         SUBMIT_FOR_APPROVAL,
+        REVIEW_FINANCE_APPROVALS,
         EXPORT,
     },
     UserRole.MONITORING_EVALUATION_MANAGER: {
@@ -195,9 +198,18 @@ class RoleActionAccess(IsAuthenticated):
                 )
             return user_has_capability(request.user, READ)
         if request.method == "DELETE":
-            return user_has_capability(
-                request.user,
-                required_archive_capability(view),
+            return (
+                user_has_capability(
+                    request.user,
+                    required_archive_capability(view),
+                )
+                or (
+                    user_has_capability(request.user, SUBMIT_FOR_APPROVAL)
+                    and user_has_capability(
+                        request.user,
+                        required_write_capability(view),
+                    )
+                )
             )
         return user_has_capability(request.user, required_write_capability(view))
 
@@ -210,16 +222,28 @@ class ApprovalReviewAccess(RoleActionAccess):
             return False
         capabilities = user_capabilities(request.user)
         return bool(
-            capabilities.intersection({REVIEW_APPROVALS, REVIEW_IMPACT_APPROVALS})
+            capabilities.intersection(
+                {
+                    REVIEW_APPROVALS,
+                    REVIEW_IMPACT_APPROVALS,
+                    REVIEW_FINANCE_APPROVALS,
+                }
+            )
         )
 
     def has_object_permission(self, request, view, obj):
-        if user_has_capability(request.user, REVIEW_APPROVALS):
-            return True
-        return (
-            user_has_capability(request.user, REVIEW_IMPACT_APPROVALS)
-            and obj.entity_type == "impact_record"
-        )
+        from apps.common.models import ApprovalReviewScope
+
+        if obj.review_scope == ApprovalReviewScope.FINANCE:
+            return user_has_capability(request.user, REVIEW_FINANCE_APPROVALS)
+        if (
+            obj.review_scope == ApprovalReviewScope.IMPACT
+            or obj.entity_type == "impact_record"
+        ):
+            return user_has_capability(
+                request.user, REVIEW_APPROVALS
+            ) or user_has_capability(request.user, REVIEW_IMPACT_APPROVALS)
+        return user_has_capability(request.user, REVIEW_APPROVALS)
 
 
 class AdminUserAccess(IsAuthenticated):

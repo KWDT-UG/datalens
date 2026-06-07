@@ -39,6 +39,11 @@ class UiReadyMilestoneTests(TestCase):
             email="other@example.com",
             password="test-password",
         )
+        cls.admin_user = get_user_model().objects.create_superuser(
+            username="ui.admin",
+            email="ui.admin@example.com",
+            password="test-password",
+        )
         cls.community = Community.objects.create(name="UI Community")
         cls.group = Group.objects.create(
             community=cls.community,
@@ -211,7 +216,7 @@ class UiReadyMilestoneTests(TestCase):
         )
 
     def test_resource_thematic_area_endpoint_and_filter(self):
-        self.client.force_authenticate(self.user)
+        self.client.force_authenticate(self.admin_user)
         create_response = self.client.post(
             reverse("resource-thematic-area-list"),
             {
@@ -271,7 +276,7 @@ class UiReadyMilestoneTests(TestCase):
                 self.assertTrue(case["assertion"](response.data))
 
     def test_sync_push_applies_clean_update_and_detects_conflict(self):
-        self.client.force_authenticate(self.user)
+        self.client.force_authenticate(self.admin_user)
         update_response = self.client.post(
             reverse("sync-push"),
             {

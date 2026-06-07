@@ -9,6 +9,7 @@ import type {
   AdminInvitationCreateInput,
   AdminRoleDefinition,
   ApprovalRequest,
+  ApprovalSubmission,
   AuthUser,
   Committee,
   CommitteeCreateInput,
@@ -333,7 +334,10 @@ export function useCreateResourceMutation() {
 
   return useMutation({
     mutationFn: (payload: ResourceCreateInput) =>
-      apiPost<Resource, ResourceCreateInput>('/api/v1/resources/', payload),
+      apiPost<Resource | ApprovalSubmission, ResourceCreateInput>(
+        '/api/v1/resources/',
+        payload
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
       queryClient.invalidateQueries({ queryKey: ['communities'] });
@@ -348,7 +352,10 @@ export function useUpdateResourceMutation() {
 
   return useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<ResourceCreateInput> }) =>
-      apiPatch<Resource, Partial<ResourceCreateInput>>(`/api/v1/resources/${id}/`, payload),
+      apiPatch<Resource | ApprovalSubmission, Partial<ResourceCreateInput>>(
+        `/api/v1/resources/${id}/`,
+        payload
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
       queryClient.invalidateQueries({ queryKey: ['communities'] });
@@ -392,7 +399,7 @@ export function useCreateImpactRecordMutation() {
 
   return useMutation({
     mutationFn: (payload: ImpactRecordCreateInput) =>
-      apiPost<ImpactRecord, ImpactRecordCreateInput>(
+      apiPost<ImpactRecord | ApprovalSubmission, ImpactRecordCreateInput>(
         '/api/v1/impact-records/',
         payload
       ),
@@ -412,7 +419,10 @@ export function useUpdateImpactRecordMutation() {
 
   return useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<ImpactRecordCreateInput> }) =>
-      apiPatch<ImpactRecord, Partial<ImpactRecordCreateInput>>(`/api/v1/impact-records/${id}/`, payload),
+      apiPatch<ImpactRecord | ApprovalSubmission, Partial<ImpactRecordCreateInput>>(
+        `/api/v1/impact-records/${id}/`,
+        payload
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['impact-records'] });
       queryClient.invalidateQueries({ queryKey: ['impact-summary'] });

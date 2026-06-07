@@ -1,12 +1,23 @@
 from rest_framework.viewsets import ModelViewSet
 
-from apps.common.viewsets import AuditFieldsMixin, SimpleFilterMixin, SoftDeleteMixin
+from apps.common.viewsets import (
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SimpleFilterMixin,
+    SoftDeleteMixin,
+)
 
 from .models import Member
 from .serializers import MemberSerializer
 
 
-class MemberViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, ModelViewSet):
+class MemberViewSet(
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SoftDeleteMixin,
+    SimpleFilterMixin,
+    ModelViewSet,
+):
     queryset = Member.objects.select_related("community", "group").all()
     serializer_class = MemberSerializer
     filter_fields = ("community", "group", "status")

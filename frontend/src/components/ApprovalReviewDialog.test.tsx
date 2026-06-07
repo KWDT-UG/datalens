@@ -14,6 +14,7 @@ const approval: ApprovalRequest = {
   entity_type: 'resource',
   entity_id: 23,
   action_type: 'update',
+  review_scope: 'standard',
   status: 'pending'
 };
 

@@ -63,6 +63,7 @@ export function ApprovalsPage() {
   const { user } = useAuth();
   const canReviewAll = hasCapability(user, capabilities.reviewApprovals);
   const canReviewImpact = hasCapability(user, capabilities.reviewImpactApprovals);
+  const canReviewFinance = hasCapability(user, capabilities.reviewFinanceApprovals);
   const canArchive = hasCapability(user, capabilities.archiveOperations);
   const canExport = hasCapability(user, capabilities.export);
   const [search, setSearch] = useState('');
@@ -241,7 +242,10 @@ export function ApprovalsPage() {
               {approvals.map((approval) => {
                 const isPending = approval.status === 'pending';
                 const canReview =
-                  canReviewAll || (canReviewImpact && approval.entity_type === 'impact_record');
+                  approval.submitted_by_user_id !== user?.id &&
+                  ((approval.review_scope === 'finance' && canReviewFinance) ||
+                    (approval.review_scope === 'impact' && (canReviewAll || canReviewImpact)) ||
+                    (approval.review_scope === 'standard' && canReviewAll));
                 return (
                   <tr key={approval.id}>
                     <td>
@@ -253,9 +257,13 @@ export function ApprovalsPage() {
                       /> : null}
                     </td>
                     <td>
-                      {formatLabel(approval.entity_type)} #{approval.entity_id ?? 'new'}
+                      {approval.target_display ??
+                        `${formatLabel(approval.entity_type)} #${approval.entity_id ?? 'new'}`}
                     </td>
-                    <td>{formatLabel(approval.action_type)}</td>
+                    <td>
+                      {formatLabel(approval.action_type)}
+                      <small>{formatLabel(approval.review_scope)} review</small>
+                    </td>
                     <td>{approval.community_name ?? 'Not recorded'}</td>
                     <td>
                       <StatusBadge status={approval.status} />

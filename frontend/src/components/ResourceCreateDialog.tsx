@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import {
@@ -10,7 +10,17 @@ import {
   useMembersQuery,
   useUpdateResourceMutation
 } from '../api/queries';
-import type { Community, Cooperative, Group, Institution, Member, Resource, ResourceCreateInput } from '../api/types';
+import {
+  isApprovalSubmission,
+  type ApprovalSubmission,
+  type Community,
+  type Cooperative,
+  type Group,
+  type Institution,
+  type Member,
+  type Resource,
+  type ResourceCreateInput
+} from '../api/types';
 import { FormDialog, FormErrorSummary } from './FormDialog';
 
 type ResourceCreateDialogProps = {
@@ -134,6 +144,8 @@ function ownerOptionsFor(
 export function ResourceCreateDialog({ communityId, onClose, onCreated, resource }: ResourceCreateDialogProps) {
   const createResource = useCreateResourceMutation();
   const updateResource = useUpdateResourceMutation();
+  const [approvalSubmission, setApprovalSubmission] =
+    useState<ApprovalSubmission | null>(null);
   const hasMounted = useRef(false);
   const isEditing = Boolean(resource);
   const {
@@ -227,14 +239,27 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
             const savedResource = resource
               ? await updateResource.mutateAsync({ id: resource.id, payload })
               : await createResource.mutateAsync(payload);
-            onCreated(savedResource);
-            onClose();
+            if (isApprovalSubmission(savedResource)) {
+              setApprovalSubmission(savedResource);
+            } else {
+              onCreated(savedResource);
+              onClose();
+            }
           } catch {
             // The mutation error state is rendered below.
           }
         })}
       >
         <FormErrorSummary error={mutationError} />
+        {approvalSubmission ? (
+          <div className="form-alert" role="status">
+            <strong>Submitted for approval</strong>
+            <span>
+              Request #{approvalSubmission.approval_request.id} requires{' '}
+              {approvalSubmission.approval_request.review_scope.replace(/_/g, ' ')} review.
+            </span>
+          </div>
+        ) : null}
 
         <div className="form-grid">
           <label className="form-field">
@@ -386,8 +411,18 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
           <button className="button button--secondary" type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="button button--primary" type="submit" disabled={isPending}>
-            {isPending ? 'Saving...' : isEditing ? 'Save resource' : 'Create resource'}
+          <button
+            className="button button--primary"
+            type="submit"
+            disabled={isPending || Boolean(approvalSubmission)}
+          >
+            {isPending
+              ? 'Saving...'
+              : approvalSubmission
+                ? 'Awaiting approval'
+                : isEditing
+                  ? 'Save resource'
+                  : 'Create resource'}
           </button>
         </footer>
       </form>

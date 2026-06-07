@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import {
@@ -18,6 +18,7 @@ import {
   useUpdateMemberMutation
 } from '../api/queries';
 import type {
+  ApprovalSubmission,
   Committee,
   CommitteeCreateInput,
   Cooperative,
@@ -31,6 +32,7 @@ import type {
   Member,
   MemberCreateInput
 } from '../api/types';
+import { isApprovalSubmission } from '../api/types';
 import { FormDialog, FormErrorSummary } from './FormDialog';
 
 type CommunityScopedDialogProps = {
@@ -694,6 +696,8 @@ export function ImpactRecordCreateDialog({
 }: ImpactRecordDialogProps) {
   const createImpact = useCreateImpactRecordMutation();
   const updateImpact = useUpdateImpactRecordMutation();
+  const [approvalSubmission, setApprovalSubmission] =
+    useState<ApprovalSubmission | null>(null);
   const isEditing = Boolean(impactRecord);
   const resourcesQuery = useResourcesQuery({
     community: communityId,
@@ -756,19 +760,29 @@ export function ImpactRecordCreateDialog({
           };
 
           try {
-            if (impactRecord) {
-              await updateImpact.mutateAsync({ id: impactRecord.id, payload });
+            const result = impactRecord
+              ? await updateImpact.mutateAsync({ id: impactRecord.id, payload })
+              : await createImpact.mutateAsync(payload);
+            if (isApprovalSubmission(result)) {
+              setApprovalSubmission(result);
             } else {
-              await createImpact.mutateAsync(payload);
+              onCreated();
+              onClose();
             }
-            onCreated();
-            onClose();
           } catch {
             // Mutation errors render below.
           }
         })}
       >
         <FormErrorSummary error={mutationError} />
+        {approvalSubmission ? (
+          <div className="form-alert" role="status">
+            <strong>Submitted for approval</strong>
+            <span>
+              Request #{approvalSubmission.approval_request.id} is awaiting impact review.
+            </span>
+          </div>
+        ) : null}
         <div className="form-grid">
           <label className="form-field">
             <span>Resource</span>
@@ -836,8 +850,14 @@ export function ImpactRecordCreateDialog({
           <textarea rows={3} {...register('notes')} />
         </label>
         <Actions
-          isPending={isPending}
-          label={isEditing ? 'Save impact record' : 'Create impact record'}
+          isPending={isPending || Boolean(approvalSubmission)}
+          label={
+            approvalSubmission
+              ? 'Awaiting approval'
+              : isEditing
+                ? 'Save impact record'
+                : 'Create impact record'
+          }
           onClose={onClose}
         />
       </form>

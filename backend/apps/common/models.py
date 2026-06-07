@@ -128,6 +128,18 @@ class ApprovalStatus(models.TextChoices):
     SUPERSEDED = "superseded", "Superseded"
 
 
+class ApprovalReviewScope(models.TextChoices):
+    STANDARD = "standard", "Programme Review"
+    IMPACT = "impact", "Impact Review"
+    FINANCE = "finance", "Finance Review"
+
+
+class ApprovalSubmissionSource(models.TextChoices):
+    API = "api", "API"
+    OFFLINE_SYNC = "offline_sync", "Offline Sync"
+    MANUAL = "manual", "Manual"
+
+
 class TimestampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

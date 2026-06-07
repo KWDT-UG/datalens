@@ -3,7 +3,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.common.viewsets import AuditFieldsMixin, SimpleFilterMixin, SoftDeleteMixin
+from apps.common.models import ApprovalActionType
+from apps.common.viewsets import (
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SimpleFilterMixin,
+    SoftDeleteMixin,
+)
 from apps.impacts.serializers import ImpactRecordSerializer
 
 from .models import (
@@ -22,7 +28,13 @@ from .serializers import (
 )
 
 
-class ThematicAreaViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, ModelViewSet):
+class ThematicAreaViewSet(
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SoftDeleteMixin,
+    SimpleFilterMixin,
+    ModelViewSet,
+):
     queryset = ThematicArea.objects.all()
     serializer_class = ThematicAreaSerializer
     filter_fields = ("status",)
@@ -30,7 +42,13 @@ class ThematicAreaViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, 
     ordering_fields = ("code", "name", "created_at")
 
 
-class ResourceViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, ModelViewSet):
+class ResourceViewSet(
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SoftDeleteMixin,
+    SimpleFilterMixin,
+    ModelViewSet,
+):
     queryset = Resource.objects.select_related("community").prefetch_related(
         "beneficiaries",
         "status_events",
@@ -57,6 +75,17 @@ class ResourceViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, Mode
             context=self.get_serializer_context(),
         )
         serializer.is_valid(raise_exception=True)
+        payload = {**request.data, "resource": resource.pk}
+        queued_response = self._queue_if_required(
+            serializer=serializer,
+            action_type=ApprovalActionType.CREATE,
+            entity_id=0,
+            instance=None,
+            entity_type="resource_beneficiary",
+            payload=payload,
+        )
+        if queued_response is not None:
+            return queued_response
         user_id = request.user.pk if request.user.is_authenticated else None
         serializer.save(created_by_user_id=user_id, updated_by_user_id=user_id)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -77,6 +106,17 @@ class ResourceViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, Mode
             context=self.get_serializer_context(),
         )
         serializer.is_valid(raise_exception=True)
+        payload = {**request.data, "resource": resource.pk}
+        queued_response = self._queue_if_required(
+            serializer=serializer,
+            action_type=ApprovalActionType.CREATE,
+            entity_id=0,
+            instance=None,
+            entity_type="resource_status_event",
+            payload=payload,
+        )
+        if queued_response is not None:
+            return queued_response
         user_id = request.user.pk if request.user.is_authenticated else None
         serializer.save(
             created_by_user_id=user_id,
@@ -128,6 +168,17 @@ class ResourceViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, Mode
             context=self.get_serializer_context(),
         )
         serializer.is_valid(raise_exception=True)
+        payload = {**request.data, "resource": resource.pk}
+        queued_response = self._queue_if_required(
+            serializer=serializer,
+            action_type=ApprovalActionType.CREATE,
+            entity_id=0,
+            instance=None,
+            entity_type="impact_record",
+            payload=payload,
+        )
+        if queued_response is not None:
+            return queued_response
         user_id = request.user.pk if request.user.is_authenticated else None
         serializer.save(
             created_by_user_id=user_id,
@@ -148,6 +199,7 @@ class ResourceViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, Mode
 
 
 class ResourceBeneficiaryViewSet(
+    ApprovalPolicyMixin,
     AuditFieldsMixin,
     SoftDeleteMixin,
     SimpleFilterMixin,
@@ -168,6 +220,7 @@ class ResourceBeneficiaryViewSet(
 
 
 class ResourceThematicAreaViewSet(
+    ApprovalPolicyMixin,
     AuditFieldsMixin,
     SoftDeleteMixin,
     SimpleFilterMixin,

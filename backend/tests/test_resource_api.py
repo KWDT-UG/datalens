@@ -37,6 +37,11 @@ class ResourceApiTests(TestCase):
             password="test-password",
         )
         assign_role(cls.user, UserRole.RESOURCE_PROCUREMENT_OFFICER)
+        cls.admin_user = get_user_model().objects.create_superuser(
+            username="resource.admin",
+            email="resource.admin@example.com",
+            password="test-password",
+        )
         cls.community = Community.objects.create(name="Resources")
         cls.other_community = Community.objects.create(name="Other")
         cls.group = Group.objects.create(
@@ -132,6 +137,7 @@ class ResourceApiTests(TestCase):
         self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
 
     def test_resource_crud_endpoints(self):
+        self.client.force_authenticate(self.admin_user)
         cases = [
             {
                 "label": "list",
@@ -198,6 +204,7 @@ class ResourceApiTests(TestCase):
         self.assertIn("owner_id", response.data)
 
     def test_resource_beneficiary_endpoints(self):
+        self.client.force_authenticate(self.admin_user)
         list_response = self.client.get(reverse("resource-beneficiary-list"))
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         self.assertIn("results", list_response.data)
@@ -230,6 +237,7 @@ class ResourceApiTests(TestCase):
         self.assertIn("beneficiary_id", response.data)
 
     def test_nested_resource_endpoints(self):
+        self.client.force_authenticate(self.admin_user)
         cases = [
             {
                 "label": "beneficiaries list",

@@ -360,6 +360,9 @@ export interface Resource {
   source_notes?: string;
   thematic_areas?: ResourceThematicArea[];
   updated_at?: string;
+  approval_status?: ApprovalStatus | null;
+  pending_approval_request_id?: number | null;
+  approval_history_count?: number;
 }
 
 export interface ResourceCreateInput {
@@ -399,6 +402,9 @@ export interface ImpactRecord {
   notes?: string;
   method?: string;
   updated_at?: string;
+  approval_status?: ApprovalStatus | null;
+  pending_approval_request_id?: number | null;
+  approval_history_count?: number;
 }
 
 export interface ImpactSummary {
@@ -444,6 +450,10 @@ export interface ApprovalRequest {
   action_type: string;
   submitted_payload?: Record<string, unknown>;
   diff_summary?: Record<string, unknown> | null;
+  review_scope: 'standard' | 'impact' | 'finance' | string;
+  policy_reason?: string;
+  submission_source?: 'api' | 'offline_sync' | 'manual' | string;
+  base_sync_version?: number | null;
   status: ApprovalStatus;
   submitted_by_user_id?: number | null;
   submitted_at?: string;
@@ -452,6 +462,23 @@ export interface ApprovalRequest {
   review_notes?: string;
   applied_at?: string | null;
   updated_at?: string;
+  target_display?: string;
+}
+
+export interface ApprovalSubmission {
+  approval_required: true;
+  detail: string;
+  approval_request: ApprovalRequest;
+}
+
+export function isApprovalSubmission(
+  value: unknown
+): value is ApprovalSubmission {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as { approval_required?: unknown }).approval_required === true
+  );
 }
 
 export interface HealthResponse {

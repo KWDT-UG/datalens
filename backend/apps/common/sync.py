@@ -1,12 +1,20 @@
 from django.utils.dateparse import parse_datetime
 from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.approvals.policy import (
+    approval_policy_for_change,
+    community_id_for_change,
+    queue_approval_request,
+    required_capability_for_entity,
+)
+from apps.approvals.serializers import ApprovalRequestSerializer
 from apps.approvals.services import APPROVAL_ENTITY_REGISTRY
-from apps.common.models import ApprovalActionType
-
+from apps.common.models import ApprovalActionType, ApprovalSubmissionSource
+from apps.common.permissions import SUBMIT_FOR_APPROVAL, user_has_capability
 
 MAX_SYNC_RECORDS = 100
 
@@ -26,7 +34,9 @@ class SyncPullView(APIView):
         updated_after = request.query_params.get("updated_after")
         include_deleted = request.query_params.get("include_deleted", "1").lower()
 
-        entity_types = [entity_type] if entity_type else sorted(APPROVAL_ENTITY_REGISTRY)
+        entity_types = (
+            [entity_type] if entity_type else sorted(APPROVAL_ENTITY_REGISTRY)
+        )
         data = {}
         errors = []
 
@@ -61,11 +71,18 @@ class SyncPullView(APIView):
 
             model, serializer_class = registry_item
             queryset = model.objects.all().order_by("updated_at", "id")
-            if hasattr(model, "is_deleted") and include_deleted not in {"1", "true", "yes"}:
+            if hasattr(model, "is_deleted") and include_deleted not in {
+                "1",
+                "true",
+                "yes",
+            }:
                 queryset = queryset.filter(is_deleted=False)
             if since is not None and hasattr(model, "updated_at"):
                 queryset = queryset.filter(updated_at__gt=since)
-            data[current_type] = serializer_class(queryset[:MAX_SYNC_RECORDS], many=True).data
+            data[current_type] = serializer_class(
+                queryset[:MAX_SYNC_RECORDS],
+                many=True,
+            ).data
 
         response_status = status.HTTP_400_BAD_REQUEST if errors else status.HTTP_200_OK
         return Response(
@@ -83,6 +100,8 @@ class SyncPullView(APIView):
 
 class SyncPushView(APIView):
     """Write-side sync endpoint with coarse record-level conflict detection."""
+
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = SyncPushSerializer(data=request.data)
@@ -115,6 +134,17 @@ class SyncPushView(APIView):
                 continue
 
             model, serializer_class = registry_item
+            required_capability = required_capability_for_entity(entity_type)
+            if not user_has_capability(request.user, required_capability):
+                errors.append(
+                    {
+                        "index": index,
+                        "attr": "entity_type",
+                        "detail": "User cannot mutate this entity type.",
+                        "code": "permission_denied",
+                    }
+                )
+                continue
             instance = (
                 model.objects.filter(pk=entity_id).first()
                 if entity_id is not None
@@ -152,6 +182,66 @@ class SyncPushView(APIView):
                 continue
 
             try:
+                self.validate_change(
+                    action=action,
+                    payload=payload,
+                    instance=instance,
+                    serializer_class=serializer_class,
+                )
+                decision = approval_policy_for_change(
+                    entity_type=entity_type,
+                    action_type=action,
+                    payload=payload,
+                    instance=instance,
+                )
+                if decision.required and not request.user.is_superuser:
+                    if not user_has_capability(request.user, SUBMIT_FOR_APPROVAL):
+                        raise ValidationError(
+                            {
+                                "approval": (
+                                    "User cannot submit changes for approval."
+                                )
+                            }
+                        )
+                    community_id = community_id_for_change(
+                        entity_type=entity_type,
+                        payload=payload,
+                        instance=instance,
+                    )
+                    if community_id is None:
+                        raise ValidationError(
+                            {
+                                "community": (
+                                    "Could not determine the community for approval."
+                                )
+                            }
+                        )
+                    approval_request, _created = queue_approval_request(
+                        community_id=community_id,
+                        entity_type=entity_type,
+                        entity_id=entity_id or 0,
+                        action_type=action,
+                        payload=payload,
+                        submitted_by_user_id=request.user.pk,
+                        decision=decision,
+                        submission_source=ApprovalSubmissionSource.OFFLINE_SYNC,
+                        client_mutation_id=change.get("client_mutation_id", "")
+                        or payload.get("client_mutation_id", ""),
+                        instance=instance,
+                    )
+                    accepted.append(
+                        {
+                            "index": index,
+                            "entity_type": entity_type,
+                            "id": entity_id,
+                            "action": action,
+                            "status": "pending_approval",
+                            "approval_request": ApprovalRequestSerializer(
+                                approval_request
+                            ).data,
+                        }
+                    )
+                    continue
                 applied = self.apply_change(
                     action=action,
                     payload=payload,
@@ -187,13 +277,34 @@ class SyncPushView(APIView):
                     "conflicts": conflicts,
                 },
                 "meta": {
-                    "applied": len(accepted),
+                    "applied": sum(
+                        item["status"] == "applied" for item in accepted
+                    ),
+                    "pending_approval": sum(
+                        item["status"] == "pending_approval" for item in accepted
+                    ),
                     "sync_contract": "record_version_v1",
                 },
                 "errors": errors,
             },
             status=status.HTTP_409_CONFLICT if conflicts else status.HTTP_200_OK,
         )
+
+    def validate_change(self, action, payload, instance, serializer_class):
+        if action == ApprovalActionType.CREATE:
+            serializer = serializer_class(data=payload)
+            serializer.is_valid(raise_exception=True)
+            return
+        if instance is None:
+            raise ValidationError(
+                {"id": "Existing record id is required for this action."}
+            )
+        if action == ApprovalActionType.UPDATE:
+            serializer = serializer_class(instance, data=payload, partial=True)
+            serializer.is_valid(raise_exception=True)
+            return
+        if action != ApprovalActionType.DELETE:
+            raise ValidationError({"action": "Unsupported sync action."})
 
     def apply_change(self, action, payload, instance, serializer_class, user=None):
         user_id = user.pk if user is not None else None
@@ -209,7 +320,9 @@ class SyncPushView(APIView):
             return serializer.save(**save_kwargs)
 
         if instance is None:
-            raise ValidationError({"id": "Existing record id is required for this action."})
+            raise ValidationError(
+                {"id": "Existing record id is required for this action."}
+            )
 
         if action == ApprovalActionType.UPDATE:
             serializer = serializer_class(instance, data=payload, partial=True)

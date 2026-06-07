@@ -2,6 +2,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
+from apps.common.serializers import ApprovalStateSerializerMixin
+
 from .models import (
     Resource,
     ResourceBeneficiary,
@@ -11,7 +13,7 @@ from .models import (
 )
 
 
-class ThematicAreaSerializer(serializers.ModelSerializer):
+class ThematicAreaSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer):
     class Meta:
         model = ThematicArea
         fields = [
@@ -20,6 +22,9 @@ class ThematicAreaSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "status",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",
@@ -53,7 +58,10 @@ class ResourceThematicAreaReadSerializer(serializers.ModelSerializer):
         fields = ["id", "thematic_area_id", "code", "name", "is_primary"]
 
 
-class ResourceThematicAreaSerializer(serializers.ModelSerializer):
+class ResourceThematicAreaSerializer(
+    ApprovalStateSerializerMixin,
+    serializers.ModelSerializer,
+):
     code = serializers.CharField(source="thematic_area.code", read_only=True)
     name = serializers.CharField(source="thematic_area.name", read_only=True)
 
@@ -67,6 +75,9 @@ class ResourceThematicAreaSerializer(serializers.ModelSerializer):
             "code",
             "name",
             "is_primary",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",
@@ -133,7 +144,7 @@ class ResourceThematicAreaSerializer(serializers.ModelSerializer):
             ).update(is_primary=False)
 
 
-class ResourceSerializer(serializers.ModelSerializer):
+class ResourceSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer):
     community_name = serializers.CharField(source="community.name", read_only=True)
     thematic_areas = ResourceThematicAreaReadSerializer(
         source="thematic_links",
@@ -176,6 +187,9 @@ class ResourceSerializer(serializers.ModelSerializer):
             "thematic_areas",
             "thematic_area_ids",
             "primary_thematic_area_id",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",
@@ -296,7 +310,10 @@ class ResourceSerializer(serializers.ModelSerializer):
             )
 
 
-class ResourceBeneficiarySerializer(serializers.ModelSerializer):
+class ResourceBeneficiarySerializer(
+    ApprovalStateSerializerMixin,
+    serializers.ModelSerializer,
+):
     class Meta:
         model = ResourceBeneficiary
         fields = [
@@ -306,6 +323,9 @@ class ResourceBeneficiarySerializer(serializers.ModelSerializer):
             "beneficiary_id",
             "relationship_type",
             "notes",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",
@@ -344,7 +364,10 @@ class ResourceBeneficiarySerializer(serializers.ModelSerializer):
         return attrs
 
 
-class ResourceStatusEventSerializer(serializers.ModelSerializer):
+class ResourceStatusEventSerializer(
+    ApprovalStateSerializerMixin,
+    serializers.ModelSerializer,
+):
     class Meta:
         model = ResourceStatusEvent
         fields = [
@@ -354,6 +377,9 @@ class ResourceStatusEventSerializer(serializers.ModelSerializer):
             "effective_at",
             "notes",
             "recorded_by_user_id",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",

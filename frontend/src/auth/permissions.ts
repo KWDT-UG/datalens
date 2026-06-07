@@ -11,6 +11,7 @@ export const capabilities = {
   submitForApproval: 'submit_for_approval',
   reviewApprovals: 'review_approvals',
   reviewImpactApprovals: 'review_impact_approvals',
+  reviewFinanceApprovals: 'review_finance_approvals',
   export: 'export',
   manageUsers: 'manage_users',
   manageRoles: 'manage_roles',
@@ -28,6 +29,7 @@ export function hasAnyCapability(user: AuthUser | null, required: string[]) {
 export function canReviewApprovals(user: AuthUser | null) {
   return hasAnyCapability(user, [
     capabilities.reviewApprovals,
-    capabilities.reviewImpactApprovals
+    capabilities.reviewImpactApprovals,
+    capabilities.reviewFinanceApprovals
   ]);
 }

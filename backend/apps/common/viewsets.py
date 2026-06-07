@@ -1,3 +1,9 @@
+from rest_framework import status
+from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
+
+from apps.common.models import ApprovalActionType, ApprovalSubmissionSource
+
 TRUTHY_VALUES = {"1", "true", "yes", "on"}
 
 
@@ -37,6 +43,139 @@ class ActionPermissionMixin:
         return [permission() for permission in permission_classes]
 
 
+class ApprovalPolicyMixin:
+    approval_entity_type = None
+
+    def get_approval_entity_type(self):
+        return self.approval_entity_type or getattr(self, "basename", "").replace(
+            "-", "_"
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        queued_response = self._queue_if_required(
+            serializer=serializer,
+            action_type=ApprovalActionType.CREATE,
+            entity_id=0,
+            instance=None,
+        )
+        if queued_response is not None:
+            return queued_response
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(
+            instance,
+            data=request.data,
+            partial=partial,
+        )
+        serializer.is_valid(raise_exception=True)
+        queued_response = self._queue_if_required(
+            serializer=serializer,
+            action_type=ApprovalActionType.UPDATE,
+            entity_id=instance.pk,
+            instance=instance,
+        )
+        if queued_response is not None:
+            return queued_response
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        queued_response = self._queue_if_required(
+            serializer=None,
+            action_type=ApprovalActionType.DELETE,
+            entity_id=instance.pk,
+            instance=instance,
+        )
+        if queued_response is not None:
+            return queued_response
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _queue_if_required(
+        self,
+        *,
+        serializer,
+        action_type,
+        entity_id,
+        instance,
+        entity_type=None,
+        payload=None,
+    ):
+        if self.request.user.is_superuser:
+            return None
+
+        from apps.approvals.policy import (
+            approval_policy_for_change,
+            community_id_for_change,
+            queue_approval_request,
+        )
+        from apps.approvals.serializers import ApprovalRequestSerializer
+
+        if payload is None:
+            payload = (
+                dict(self.request.data)
+                if action_type != ApprovalActionType.DELETE
+                else {}
+            )
+        entity_type = entity_type or self.get_approval_entity_type()
+        decision = approval_policy_for_change(
+            entity_type=entity_type,
+            action_type=action_type,
+            payload=payload,
+            instance=instance,
+        )
+        if not decision.required:
+            return None
+
+        community_id = community_id_for_change(
+            entity_type=entity_type,
+            payload=payload,
+            instance=instance,
+        )
+        if community_id is None:
+            raise ValidationError(
+                {"community": "Could not determine the community for approval."}
+            )
+        user_id = (
+            self.request.user.pk if self.request.user.is_authenticated else None
+        )
+        approval_request, _created = queue_approval_request(
+            community_id=community_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            action_type=action_type,
+            payload=payload,
+            submitted_by_user_id=user_id,
+            decision=decision,
+            submission_source=ApprovalSubmissionSource.API,
+            client_mutation_id=payload.get("client_mutation_id", ""),
+            instance=instance,
+        )
+        return Response(
+            {
+                "approval_required": True,
+                "detail": "Change submitted for approval.",
+                "approval_request": ApprovalRequestSerializer(
+                    approval_request,
+                    context=self.get_serializer_context(),
+                ).data,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
 class SimpleFilterMixin:
     filter_fields: tuple[str, ...] = ()
     search_fields: tuple[str, ...] = ()
@@ -70,7 +209,11 @@ class SimpleFilterMixin:
 
         ordering = self.request.query_params.get("ordering")
         if ordering and self.ordering_fields:
-            requested_fields = [item.strip() for item in ordering.split(",") if item.strip()]
+            requested_fields = [
+                item.strip()
+                for item in ordering.split(",")
+                if item.strip()
+            ]
             valid_fields = []
             for field in requested_fields:
                 normalized = field.lstrip("-")
