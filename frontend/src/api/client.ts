@@ -15,12 +15,19 @@ function getCookie(name: string) {
 export class ApiClientError extends Error {
   status: number;
   errors: ApiErrorItem[];
+  payload: unknown;
 
-  constructor(message: string, status: number, errors: ApiErrorItem[] = []) {
+  constructor(
+    message: string,
+    status: number,
+    errors: ApiErrorItem[] = [],
+    payload: unknown = null
+  ) {
     super(message);
     this.name = 'ApiClientError';
     this.status = status;
     this.errors = errors;
+    this.payload = payload;
   }
 }
 
@@ -116,7 +123,7 @@ async function apiRequest<T, TBody = never>(
     }
     const errors = extractErrors(payload);
     const message = errors[0]?.detail ?? `Request failed with status ${response.status}`;
-    throw new ApiClientError(message, response.status, errors);
+    throw new ApiClientError(message, response.status, errors, payload);
   }
 
   return payload as T;

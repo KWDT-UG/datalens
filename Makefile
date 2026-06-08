@@ -2,7 +2,7 @@ COMPOSE ?= docker compose
 BACKEND ?= $(COMPOSE) run --rm backend
 FRONTEND ?= $(COMPOSE) run --rm frontend
 
-.PHONY: help bootstrap build up down logs migrate makemigrations superuser test check shell init-roles seed-reference-data seed-demo-data smoke-api frontend-install frontend-build frontend-lint frontend-test frontend-dev
+.PHONY: help bootstrap build up down logs migrate makemigrations superuser test check shell init-roles seed-reference-data seed-demo-data smoke-api frontend-install frontend-build frontend-lint frontend-test frontend-pwa-check frontend-pwa-e2e frontend-dev
 
 help:
 	@echo "KWDT Data Lens commands"
@@ -25,6 +25,8 @@ help:
 	@echo "  make frontend-build    Build the frontend"
 	@echo "  make frontend-lint     Type-check the frontend"
 	@echo "  make frontend-test     Run frontend unit/component tests"
+	@echo "  make frontend-pwa-check Verify the built manifest and offline shell"
+	@echo "  make frontend-pwa-e2e  Verify offline/PWA behavior in Chromium"
 	@echo "  make frontend-dev      Start only the frontend dev service"
 
 bootstrap:
@@ -73,6 +75,15 @@ frontend-lint:
 
 frontend-test:
 	cd frontend && npm run test:run
+
+frontend-pwa-check:
+	$(COMPOSE) run --rm --build --no-deps -v /app/node_modules frontend npm run pwa:check
+
+frontend-pwa-e2e:
+	$(COMPOSE) --profile production up -d --build db backend nginx
+	$(BACKEND) python manage.py shell -c "from django.contrib.auth import get_user_model; user, _ = get_user_model().objects.get_or_create(username='pwa.e2e'); user.set_password('Pwa-E2E-Password-2026!'); user.is_active = True; user.is_staff = True; user.is_superuser = True; user.save()"
+	docker build -f frontend/Dockerfile.e2e -t datalens-pwa-e2e frontend
+	docker run --rm --add-host=host.docker.internal:host-gateway -e PLAYWRIGHT_TARGET_URL=http://host.docker.internal:8080 datalens-pwa-e2e
 
 frontend-dev:
 	$(COMPOSE) up frontend

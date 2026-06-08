@@ -172,6 +172,24 @@ class CoreModel(TimestampedModel, AuditModel, OfflineMetadataModel):
         abstract = True
 
 
+class SyncMutationReceipt(TimestampedModel):
+    user_id = models.PositiveBigIntegerField()
+    client_mutation_id = models.CharField(max_length=128)
+    request_fingerprint = models.CharField(max_length=64)
+    response_payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user_id", "client_mutation_id"],
+                name="unique_sync_mutation_receipt_per_user",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user_id}:{self.client_mutation_id}"
+
+
 class UserProfile(TimestampedModel):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,

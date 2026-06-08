@@ -342,6 +342,138 @@ class UiReadyMilestoneTests(TestCase):
             "version_mismatch",
         )
 
+    def test_sync_pull_uses_server_cursors_for_multiple_pages(self):
+        self.client.force_authenticate(self.admin_user)
+        Group.objects.create(
+            community=self.community,
+            code="GRP-CURSOR-2",
+            name="Cursor Group Two",
+        )
+
+        first_response = self.client.get(
+            reverse("sync-pull"),
+            {"entity_type": "group", "page_size": 1},
+        )
+        second_response = self.client.get(
+            reverse("sync-pull"),
+            {
+                "entity_type": "group",
+                "page_size": 1,
+                "cursor": first_response.data["meta"]["next_cursor"],
+            },
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(first_response.data["meta"]["has_more"])
+        self.assertIsNotNone(first_response.data["meta"]["next_cursor"])
+        first_id = first_response.data["data"]["group"][0]["id"]
+        second_id = second_response.data["data"]["group"][0]["id"]
+        self.assertNotEqual(first_id, second_id)
+        self.assertEqual(
+            first_response.data["meta"]["sync_contract"],
+            "record_version_v2",
+        )
+
+    def test_sync_push_replays_direct_create_by_client_mutation_id(self):
+        self.client.force_authenticate(self.admin_user)
+        payload = {
+            "changes": [
+                {
+                    "entity_type": "community",
+                    "action": "create",
+                    "client_mutation_id": "community-create-once",
+                    "payload": {"name": "Offline Idempotent Community"},
+                }
+            ]
+        }
+
+        first_response = self.client.post(reverse("sync-push"), payload, format="json")
+        created = Community.objects.get(name="Offline Idempotent Community")
+        created.client_mutation_id = "a-later-mutation"
+        created.save(update_fields=["client_mutation_id", "updated_at"])
+        second_response = self.client.post(reverse("sync-push"), payload, format="json")
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(first_response.data["data"]["accepted"][0]["replayed"])
+        self.assertTrue(second_response.data["data"]["accepted"][0]["replayed"])
+        self.assertEqual(
+            Community.objects.filter(name="Offline Idempotent Community").count(),
+            1,
+        )
+
+    def test_sync_push_rejects_reusing_mutation_id_for_different_payload(self):
+        self.client.force_authenticate(self.admin_user)
+        first_payload = {
+            "changes": [
+                {
+                    "entity_type": "community",
+                    "action": "create",
+                    "client_mutation_id": "community-create-reused",
+                    "payload": {"name": "Original Offline Community"},
+                }
+            ]
+        }
+        reused_payload = {
+            "changes": [
+                {
+                    "entity_type": "community",
+                    "action": "create",
+                    "client_mutation_id": "community-create-reused",
+                    "payload": {"name": "Different Offline Community"},
+                }
+            ]
+        }
+
+        first_response = self.client.post(
+            reverse("sync-push"),
+            first_payload,
+            format="json",
+        )
+        reused_response = self.client.post(
+            reverse("sync-push"),
+            reused_payload,
+            format="json",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(reused_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            reused_response.data["errors"][0]["code"],
+            "mutation_id_reused",
+        )
+        self.assertFalse(
+            Community.objects.filter(name="Different Offline Community").exists()
+        )
+
+    def test_sync_push_replays_direct_update_without_incrementing_version_twice(self):
+        self.client.force_authenticate(self.admin_user)
+        self.group.refresh_from_db()
+        original_version = self.group.sync_version
+        payload = {
+            "changes": [
+                {
+                    "entity_type": "group",
+                    "id": self.group.id,
+                    "sync_version": original_version,
+                    "action": "update",
+                    "client_mutation_id": "group-update-once",
+                    "payload": {"name": "Offline Updated Group"},
+                }
+            ]
+        }
+
+        first_response = self.client.post(reverse("sync-push"), payload, format="json")
+        second_response = self.client.post(reverse("sync-push"), payload, format="json")
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(first_response.data["data"]["accepted"][0]["replayed"])
+        self.assertTrue(second_response.data["data"]["accepted"][0]["replayed"])
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.name, "Offline Updated Group")
+        self.assertEqual(self.group.sync_version, original_version + 1)
+
     @override_settings(
         SECURE_CONTENT_TYPE_NOSNIFF=True,
         X_FRAME_OPTIONS="DENY",

@@ -14,6 +14,7 @@ import { useOptionalAuth } from '../auth/AuthContext';
 import { capabilities, hasCapability } from '../auth/permissions';
 import {
   isApprovalSubmission,
+  isOfflineQueuedResult,
   type ApprovalSubmission,
   type Community,
   type Cooperative,
@@ -24,6 +25,7 @@ import {
   type ResourceCreateInput
 } from '../api/types';
 import { FormDialog, FormErrorSummary } from './FormDialog';
+import { clearOfflineDraft, useOfflineDraft } from '../offline/drafts';
 
 type ResourceCreateDialogProps = {
   communityId?: number;
@@ -145,6 +147,7 @@ function ownerOptionsFor(
 
 export function ResourceCreateDialog({ communityId, onClose, onCreated, resource }: ResourceCreateDialogProps) {
   const auth = useOptionalAuth();
+  const userId = auth?.user?.id;
   const canManageFinancials = auth
     ? hasCapability(auth.user, capabilities.manageResourceFinancials)
     : true;
@@ -158,6 +161,7 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
     formState: { errors },
     handleSubmit,
     register,
+    reset,
     setValue,
     watch
   } = useForm<ResourceFormValues>({
@@ -211,6 +215,13 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
   const ownerSelectDisabled = !selectedCommunity || Boolean(ownerQuery?.isLoading);
   const mutationError = createResource.error ?? updateResource.error;
   const isPending = createResource.isPending || updateResource.isPending;
+  useOfflineDraft({
+    entityId: resource?.id,
+    entityType: 'resource',
+    reset,
+    userId,
+    watch
+  });
 
   return (
     <FormDialog
@@ -247,8 +258,17 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
 
           try {
             const savedResource = resource
-              ? await updateResource.mutateAsync({ id: resource.id, payload })
+              ? await updateResource.mutateAsync({
+                  id: resource.id,
+                  payload,
+                  syncVersion: resource.sync_version
+                })
               : await createResource.mutateAsync(payload);
+            await clearOfflineDraft('resource', resource?.id, userId);
+            if (isOfflineQueuedResult(savedResource)) {
+              onClose();
+              return;
+            }
             if (isApprovalSubmission(savedResource)) {
               setApprovalSubmission(savedResource);
             } else {

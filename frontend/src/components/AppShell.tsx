@@ -22,6 +22,7 @@ import {
   capabilities,
   hasCapability
 } from '../auth/permissions';
+import { SyncCenter } from '../offline/SyncCenter';
 
 const navItems = [
   { label: 'Dashboard', to: '/dashboard', icon: HomeIcon },
@@ -106,6 +107,7 @@ export function AppShell() {
           </form>
           <div className="topbar__user">
             <ApiStatus />
+            <SyncCenter />
             <span>{displayName}</span>
             <NavLink to="/profile" aria-label="Open profile">
               <UserCircleIcon />

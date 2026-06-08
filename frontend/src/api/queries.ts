@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import { useOptionalAuth } from '../auth/AuthContext';
+import { executeOrQueue } from '../offline/sync';
 import type {
   AdminAccount,
   AdminAccountCreateInput,
@@ -198,10 +200,18 @@ export function useCommunityQuery(communityId?: string) {
 
 export function useCreateCommunityMutation() {
   const queryClient = useQueryClient();
+  const userId = useOptionalAuth()?.user?.id;
 
   return useMutation({
     mutationFn: (payload: CommunityCreateInput) =>
-      apiPost<Community, CommunityCreateInput>('/api/v1/communities/', payload),
+      executeOrQueue({
+        action: 'create',
+        entityType: 'community',
+        payload: payload as unknown as Record<string, unknown>,
+        userId,
+        execute: () =>
+          apiPost<Community, CommunityCreateInput>('/api/v1/communities/', payload)
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['communities'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -216,12 +226,33 @@ function invalidateOperationalQueries(queryClient: ReturnType<typeof useQueryCli
   queryClient.invalidateQueries({ queryKey: ['dashboard'] });
 }
 
-function useUpdateListMutation<T, TPayload>(key: string, path: string) {
+function useUpdateListMutation<T, TPayload>(
+  key: string,
+  path: string,
+  entityType: string
+) {
   const queryClient = useQueryClient();
+  const userId = useOptionalAuth()?.user?.id;
 
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<TPayload> }) =>
-      apiPatch<T, Partial<TPayload>>(`${path}${id}/`, payload),
+    mutationFn: ({
+      id,
+      payload,
+      syncVersion
+    }: {
+      id: number;
+      payload: Partial<TPayload>;
+      syncVersion?: number;
+    }) =>
+      executeOrQueue({
+        action: 'update',
+        entityId: id,
+        entityType,
+        payload: payload as Record<string, unknown>,
+        syncVersion,
+        userId,
+        execute: () => apiPatch<T, Partial<TPayload>>(`${path}${id}/`, payload)
+      }),
     onSuccess: () => invalidateOperationalQueries(queryClient, key)
   });
 }
@@ -229,7 +260,8 @@ function useUpdateListMutation<T, TPayload>(key: string, path: string) {
 export function useUpdateCommunityMutation() {
   return useUpdateListMutation<Community, CommunityCreateInput>(
     'communities',
-    '/api/v1/communities/'
+    '/api/v1/communities/',
+    'community'
   );
 }
 
@@ -241,11 +273,23 @@ function useListQuery<T>(key: string, path: string, params: ListParams, enabled 
   });
 }
 
-function useCreateListMutation<T, TPayload>(key: string, path: string) {
+function useCreateListMutation<T, TPayload>(
+  key: string,
+  path: string,
+  entityType: string
+) {
   const queryClient = useQueryClient();
+  const userId = useOptionalAuth()?.user?.id;
 
   return useMutation({
-    mutationFn: (payload: TPayload) => apiPost<T, TPayload>(path, payload),
+    mutationFn: (payload: TPayload) =>
+      executeOrQueue({
+        action: 'create',
+        entityType,
+        payload: payload as Record<string, unknown>,
+        userId,
+        execute: () => apiPost<T, TPayload>(path, payload)
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [key] });
       queryClient.invalidateQueries({ queryKey: ['communities'] });
@@ -255,11 +299,52 @@ function useCreateListMutation<T, TPayload>(key: string, path: string) {
   });
 }
 
+const entityTypeByKey: Record<string, string> = {
+  communities: 'community',
+  groups: 'group',
+  members: 'member',
+  institutions: 'institution',
+  committees: 'committee',
+  cooperatives: 'cooperative',
+  resources: 'resource',
+  'impact-records': 'impact_record',
+  'approval-requests': 'approval_request'
+};
+
+function cachedSyncVersion(
+  queryClient: ReturnType<typeof useQueryClient>,
+  key: string,
+  id: number
+) {
+  for (const [, value] of queryClient.getQueriesData({ queryKey: [key] })) {
+    const results = (value as { results?: Array<{ id?: number; sync_version?: number }> })
+      ?.results;
+    const match = results?.find((record) => record.id === id);
+    if (match?.sync_version !== undefined) {
+      return match.sync_version;
+    }
+  }
+  return undefined;
+}
+
 export function useArchiveRecordsMutation(key: string, path: string) {
   const queryClient = useQueryClient();
+  const userId = useOptionalAuth()?.user?.id;
 
   return useMutation({
-    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => apiDelete(`${path}${id}/`))),
+    mutationFn: (ids: number[]) =>
+      Promise.all(
+        ids.map((id) =>
+          executeOrQueue({
+            action: 'delete',
+            entityId: id,
+            entityType: entityTypeByKey[key] ?? key.replace(/-/g, '_'),
+            syncVersion: cachedSyncVersion(queryClient, key, id),
+            userId,
+            execute: () => apiDelete(`${path}${id}/`)
+          })
+        )
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [key] });
       queryClient.invalidateQueries({ queryKey: ['communities'] });
@@ -284,11 +369,19 @@ export function useMembersQuery(params: ListParams, enabled = true) {
 }
 
 export function useCreateMemberMutation() {
-  return useCreateListMutation<Member, MemberCreateInput>('members', '/api/v1/members/');
+  return useCreateListMutation<Member, MemberCreateInput>(
+    'members',
+    '/api/v1/members/',
+    'member'
+  );
 }
 
 export function useUpdateMemberMutation() {
-  return useUpdateListMutation<Member, MemberCreateInput>('members', '/api/v1/members/');
+  return useUpdateListMutation<Member, MemberCreateInput>(
+    'members',
+    '/api/v1/members/',
+    'member'
+  );
 }
 
 export function useGroupsQuery(params: ListParams, enabled = true) {
@@ -296,11 +389,19 @@ export function useGroupsQuery(params: ListParams, enabled = true) {
 }
 
 export function useCreateGroupMutation() {
-  return useCreateListMutation<Group, GroupCreateInput>('groups', '/api/v1/groups/');
+  return useCreateListMutation<Group, GroupCreateInput>(
+    'groups',
+    '/api/v1/groups/',
+    'group'
+  );
 }
 
 export function useUpdateGroupMutation() {
-  return useUpdateListMutation<Group, GroupCreateInput>('groups', '/api/v1/groups/');
+  return useUpdateListMutation<Group, GroupCreateInput>(
+    'groups',
+    '/api/v1/groups/',
+    'group'
+  );
 }
 
 export function useInstitutionsQuery(params: ListParams, enabled = true) {
@@ -308,13 +409,18 @@ export function useInstitutionsQuery(params: ListParams, enabled = true) {
 }
 
 export function useCreateInstitutionMutation() {
-  return useCreateListMutation<Institution, InstitutionCreateInput>('institutions', '/api/v1/institutions/');
+  return useCreateListMutation<Institution, InstitutionCreateInput>(
+    'institutions',
+    '/api/v1/institutions/',
+    'institution'
+  );
 }
 
 export function useUpdateInstitutionMutation() {
   return useUpdateListMutation<Institution, InstitutionCreateInput>(
     'institutions',
-    '/api/v1/institutions/'
+    '/api/v1/institutions/',
+    'institution'
   );
 }
 
@@ -323,13 +429,18 @@ export function useCommitteesQuery(params: ListParams, enabled = true) {
 }
 
 export function useCreateCommitteeMutation() {
-  return useCreateListMutation<Committee, CommitteeCreateInput>('committees', '/api/v1/committees/');
+  return useCreateListMutation<Committee, CommitteeCreateInput>(
+    'committees',
+    '/api/v1/committees/',
+    'committee'
+  );
 }
 
 export function useUpdateCommitteeMutation() {
   return useUpdateListMutation<Committee, CommitteeCreateInput>(
     'committees',
-    '/api/v1/committees/'
+    '/api/v1/committees/',
+    'committee'
   );
 }
 
@@ -338,13 +449,18 @@ export function useCooperativesQuery(params: ListParams, enabled = true) {
 }
 
 export function useCreateCooperativeMutation() {
-  return useCreateListMutation<Cooperative, CooperativeCreateInput>('cooperatives', '/api/v1/cooperatives/');
+  return useCreateListMutation<Cooperative, CooperativeCreateInput>(
+    'cooperatives',
+    '/api/v1/cooperatives/',
+    'cooperative'
+  );
 }
 
 export function useUpdateCooperativeMutation() {
   return useUpdateListMutation<Cooperative, CooperativeCreateInput>(
     'cooperatives',
-    '/api/v1/cooperatives/'
+    '/api/v1/cooperatives/',
+    'cooperative'
   );
 }
 
@@ -354,13 +470,21 @@ export function useResourcesQuery(params: ListParams, enabled = true) {
 
 export function useCreateResourceMutation() {
   const queryClient = useQueryClient();
+  const userId = useOptionalAuth()?.user?.id;
 
   return useMutation({
     mutationFn: (payload: ResourceCreateInput) =>
-      apiPost<Resource | ApprovalSubmission, ResourceCreateInput>(
-        '/api/v1/resources/',
-        payload
-      ),
+      executeOrQueue({
+        action: 'create',
+        entityType: 'resource',
+        payload: payload as unknown as Record<string, unknown>,
+        userId,
+        execute: () =>
+          apiPost<Resource | ApprovalSubmission, ResourceCreateInput>(
+            '/api/v1/resources/',
+            payload
+          )
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
       queryClient.invalidateQueries({ queryKey: ['communities'] });
@@ -372,13 +496,31 @@ export function useCreateResourceMutation() {
 
 export function useUpdateResourceMutation() {
   const queryClient = useQueryClient();
+  const userId = useOptionalAuth()?.user?.id;
 
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<ResourceCreateInput> }) =>
-      apiPatch<Resource | ApprovalSubmission, Partial<ResourceCreateInput>>(
-        `/api/v1/resources/${id}/`,
-        payload
-      ),
+    mutationFn: ({
+      id,
+      payload,
+      syncVersion
+    }: {
+      id: number;
+      payload: Partial<ResourceCreateInput>;
+      syncVersion?: number;
+    }) =>
+      executeOrQueue({
+        action: 'update',
+        entityId: id,
+        entityType: 'resource',
+        payload,
+        syncVersion,
+        userId,
+        execute: () =>
+          apiPatch<Resource | ApprovalSubmission, Partial<ResourceCreateInput>>(
+            `/api/v1/resources/${id}/`,
+            payload
+          )
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
       queryClient.invalidateQueries({ queryKey: ['communities'] });
@@ -419,13 +561,21 @@ export function useImpactByResourceQuery(params: Record<string, string | number 
 
 export function useCreateImpactRecordMutation() {
   const queryClient = useQueryClient();
+  const userId = useOptionalAuth()?.user?.id;
 
   return useMutation({
     mutationFn: (payload: ImpactRecordCreateInput) =>
-      apiPost<ImpactRecord | ApprovalSubmission, ImpactRecordCreateInput>(
-        '/api/v1/impact-records/',
-        payload
-      ),
+      executeOrQueue({
+        action: 'create',
+        entityType: 'impact_record',
+        payload: payload as unknown as Record<string, unknown>,
+        userId,
+        execute: () =>
+          apiPost<ImpactRecord | ApprovalSubmission, ImpactRecordCreateInput>(
+            '/api/v1/impact-records/',
+            payload
+          )
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['impact-records'] });
       queryClient.invalidateQueries({ queryKey: ['impact-summary'] });
@@ -439,13 +589,31 @@ export function useCreateImpactRecordMutation() {
 
 export function useUpdateImpactRecordMutation() {
   const queryClient = useQueryClient();
+  const userId = useOptionalAuth()?.user?.id;
 
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<ImpactRecordCreateInput> }) =>
-      apiPatch<ImpactRecord | ApprovalSubmission, Partial<ImpactRecordCreateInput>>(
-        `/api/v1/impact-records/${id}/`,
-        payload
-      ),
+    mutationFn: ({
+      id,
+      payload,
+      syncVersion
+    }: {
+      id: number;
+      payload: Partial<ImpactRecordCreateInput>;
+      syncVersion?: number;
+    }) =>
+      executeOrQueue({
+        action: 'update',
+        entityId: id,
+        entityType: 'impact_record',
+        payload,
+        syncVersion,
+        userId,
+        execute: () =>
+          apiPatch<
+            ImpactRecord | ApprovalSubmission,
+            Partial<ImpactRecordCreateInput>
+          >(`/api/v1/impact-records/${id}/`, payload)
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['impact-records'] });
       queryClient.invalidateQueries({ queryKey: ['impact-summary'] });

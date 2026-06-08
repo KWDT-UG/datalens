@@ -8,6 +8,12 @@ export type ApprovalStatus =
   | string;
 export type SyncStatus = 'synced' | 'pending_sync' | 'sync_failed' | 'conflict';
 
+export interface SyncMetadata {
+  client_mutation_id?: string;
+  sync_version?: number;
+  is_deleted?: boolean;
+}
+
 export interface ApiErrorItem {
   attr?: string;
   detail: string;
@@ -149,7 +155,7 @@ export interface AdminInvitationCreateInput {
   role: string;
 }
 
-export interface Community {
+export interface Community extends SyncMetadata {
   id: number;
   name: string;
   area_name?: string;
@@ -166,7 +172,6 @@ export interface Community {
   institution_count?: number;
   created_at?: string;
   updated_at?: string;
-  is_deleted?: boolean;
 }
 
 export interface DashboardMetrics {
@@ -206,7 +211,7 @@ export interface CommunityCreateInput {
   notes?: string;
 }
 
-export interface Group {
+export interface Group extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -230,7 +235,7 @@ export interface GroupCreateInput {
   notes?: string;
 }
 
-export interface Member {
+export interface Member extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -273,7 +278,7 @@ export interface MemberCreateInput {
   notes?: string;
 }
 
-export interface Institution {
+export interface Institution extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -301,7 +306,7 @@ export interface InstitutionCreateInput {
   notes?: string;
 }
 
-export interface Committee {
+export interface Committee extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -323,7 +328,7 @@ export interface CommitteeCreateInput {
   closed_on?: string;
 }
 
-export interface Cooperative {
+export interface Cooperative extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -361,7 +366,7 @@ export interface ThematicArea {
   status?: RecordStatus;
 }
 
-export interface Resource {
+export interface Resource extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -384,7 +389,6 @@ export interface Resource {
   approval_status?: ApprovalStatus | null;
   pending_approval_request_id?: number | null;
   approval_history_count?: number;
-  is_deleted?: boolean;
 }
 
 export interface ResourceCreateInput {
@@ -405,7 +409,7 @@ export interface ResourceCreateInput {
   source_notes?: string;
 }
 
-export interface ImpactRecord {
+export interface ImpactRecord extends SyncMetadata {
   id: number;
   resource: number;
   resource_name?: string;
@@ -491,6 +495,21 @@ export interface ApprovalSubmission {
   approval_required: true;
   detail: string;
   approval_request: ApprovalRequest;
+}
+
+export interface OfflineQueuedResult {
+  offline_queued: true;
+  queue_id: number;
+  client_mutation_id: string;
+  sync_status: 'pending_sync';
+}
+
+export function isOfflineQueuedResult(value: unknown): value is OfflineQueuedResult {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as { offline_queued?: unknown }).offline_queued === true
+  );
 }
 
 export function isApprovalSubmission(
