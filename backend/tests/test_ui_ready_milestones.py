@@ -39,6 +39,11 @@ class UiReadyMilestoneTests(TestCase):
             email="other@example.com",
             password="test-password",
         )
+        cls.admin_user = get_user_model().objects.create_superuser(
+            username="ui.admin",
+            email="ui.admin@example.com",
+            password="test-password",
+        )
         cls.community = Community.objects.create(name="UI Community")
         cls.group = Group.objects.create(
             community=cls.community,
@@ -76,14 +81,15 @@ class UiReadyMilestoneTests(TestCase):
             format="json",
         )
         self.assertEqual(login_response.status_code, status.HTTP_200_OK)
-        token = login_response.data["data"]["token"]
+        self.assertNotIn("token", login_response.data["data"])
+        auth_cookie = login_response.cookies["datalens_auth"]
+        self.assertTrue(auth_cookie["httponly"])
         self.assertIn(UserRole.PROGRAMME_MANAGER, login_response.data["data"]["user"]["roles"])
         self.assertIn(
             "review_approvals",
             login_response.data["data"]["user"]["capabilities"],
         )
 
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
         me_response = self.client.get(reverse("auth-me"))
         self.assertEqual(me_response.status_code, status.HTTP_200_OK)
         self.assertEqual(me_response.data["data"]["user"]["username"], "ui.user")
@@ -94,6 +100,29 @@ class UiReadyMilestoneTests(TestCase):
 
         logout_response = self.client.post(reverse("auth-logout"))
         self.assertEqual(logout_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(logout_response.cookies["datalens_auth"].value, "")
+
+    def test_browser_login_requires_csrf_when_checks_are_enabled(self):
+        client = APIClient(enforce_csrf_checks=True)
+        login_payload = {
+            "username": "ui.user",
+            "password": "test-password",
+        }
+
+        denied = client.post(reverse("auth-login"), login_payload, format="json")
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+        csrf_response = client.get(reverse("auth-csrf"))
+        csrf_token = csrf_response.cookies["csrftoken"].value
+        accepted = client.post(
+            reverse("auth-login"),
+            login_payload,
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        self.assertIn("datalens_auth", accepted.cookies)
 
     def test_current_user_can_update_profile_details(self):
         self.client.force_authenticate(self.user)
@@ -211,7 +240,7 @@ class UiReadyMilestoneTests(TestCase):
         )
 
     def test_resource_thematic_area_endpoint_and_filter(self):
-        self.client.force_authenticate(self.user)
+        self.client.force_authenticate(self.admin_user)
         create_response = self.client.post(
             reverse("resource-thematic-area-list"),
             {
@@ -271,7 +300,7 @@ class UiReadyMilestoneTests(TestCase):
                 self.assertTrue(case["assertion"](response.data))
 
     def test_sync_push_applies_clean_update_and_detects_conflict(self):
-        self.client.force_authenticate(self.user)
+        self.client.force_authenticate(self.admin_user)
         update_response = self.client.post(
             reverse("sync-push"),
             {
@@ -312,6 +341,138 @@ class UiReadyMilestoneTests(TestCase):
             conflict_response.data["data"]["conflicts"][0]["code"],
             "version_mismatch",
         )
+
+    def test_sync_pull_uses_server_cursors_for_multiple_pages(self):
+        self.client.force_authenticate(self.admin_user)
+        Group.objects.create(
+            community=self.community,
+            code="GRP-CURSOR-2",
+            name="Cursor Group Two",
+        )
+
+        first_response = self.client.get(
+            reverse("sync-pull"),
+            {"entity_type": "group", "page_size": 1},
+        )
+        second_response = self.client.get(
+            reverse("sync-pull"),
+            {
+                "entity_type": "group",
+                "page_size": 1,
+                "cursor": first_response.data["meta"]["next_cursor"],
+            },
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(first_response.data["meta"]["has_more"])
+        self.assertIsNotNone(first_response.data["meta"]["next_cursor"])
+        first_id = first_response.data["data"]["group"][0]["id"]
+        second_id = second_response.data["data"]["group"][0]["id"]
+        self.assertNotEqual(first_id, second_id)
+        self.assertEqual(
+            first_response.data["meta"]["sync_contract"],
+            "record_version_v2",
+        )
+
+    def test_sync_push_replays_direct_create_by_client_mutation_id(self):
+        self.client.force_authenticate(self.admin_user)
+        payload = {
+            "changes": [
+                {
+                    "entity_type": "community",
+                    "action": "create",
+                    "client_mutation_id": "community-create-once",
+                    "payload": {"name": "Offline Idempotent Community"},
+                }
+            ]
+        }
+
+        first_response = self.client.post(reverse("sync-push"), payload, format="json")
+        created = Community.objects.get(name="Offline Idempotent Community")
+        created.client_mutation_id = "a-later-mutation"
+        created.save(update_fields=["client_mutation_id", "updated_at"])
+        second_response = self.client.post(reverse("sync-push"), payload, format="json")
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(first_response.data["data"]["accepted"][0]["replayed"])
+        self.assertTrue(second_response.data["data"]["accepted"][0]["replayed"])
+        self.assertEqual(
+            Community.objects.filter(name="Offline Idempotent Community").count(),
+            1,
+        )
+
+    def test_sync_push_rejects_reusing_mutation_id_for_different_payload(self):
+        self.client.force_authenticate(self.admin_user)
+        first_payload = {
+            "changes": [
+                {
+                    "entity_type": "community",
+                    "action": "create",
+                    "client_mutation_id": "community-create-reused",
+                    "payload": {"name": "Original Offline Community"},
+                }
+            ]
+        }
+        reused_payload = {
+            "changes": [
+                {
+                    "entity_type": "community",
+                    "action": "create",
+                    "client_mutation_id": "community-create-reused",
+                    "payload": {"name": "Different Offline Community"},
+                }
+            ]
+        }
+
+        first_response = self.client.post(
+            reverse("sync-push"),
+            first_payload,
+            format="json",
+        )
+        reused_response = self.client.post(
+            reverse("sync-push"),
+            reused_payload,
+            format="json",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(reused_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            reused_response.data["errors"][0]["code"],
+            "mutation_id_reused",
+        )
+        self.assertFalse(
+            Community.objects.filter(name="Different Offline Community").exists()
+        )
+
+    def test_sync_push_replays_direct_update_without_incrementing_version_twice(self):
+        self.client.force_authenticate(self.admin_user)
+        self.group.refresh_from_db()
+        original_version = self.group.sync_version
+        payload = {
+            "changes": [
+                {
+                    "entity_type": "group",
+                    "id": self.group.id,
+                    "sync_version": original_version,
+                    "action": "update",
+                    "client_mutation_id": "group-update-once",
+                    "payload": {"name": "Offline Updated Group"},
+                }
+            ]
+        }
+
+        first_response = self.client.post(reverse("sync-push"), payload, format="json")
+        second_response = self.client.post(reverse("sync-push"), payload, format="json")
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(first_response.data["data"]["accepted"][0]["replayed"])
+        self.assertTrue(second_response.data["data"]["accepted"][0]["replayed"])
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.name, "Offline Updated Group")
+        self.assertEqual(self.group.sync_version, original_version + 1)
 
     @override_settings(
         SECURE_CONTENT_TYPE_NOSNIFF=True,

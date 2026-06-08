@@ -2,14 +2,25 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.common.viewsets import AuditFieldsMixin, SimpleFilterMixin, SoftDeleteMixin
+from apps.common.viewsets import (
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SimpleFilterMixin,
+    SoftDeleteMixin,
+)
 from apps.members.serializers import MemberSerializer
 
 from .models import Group
 from .serializers import GroupSerializer
 
 
-class GroupViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, ModelViewSet):
+class GroupViewSet(
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SoftDeleteMixin,
+    SimpleFilterMixin,
+    ModelViewSet,
+):
     queryset = Group.objects.select_related("community").all()
     serializer_class = GroupSerializer
     filter_fields = ("community", "status")

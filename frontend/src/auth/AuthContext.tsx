@@ -3,9 +3,7 @@ import type { ReactNode } from 'react';
 
 import {
   ApiClientError,
-  clearAuthToken,
-  getAuthToken,
-  setAuthToken,
+  initializeCsrf,
   UNAUTHORIZED_EVENT
 } from '../api/client';
 import { apiGet, apiPost } from '../api/client';
@@ -24,10 +22,9 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(Boolean(getAuthToken()));
+  const [isLoading, setIsLoading] = useState(true);
 
   const clearAuthState = useCallback(() => {
-    clearAuthToken();
     setUser(null);
   }, []);
 
@@ -47,16 +44,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!getAuthToken()) {
-      setIsLoading(false);
-      return;
-    }
-
     let isMounted = true;
-    refreshUser()
-      .catch(() => {
-        clearAuthState();
-      })
+    initializeCsrf()
+      .then(refreshUser)
+      .catch(clearAuthState)
       .finally(() => {
         if (isMounted) {
           setIsLoading(false);
@@ -69,11 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearAuthState, refreshUser]);
 
   const login = useCallback(async (username: string, password: string) => {
+    await initializeCsrf();
     const response = await apiPost<DataEnvelope<LoginResponse>, { username: string; password: string }>(
       '/api/v1/auth/login/',
       { username, password }
     );
-    setAuthToken(response.data.token);
     setUser(response.data.user);
   }, []);
 
@@ -91,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
-      isAuthenticated: Boolean(getAuthToken()),
+      isAuthenticated: Boolean(user),
       isLoading,
       login,
       logout,
@@ -110,4 +101,8 @@ export function useAuth() {
     throw new Error('useAuth must be used within AuthProvider');
   }
   return context;
+}
+
+export function useOptionalAuth() {
+  return useContext(AuthContext);
 }

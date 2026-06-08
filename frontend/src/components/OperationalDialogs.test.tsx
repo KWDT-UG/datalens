@@ -13,7 +13,7 @@ import type {
   Member,
   Resource
 } from '../api/types';
-import { installCrudFetchMock, mutationCall } from '../test/mockApi';
+import { installCrudFetchMock, jsonResponse, mutationCall } from '../test/mockApi';
 import { renderWithProviders } from '../test/render';
 import { CommunityCreateDialog } from './CommunityCreateDialog';
 import {
@@ -270,4 +270,47 @@ describe.each(cases)('$path dialog', (dialogCase) => {
       expect(Object.values(call.body)).toContain(dialogCase.updatedValue);
     });
   });
+});
+
+it('shows a pending approval result instead of treating it as a saved resource', async () => {
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const method = init?.method ?? 'GET';
+      if (method === 'GET') {
+        return jsonResponse({ count: 0, next: null, previous: null, results: [] });
+      }
+      return jsonResponse(
+        {
+          approval_required: true,
+          detail: 'Change submitted for approval.',
+          approval_request: {
+            id: 71,
+            community: community.id,
+            entity_type: 'resource',
+            entity_id: 0,
+            action_type: 'create',
+            review_scope: 'standard',
+            status: 'pending'
+          }
+        },
+        202
+      );
+    }
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  commonCallbacks.onCreated.mockClear();
+  const user = userEvent.setup();
+
+  renderWithProviders(
+    <ResourceCreateDialog
+      communityId={community.id}
+      {...commonCallbacks}
+    />
+  );
+  await user.type(screen.getByLabelText('Resource name'), 'Approval Resource');
+  await user.click(screen.getByRole('button', { name: 'Create resource' }));
+
+  expect(await screen.findByText('Submitted for approval')).toBeInTheDocument();
+  expect(screen.getByText(/Request #71 requires standard review/)).toBeInTheDocument();
+  expect(commonCallbacks.onCreated).not.toHaveBeenCalled();
 });

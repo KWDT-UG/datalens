@@ -53,7 +53,7 @@ class PermissionApprovalSyncMilestoneTests(TestCase):
                 "role": UserRole.FIELD_OFFICER,
                 "method": "delete",
                 "url": reverse("resource-detail", kwargs={"pk": self.resource.pk}),
-                "expected": status.HTTP_403_FORBIDDEN,
+                "expected": status.HTTP_202_ACCEPTED,
             },
             {
                 "role": UserRole.COMMUNICATIONS_VIEWER,
@@ -80,7 +80,7 @@ class PermissionApprovalSyncMilestoneTests(TestCase):
                 "method": "patch",
                 "url": reverse("resource-detail", kwargs={"pk": self.resource.pk}),
                 "payload": {"name": "Procurement Update"},
-                "expected": status.HTTP_200_OK,
+                "expected": status.HTTP_202_ACCEPTED,
             },
             {
                 "role": UserRole.MONITORING_EVALUATION_MANAGER,
@@ -93,7 +93,7 @@ class PermissionApprovalSyncMilestoneTests(TestCase):
                 "role": UserRole.PROGRAMME_MANAGER,
                 "method": "delete",
                 "url": reverse("resource-detail", kwargs={"pk": self.resource.pk}),
-                "expected": status.HTTP_204_NO_CONTENT,
+                "expected": status.HTTP_202_ACCEPTED,
             },
         ]
 

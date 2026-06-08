@@ -11,6 +11,9 @@ import { router } from './router';
 
 const queryClient = new QueryClient({
   defaultOptions: {
+    mutations: {
+      networkMode: 'always'
+    },
     queries: {
       staleTime: 30_000,
       retry: 1,

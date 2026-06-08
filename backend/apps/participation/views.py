@@ -2,7 +2,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.common.viewsets import AuditFieldsMixin, SimpleFilterMixin, SoftDeleteMixin
+from apps.common.viewsets import (
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SimpleFilterMixin,
+    SoftDeleteMixin,
+)
 
 from .models import (
     Committee,
@@ -18,7 +23,13 @@ from .serializers import (
 )
 
 
-class CommitteeViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, ModelViewSet):
+class CommitteeViewSet(
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SoftDeleteMixin,
+    SimpleFilterMixin,
+    ModelViewSet,
+):
     queryset = Committee.objects.select_related("community").all()
     serializer_class = CommitteeSerializer
     filter_fields = ("community", "status", "committee_type")
@@ -37,6 +48,7 @@ class CommitteeViewSet(AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, Mod
 
 
 class CommitteeMembershipViewSet(
+    ApprovalPolicyMixin,
     AuditFieldsMixin,
     SoftDeleteMixin,
     SimpleFilterMixin,
@@ -62,6 +74,7 @@ class CommitteeMembershipViewSet(
 
 
 class CooperativeViewSet(
+    ApprovalPolicyMixin,
     AuditFieldsMixin,
     SoftDeleteMixin,
     SimpleFilterMixin,
@@ -85,6 +98,7 @@ class CooperativeViewSet(
 
 
 class CooperativeMembershipViewSet(
+    ApprovalPolicyMixin,
     AuditFieldsMixin,
     SoftDeleteMixin,
     SimpleFilterMixin,

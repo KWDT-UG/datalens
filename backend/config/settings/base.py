@@ -115,9 +115,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
+        "apps.common.authentication.CookieTokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "apps.common.permissions.RoleActionAccess",
@@ -143,7 +142,24 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", False)
+
+DATALENS_AUTH_COOKIE_NAME = os.getenv(
+    "DATALENS_AUTH_COOKIE_NAME",
+    "datalens_auth",
+)
+DATALENS_AUTH_COOKIE_MAX_AGE = int(
+    os.getenv("DATALENS_AUTH_COOKIE_MAX_AGE", str(8 * 60 * 60))
+)
+DATALENS_AUTH_COOKIE_SECURE = env_bool(
+    "DATALENS_AUTH_COOKIE_SECURE",
+    not DEBUG,
+)
+DATALENS_AUTH_COOKIE_SAMESITE = os.getenv(
+    "DATALENS_AUTH_COOKIE_SAMESITE",
+    "Lax",
+)
 
 EMAIL_BACKEND = os.getenv(
     "DJANGO_EMAIL_BACKEND",

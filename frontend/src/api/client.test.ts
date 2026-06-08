@@ -44,3 +44,24 @@ describe.each(entityPaths)('%s API client contract', (path) => {
     );
   });
 });
+
+describe('browser authentication transport', () => {
+  it('sends cookies and CSRF without an Authorization token', async () => {
+    const fetchMock = installCrudFetchMock();
+    document.cookie = 'csrftoken=test-csrf-token';
+
+    await apiPost('/api/v1/auth/logout/', {});
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/auth/logout/'),
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.objectContaining({
+          'X-CSRFToken': 'test-csrf-token'
+        })
+      })
+    );
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(options.headers).not.toHaveProperty('Authorization');
+  });
+});

@@ -128,6 +128,18 @@ class ApprovalStatus(models.TextChoices):
     SUPERSEDED = "superseded", "Superseded"
 
 
+class ApprovalReviewScope(models.TextChoices):
+    STANDARD = "standard", "Programme Review"
+    IMPACT = "impact", "Impact Review"
+    FINANCE = "finance", "Finance Review"
+
+
+class ApprovalSubmissionSource(models.TextChoices):
+    API = "api", "API"
+    OFFLINE_SYNC = "offline_sync", "Offline Sync"
+    MANUAL = "manual", "Manual"
+
+
 class TimestampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -160,6 +172,24 @@ class CoreModel(TimestampedModel, AuditModel, OfflineMetadataModel):
         abstract = True
 
 
+class SyncMutationReceipt(TimestampedModel):
+    user_id = models.PositiveBigIntegerField()
+    client_mutation_id = models.CharField(max_length=128)
+    request_fingerprint = models.CharField(max_length=64)
+    response_payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user_id", "client_mutation_id"],
+                name="unique_sync_mutation_receipt_per_user",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user_id}:{self.client_mutation_id}"
+
+
 class UserProfile(TimestampedModel):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -172,6 +202,17 @@ class UserProfile(TimestampedModel):
         default=WorkforceType.STAFF,
     )
     position_title = models.CharField(max_length=160, blank=True)
+    assigned_districts = models.JSONField(default=list, blank=True)
+    assigned_communities = models.ManyToManyField(
+        "communities.Community",
+        blank=True,
+        related_name="assigned_user_profiles",
+    )
+    assigned_thematic_areas = models.ManyToManyField(
+        "resources.ThematicArea",
+        blank=True,
+        related_name="assigned_user_profiles",
+    )
 
     def __str__(self):
         return f"{self.user.get_username()} profile"

@@ -1,12 +1,18 @@
 from rest_framework.viewsets import ModelViewSet
 
-from apps.common.viewsets import AuditFieldsMixin, SimpleFilterMixin, SoftDeleteMixin
+from apps.common.viewsets import (
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SimpleFilterMixin,
+    SoftDeleteMixin,
+)
 
 from .models import Institution
 from .serializers import InstitutionSerializer
 
 
 class InstitutionViewSet(
+    ApprovalPolicyMixin,
     AuditFieldsMixin,
     SoftDeleteMixin,
     SimpleFilterMixin,

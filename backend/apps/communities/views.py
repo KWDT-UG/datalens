@@ -3,7 +3,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.common.viewsets import AuditFieldsMixin, SimpleFilterMixin, SoftDeleteMixin
+from apps.common.viewsets import (
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SimpleFilterMixin,
+    SoftDeleteMixin,
+)
 from apps.groups.serializers import GroupSerializer
 from apps.institutions.serializers import InstitutionSerializer
 
@@ -12,6 +17,7 @@ from .serializers import CommunitySerializer
 
 
 class CommunityViewSet(
+    ApprovalPolicyMixin,
     AuditFieldsMixin,
     SoftDeleteMixin,
     SimpleFilterMixin,

@@ -8,6 +8,12 @@ export type ApprovalStatus =
   | string;
 export type SyncStatus = 'synced' | 'pending_sync' | 'sync_failed' | 'conflict';
 
+export interface SyncMetadata {
+  client_mutation_id?: string;
+  sync_version?: number;
+  is_deleted?: boolean;
+}
+
 export interface ApiErrorItem {
   attr?: string;
   detail: string;
@@ -27,6 +33,7 @@ export interface ListParams extends Record<string, string | number | undefined> 
   search?: string;
   ordering?: string;
   community?: string | number;
+  include_deleted?: string | number;
 }
 
 export interface DataEnvelope<T> {
@@ -48,6 +55,9 @@ export interface AuthUser {
   is_superuser: boolean;
   roles: string[];
   capabilities: string[];
+  assigned_districts?: string[];
+  assigned_community_ids?: number[];
+  assigned_thematic_area_ids?: number[];
 }
 
 export interface ProfileUpdateInput {
@@ -60,7 +70,6 @@ export interface ProfileUpdateInput {
 }
 
 export interface LoginResponse {
-  token: string;
   user: AuthUser;
 }
 
@@ -78,6 +87,9 @@ export interface AdminAccount {
   last_name: string;
   last_login: string | null;
   date_joined: string;
+  assigned_districts?: string[];
+  assigned_community_ids?: number[];
+  assigned_thematic_area_ids?: number[];
 }
 
 export interface AdminRoleDefinition {
@@ -97,6 +109,9 @@ export interface AdminAccountCreateInput {
   workforce_type: string;
   position_title?: string;
   is_active: boolean;
+  assigned_districts?: string[];
+  assigned_community_ids?: number[];
+  assigned_thematic_area_ids?: number[];
 }
 
 export interface AdminAccountUpdateInput {
@@ -108,6 +123,9 @@ export interface AdminAccountUpdateInput {
   workforce_type?: string;
   position_title?: string;
   is_active?: boolean;
+  assigned_districts?: string[];
+  assigned_community_ids?: number[];
+  assigned_thematic_area_ids?: number[];
 }
 
 export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired' | string;
@@ -137,7 +155,7 @@ export interface AdminInvitationCreateInput {
   role: string;
 }
 
-export interface Community {
+export interface Community extends SyncMetadata {
   id: number;
   name: string;
   area_name?: string;
@@ -193,7 +211,7 @@ export interface CommunityCreateInput {
   notes?: string;
 }
 
-export interface Group {
+export interface Group extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -217,7 +235,7 @@ export interface GroupCreateInput {
   notes?: string;
 }
 
-export interface Member {
+export interface Member extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -260,7 +278,7 @@ export interface MemberCreateInput {
   notes?: string;
 }
 
-export interface Institution {
+export interface Institution extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -288,7 +306,7 @@ export interface InstitutionCreateInput {
   notes?: string;
 }
 
-export interface Committee {
+export interface Committee extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -310,7 +328,7 @@ export interface CommitteeCreateInput {
   closed_on?: string;
 }
 
-export interface Cooperative {
+export interface Cooperative extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -340,7 +358,15 @@ export interface ResourceThematicArea {
   is_primary: boolean;
 }
 
-export interface Resource {
+export interface ThematicArea {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  status?: RecordStatus;
+}
+
+export interface Resource extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
@@ -360,6 +386,9 @@ export interface Resource {
   source_notes?: string;
   thematic_areas?: ResourceThematicArea[];
   updated_at?: string;
+  approval_status?: ApprovalStatus | null;
+  pending_approval_request_id?: number | null;
+  approval_history_count?: number;
 }
 
 export interface ResourceCreateInput {
@@ -380,7 +409,7 @@ export interface ResourceCreateInput {
   source_notes?: string;
 }
 
-export interface ImpactRecord {
+export interface ImpactRecord extends SyncMetadata {
   id: number;
   resource: number;
   resource_name?: string;
@@ -399,6 +428,9 @@ export interface ImpactRecord {
   notes?: string;
   method?: string;
   updated_at?: string;
+  approval_status?: ApprovalStatus | null;
+  pending_approval_request_id?: number | null;
+  approval_history_count?: number;
 }
 
 export interface ImpactSummary {
@@ -444,6 +476,10 @@ export interface ApprovalRequest {
   action_type: string;
   submitted_payload?: Record<string, unknown>;
   diff_summary?: Record<string, unknown> | null;
+  review_scope: 'standard' | 'impact' | 'finance' | string;
+  policy_reason?: string;
+  submission_source?: 'api' | 'offline_sync' | 'manual' | string;
+  base_sync_version?: number | null;
   status: ApprovalStatus;
   submitted_by_user_id?: number | null;
   submitted_at?: string;
@@ -452,6 +488,38 @@ export interface ApprovalRequest {
   review_notes?: string;
   applied_at?: string | null;
   updated_at?: string;
+  target_display?: string;
+}
+
+export interface ApprovalSubmission {
+  approval_required: true;
+  detail: string;
+  approval_request: ApprovalRequest;
+}
+
+export interface OfflineQueuedResult {
+  offline_queued: true;
+  queue_id: number;
+  client_mutation_id: string;
+  sync_status: 'pending_sync';
+}
+
+export function isOfflineQueuedResult(value: unknown): value is OfflineQueuedResult {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as { offline_queued?: unknown }).offline_queued === true
+  );
+}
+
+export function isApprovalSubmission(
+  value: unknown
+): value is ApprovalSubmission {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as { approval_required?: unknown }).approval_required === true
+  );
 }
 
 export interface HealthResponse {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import {
@@ -10,8 +10,22 @@ import {
   useMembersQuery,
   useUpdateResourceMutation
 } from '../api/queries';
-import type { Community, Cooperative, Group, Institution, Member, Resource, ResourceCreateInput } from '../api/types';
+import { useOptionalAuth } from '../auth/AuthContext';
+import { capabilities, hasCapability } from '../auth/permissions';
+import {
+  isApprovalSubmission,
+  isOfflineQueuedResult,
+  type ApprovalSubmission,
+  type Community,
+  type Cooperative,
+  type Group,
+  type Institution,
+  type Member,
+  type Resource,
+  type ResourceCreateInput
+} from '../api/types';
 import { FormDialog, FormErrorSummary } from './FormDialog';
+import { clearOfflineDraft, useOfflineDraft } from '../offline/drafts';
 
 type ResourceCreateDialogProps = {
   communityId?: number;
@@ -132,14 +146,22 @@ function ownerOptionsFor(
 }
 
 export function ResourceCreateDialog({ communityId, onClose, onCreated, resource }: ResourceCreateDialogProps) {
+  const auth = useOptionalAuth();
+  const userId = auth?.user?.id;
+  const canManageFinancials = auth
+    ? hasCapability(auth.user, capabilities.manageResourceFinancials)
+    : true;
   const createResource = useCreateResourceMutation();
   const updateResource = useUpdateResourceMutation();
+  const [approvalSubmission, setApprovalSubmission] =
+    useState<ApprovalSubmission | null>(null);
   const hasMounted = useRef(false);
   const isEditing = Boolean(resource);
   const {
     formState: { errors },
     handleSubmit,
     register,
+    reset,
     setValue,
     watch
   } = useForm<ResourceFormValues>({
@@ -193,6 +215,13 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
   const ownerSelectDisabled = !selectedCommunity || Boolean(ownerQuery?.isLoading);
   const mutationError = createResource.error ?? updateResource.error;
   const isPending = createResource.isPending || updateResource.isPending;
+  useOfflineDraft({
+    entityId: resource?.id,
+    entityType: 'resource',
+    reset,
+    userId,
+    watch
+  });
 
   return (
     <FormDialog
@@ -219,22 +248,48 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
             source_notes: omitBlank(values.source_notes),
             status: values.status,
             unit: omitBlank(values.unit),
-            value_amount: omitBlank(values.value_amount),
-            value_currency: omitBlank(values.value_currency)
+            ...(canManageFinancials
+              ? {
+                  value_amount: omitBlank(values.value_amount),
+                  value_currency: omitBlank(values.value_currency)
+                }
+              : {})
           };
 
           try {
             const savedResource = resource
-              ? await updateResource.mutateAsync({ id: resource.id, payload })
+              ? await updateResource.mutateAsync({
+                  id: resource.id,
+                  payload,
+                  syncVersion: resource.sync_version
+                })
               : await createResource.mutateAsync(payload);
-            onCreated(savedResource);
-            onClose();
+            await clearOfflineDraft('resource', resource?.id, userId);
+            if (isOfflineQueuedResult(savedResource)) {
+              onClose();
+              return;
+            }
+            if (isApprovalSubmission(savedResource)) {
+              setApprovalSubmission(savedResource);
+            } else {
+              onCreated(savedResource);
+              onClose();
+            }
           } catch {
             // The mutation error state is rendered below.
           }
         })}
       >
         <FormErrorSummary error={mutationError} />
+        {approvalSubmission ? (
+          <div className="form-alert" role="status">
+            <strong>Submitted for approval</strong>
+            <span>
+              Request #{approvalSubmission.approval_request.id} requires{' '}
+              {approvalSubmission.approval_request.review_scope.replace(/_/g, ' ')} review.
+            </span>
+          </div>
+        ) : null}
 
         <div className="form-grid">
           <label className="form-field">
@@ -346,15 +401,19 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
             <input {...register('unit')} />
           </label>
 
-          <label className="form-field">
-            <span>Value amount</span>
-            <input inputMode="decimal" {...register('value_amount')} />
-          </label>
+          {canManageFinancials ? (
+            <>
+              <label className="form-field">
+                <span>Value amount</span>
+                <input inputMode="decimal" {...register('value_amount')} />
+              </label>
 
-          <label className="form-field">
-            <span>Currency</span>
-            <input maxLength={3} {...register('value_currency')} />
-          </label>
+              <label className="form-field">
+                <span>Currency</span>
+                <input maxLength={3} {...register('value_currency')} />
+              </label>
+            </>
+          ) : null}
 
           <label className="form-field">
             <span>Acquired on</span>
@@ -386,8 +445,18 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
           <button className="button button--secondary" type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="button button--primary" type="submit" disabled={isPending}>
-            {isPending ? 'Saving...' : isEditing ? 'Save resource' : 'Create resource'}
+          <button
+            className="button button--primary"
+            type="submit"
+            disabled={isPending || Boolean(approvalSubmission)}
+          >
+            {isPending
+              ? 'Saving...'
+              : approvalSubmission
+                ? 'Awaiting approval'
+                : isEditing
+                  ? 'Save resource'
+                  : 'Create resource'}
           </button>
         </footer>
       </form>

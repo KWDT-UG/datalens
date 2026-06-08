@@ -79,7 +79,8 @@ export function ApprovalReviewDialog({
           <div>
             <dt>Request</dt>
             <dd>
-              {formatLabel(approval.entity_type)} #{approval.entity_id ?? 'new'}
+              {approval.target_display ??
+                `${formatLabel(approval.entity_type)} #${approval.entity_id ?? 'new'}`}
             </dd>
           </div>
           <div>
@@ -89,6 +90,18 @@ export function ApprovalReviewDialog({
           <div>
             <dt>Community</dt>
             <dd>{approval.community_name ?? 'Not recorded'}</dd>
+          </div>
+          <div>
+            <dt>Review scope</dt>
+            <dd>{formatLabel(approval.review_scope)}</dd>
+          </div>
+          <div>
+            <dt>Policy reason</dt>
+            <dd>{approval.policy_reason || 'Not recorded'}</dd>
+          </div>
+          <div>
+            <dt>Submission source</dt>
+            <dd>{formatLabel(approval.submission_source ?? 'manual')}</dd>
           </div>
         </dl>
 

@@ -3,14 +3,23 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.common.viewsets import AuditFieldsMixin, SimpleFilterMixin, SoftDeleteMixin
+from apps.common.viewsets import (
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SimpleFilterMixin,
+    SoftDeleteMixin,
+)
 
 from .models import ImpactRecord
 from .serializers import ImpactRecordSerializer
 
 
 class ImpactRecordViewSet(
-    AuditFieldsMixin, SoftDeleteMixin, SimpleFilterMixin, ModelViewSet
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SoftDeleteMixin,
+    SimpleFilterMixin,
+    ModelViewSet,
 ):
     queryset = ImpactRecord.objects.select_related("resource__community").all()
     serializer_class = ImpactRecordSerializer

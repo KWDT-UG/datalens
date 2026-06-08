@@ -68,8 +68,8 @@ jobs:
       - name: Run frontend tests
         run: npm run test:run
 
-      - name: Build frontend
-        run: npm run build
+      - name: Build and verify PWA
+        run: npm run pwa:check
 
   build-and-push-backend:
     name: Build and push backend image

@@ -43,7 +43,8 @@ export const router = createBrowserRouter([
               <CapabilityRoute
                 anyOf={[
                   capabilities.reviewApprovals,
-                  capabilities.reviewImpactApprovals
+                  capabilities.reviewImpactApprovals,
+                  capabilities.reviewFinanceApprovals
                 ]}
               />
             ),

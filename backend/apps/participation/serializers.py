@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from apps.common.serializers import ApprovalStateSerializerMixin
+
 from .models import (
     Committee,
     CommitteeMembership,
@@ -9,7 +11,7 @@ from .models import (
 )
 
 
-class CommitteeSerializer(serializers.ModelSerializer):
+class CommitteeSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer):
     community_name = serializers.CharField(source="community.name", read_only=True)
 
     class Meta:
@@ -24,6 +26,9 @@ class CommitteeSerializer(serializers.ModelSerializer):
             "description",
             "formed_on",
             "closed_on",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",
@@ -62,7 +67,10 @@ class CommitteeSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class CommitteeMembershipSerializer(serializers.ModelSerializer):
+class CommitteeMembershipSerializer(
+    ApprovalStateSerializerMixin,
+    serializers.ModelSerializer,
+):
     class Meta:
         model = CommitteeMembership
         validators = []
@@ -75,6 +83,9 @@ class CommitteeMembershipSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "notes",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",
@@ -113,7 +124,7 @@ class CommitteeMembershipSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class CooperativeSerializer(serializers.ModelSerializer):
+class CooperativeSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer):
     community_name = serializers.CharField(source="community.name", read_only=True)
 
     class Meta:
@@ -128,6 +139,9 @@ class CooperativeSerializer(serializers.ModelSerializer):
             "description",
             "formed_on",
             "closed_on",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",
@@ -166,7 +180,10 @@ class CooperativeSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class CooperativeMembershipSerializer(serializers.ModelSerializer):
+class CooperativeMembershipSerializer(
+    ApprovalStateSerializerMixin,
+    serializers.ModelSerializer,
+):
     class Meta:
         model = CooperativeMembership
         validators = []
@@ -179,6 +196,9 @@ class CooperativeMembershipSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "notes",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",

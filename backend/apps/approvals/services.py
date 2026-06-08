@@ -1,5 +1,5 @@
 from django.db import transaction
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import APIException, ValidationError
 
 from apps.common.models import ApprovalActionType
 from apps.communities.models import Community
@@ -39,7 +39,6 @@ from apps.resources.serializers import (
     ThematicAreaSerializer,
 )
 
-
 APPROVAL_ENTITY_REGISTRY = {
     "community": (Community, CommunitySerializer),
     "group": (Group, GroupSerializer),
@@ -58,6 +57,12 @@ APPROVAL_ENTITY_REGISTRY = {
 }
 
 
+class ApprovalConflict(APIException):
+    status_code = 409
+    default_detail = "The target changed after this approval request was submitted."
+    default_code = "approval_conflict"
+
+
 def supported_entity_types():
     return tuple(APPROVAL_ENTITY_REGISTRY.keys())
 
@@ -72,7 +77,9 @@ def apply_approval_request(approval_request, user_id=None):
     try:
         model, serializer_class = APPROVAL_ENTITY_REGISTRY[approval_request.entity_type]
     except KeyError as exc:
-        raise ValidationError({"entity_type": "Unsupported approval entity type."}) from exc
+        raise ValidationError(
+            {"entity_type": "Unsupported approval entity type."}
+        ) from exc
 
     payload = approval_request.submitted_payload or {}
     save_kwargs = {}
@@ -82,15 +89,37 @@ def apply_approval_request(approval_request, user_id=None):
     if approval_request.action_type == ApprovalActionType.CREATE:
         serializer = serializer_class(data=payload)
         serializer.is_valid(raise_exception=True)
-        if user_id is not None:
-            save_kwargs["created_by_user_id"] = user_id
+        submitter_id = approval_request.submitted_by_user_id
+        if submitter_id is not None:
+            save_kwargs["created_by_user_id"] = submitter_id
+            if any(
+                field.name == "recorded_by_user_id"
+                for field in model._meta.fields
+            ):
+                save_kwargs["recorded_by_user_id"] = submitter_id
         instance = serializer.save(**save_kwargs)
         approval_request.entity_id = instance.pk
         return instance
 
-    instance = model.objects.filter(pk=approval_request.entity_id).first()
+    instance = model.objects.select_for_update().filter(
+        pk=approval_request.entity_id
+    ).first()
     if instance is None:
         raise ValidationError({"entity_id": "Approval target could not be found."})
+
+    if (
+        approval_request.base_sync_version is not None
+        and hasattr(instance, "sync_version")
+        and approval_request.base_sync_version != instance.sync_version
+    ):
+        raise ApprovalConflict(
+            {
+                "sync_version": (
+                    "The target changed after submission. Supersede this request "
+                    "and submit a new change."
+                )
+            }
+        )
 
     if approval_request.action_type == ApprovalActionType.UPDATE:
         serializer = serializer_class(instance, data=payload, partial=True)

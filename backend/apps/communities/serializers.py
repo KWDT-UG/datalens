@@ -1,9 +1,11 @@
 from rest_framework import serializers
 
+from apps.common.serializers import ApprovalStateSerializerMixin
+
 from .models import Community
 
 
-class CommunitySerializer(serializers.ModelSerializer):
+class CommunitySerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer):
     member_count = serializers.IntegerField(read_only=True)
     group_count = serializers.IntegerField(read_only=True)
     committee_count = serializers.IntegerField(read_only=True)
@@ -28,6 +30,9 @@ class CommunitySerializer(serializers.ModelSerializer):
             "cooperative_count",
             "resource_count",
             "institution_count",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",

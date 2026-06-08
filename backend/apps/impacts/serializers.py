@@ -1,10 +1,12 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from apps.common.serializers import ApprovalStateSerializerMixin
+
 from .models import ImpactRecord
 
 
-class ImpactRecordSerializer(serializers.ModelSerializer):
+class ImpactRecordSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer):
     resource_name = serializers.CharField(source="resource.name", read_only=True)
     community = serializers.IntegerField(
         source="resource.community_id",
@@ -36,6 +38,9 @@ class ImpactRecordSerializer(serializers.ModelSerializer):
             "notes",
             "method",
             "recorded_by_user_id",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
             "created_at",
             "updated_at",
             "created_by_user_id",

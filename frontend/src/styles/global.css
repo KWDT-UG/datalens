@@ -151,6 +151,133 @@ a {
   height: 16px;
 }
 
+.sync-center-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sync-center-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.sync-center-button strong {
+  display: inline-grid;
+  min-width: 20px;
+  min-height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: #111;
+  font-size: 0.72rem;
+}
+
+.sync-drawer {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+}
+
+.sync-drawer__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.sync-drawer__panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  width: min(720px, 100%);
+  height: 100%;
+  align-content: start;
+  gap: 20px;
+  overflow-y: auto;
+  padding: 28px;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: -22px 0 64px rgba(0, 0, 0, 0.42);
+}
+
+.sync-drawer__panel > header,
+.sync-record__heading,
+.sync-drawer__actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sync-drawer__panel header p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.sync-drawer__actions {
+  justify-content: flex-start;
+}
+
+.sync-records {
+  display: grid;
+  gap: 14px;
+}
+
+.sync-record {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.sync-record__heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.sync-record small,
+.sync-record p {
+  color: var(--muted);
+}
+
+.sync-record__error {
+  margin: 0;
+  color: var(--red) !important;
+}
+
+.sync-conflict-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sync-conflict-grid > div {
+  min-width: 0;
+}
+
+.sync-conflict-grid pre {
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: #171717;
+  color: var(--text);
+  font-size: 0.76rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .auth-loading,
 .login-page {
   display: grid;
@@ -1248,6 +1375,19 @@ h2 {
   }
 
   .review-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .sync-drawer__panel {
+    padding: 20px;
+  }
+
+  .sync-drawer__panel > header,
+  .sync-record__heading {
+    flex-direction: column;
+  }
+
+  .sync-conflict-grid {
     grid-template-columns: 1fr;
   }
 }

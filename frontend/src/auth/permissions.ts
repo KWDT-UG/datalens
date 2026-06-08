@@ -8,10 +8,17 @@ export const capabilities = {
   archiveOperations: 'archive_operations',
   archiveResources: 'archive_resources',
   archiveImpact: 'archive_impact',
+  restoreOperations: 'restore_operations',
+  restoreResources: 'restore_resources',
+  restoreImpact: 'restore_impact',
   submitForApproval: 'submit_for_approval',
   reviewApprovals: 'review_approvals',
   reviewImpactApprovals: 'review_impact_approvals',
+  reviewFinanceApprovals: 'review_finance_approvals',
   export: 'export',
+  viewPersonalData: 'view_personal_data',
+  viewResourceFinancials: 'view_resource_financials',
+  manageResourceFinancials: 'manage_resource_financials',
   manageUsers: 'manage_users',
   manageRoles: 'manage_roles',
   manageSettings: 'manage_settings'
@@ -28,6 +35,7 @@ export function hasAnyCapability(user: AuthUser | null, required: string[]) {
 export function canReviewApprovals(user: AuthUser | null) {
   return hasAnyCapability(user, [
     capabilities.reviewApprovals,
-    capabilities.reviewImpactApprovals
+    capabilities.reviewImpactApprovals,
+    capabilities.reviewFinanceApprovals
   ]);
 }

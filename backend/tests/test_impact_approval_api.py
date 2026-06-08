@@ -77,6 +77,7 @@ class ImpactApprovalApiTests(TestCase):
         self.client.force_authenticate(self.user)
 
     def test_impact_record_crud_endpoints(self):
+        self.client.force_authenticate(self.admin_user)
         create_response = self.client.post(
             reverse("impact-record-list"),
             {
@@ -129,6 +130,7 @@ class ImpactApprovalApiTests(TestCase):
         self.assertIn("beneficiary_id", response.data)
 
     def test_resource_impact_records_nested_endpoint(self):
+        self.client.force_authenticate(self.admin_user)
         list_response = self.client.get(
             reverse("resource-impact-records", kwargs={"pk": self.resource.pk})
         )
@@ -151,11 +153,13 @@ class ImpactApprovalApiTests(TestCase):
             reverse("approval-request-list"),
             {
                 "community": self.community.id,
-                "entity_type": "member",
-                "entity_id": self.member.id,
-                "action_type": ApprovalActionType.UPDATE,
-                "submitted_payload": {"status": "inactive"},
-                "diff_summary": {"status": ["active", "inactive"]},
+                "entity_type": "impact_record",
+                "action_type": ApprovalActionType.CREATE,
+                "submitted_payload": {
+                    "resource": self.resource.id,
+                    "beneficiary_count": 4,
+                },
+                "diff_summary": {"beneficiary_count": [None, 4]},
             },
             format="json",
         )

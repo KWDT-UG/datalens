@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import {
@@ -18,6 +18,7 @@ import {
   useUpdateMemberMutation
 } from '../api/queries';
 import type {
+  ApprovalSubmission,
   Committee,
   CommitteeCreateInput,
   Cooperative,
@@ -31,6 +32,9 @@ import type {
   Member,
   MemberCreateInput
 } from '../api/types';
+import { isApprovalSubmission, isOfflineQueuedResult } from '../api/types';
+import { useOptionalAuth } from '../auth/AuthContext';
+import { clearOfflineDraft, useOfflineDraft } from '../offline/drafts';
 import { FormDialog, FormErrorSummary } from './FormDialog';
 
 type CommunityScopedDialogProps = {
@@ -132,12 +136,15 @@ export function GroupCreateDialog({
   onCreated
 }: GroupDialogProps) {
   const createGroup = useCreateGroupMutation();
+  const userId = useOptionalAuth()?.user?.id;
   const updateGroup = useUpdateGroupMutation();
   const isEditing = Boolean(group);
   const {
     formState: { errors },
     handleSubmit,
-    register
+    register,
+    reset,
+    watch
   } = useForm<GroupCreateInput>({
     defaultValues: {
       closed_on: group?.closed_on ?? '',
@@ -152,6 +159,13 @@ export function GroupCreateDialog({
   });
   const mutationError = createGroup.error ?? updateGroup.error;
   const isPending = createGroup.isPending || updateGroup.isPending;
+  useOfflineDraft({
+    entityId: group?.id,
+    entityType: 'group',
+    reset,
+    userId,
+    watch
+  });
 
   return (
     <FormDialog
@@ -171,10 +185,15 @@ export function GroupCreateDialog({
               ...optionalTextFields(values, ['closed_on', 'formed_on', 'meeting_day', 'notes'])
             };
             if (group) {
-              await updateGroup.mutateAsync({ id: group.id, payload });
+              await updateGroup.mutateAsync({
+                id: group.id,
+                payload,
+                syncVersion: group.sync_version
+              });
             } else {
               await createGroup.mutateAsync(payload);
             }
+            await clearOfflineDraft('group', group?.id, userId);
             onCreated();
             onClose();
           } catch {
@@ -238,6 +257,7 @@ export function MemberCreateDialog({
   onCreated
 }: MemberDialogProps) {
   const createMember = useCreateMemberMutation();
+  const userId = useOptionalAuth()?.user?.id;
   const updateMember = useUpdateMemberMutation();
   const isEditing = Boolean(member);
   const groupsQuery = useGroupsQuery({ community: communityId, page: 1, page_size: 100, ordering: 'name' });
@@ -245,7 +265,9 @@ export function MemberCreateDialog({
     formState: { errors },
     handleSubmit,
     register,
-    setValue
+    reset,
+    setValue,
+    watch
   } = useForm<Omit<MemberCreateInput, 'group'> & { group: string }>({
     defaultValues: {
       address_text: member?.address_text ?? '',
@@ -269,6 +291,13 @@ export function MemberCreateDialog({
   });
   const mutationError = createMember.error ?? updateMember.error;
   const isPending = createMember.isPending || updateMember.isPending;
+  useOfflineDraft({
+    entityId: member?.id,
+    entityType: 'member',
+    reset,
+    userId,
+    watch
+  });
 
   useEffect(() => {
     if (
@@ -317,10 +346,15 @@ export function MemberCreateDialog({
               ])
             };
             if (member) {
-              await updateMember.mutateAsync({ id: member.id, payload });
+              await updateMember.mutateAsync({
+                id: member.id,
+                payload,
+                syncVersion: member.sync_version
+              });
             } else {
               await createMember.mutateAsync(payload);
             }
+            await clearOfflineDraft('member', member?.id, userId);
             onCreated();
             onClose();
           } catch {
@@ -434,12 +468,15 @@ export function InstitutionCreateDialog({
   onCreated
 }: InstitutionDialogProps) {
   const createInstitution = useCreateInstitutionMutation();
+  const userId = useOptionalAuth()?.user?.id;
   const updateInstitution = useUpdateInstitutionMutation();
   const isEditing = Boolean(institution);
   const {
     formState: { errors },
     handleSubmit,
-    register
+    register,
+    reset,
+    watch
   } = useForm<InstitutionCreateInput>({
     defaultValues: {
       code: institution?.code ?? '',
@@ -456,6 +493,13 @@ export function InstitutionCreateDialog({
   });
   const mutationError = createInstitution.error ?? updateInstitution.error;
   const isPending = createInstitution.isPending || updateInstitution.isPending;
+  useOfflineDraft({
+    entityId: institution?.id,
+    entityType: 'institution',
+    reset,
+    userId,
+    watch
+  });
 
   return (
     <FormDialog
@@ -476,10 +520,15 @@ export function InstitutionCreateDialog({
               ...optionalTextFields(values, ['code', 'contact_name', 'email', 'location_text', 'notes', 'phone'])
             };
             if (institution) {
-              await updateInstitution.mutateAsync({ id: institution.id, payload });
+              await updateInstitution.mutateAsync({
+                id: institution.id,
+                payload,
+                syncVersion: institution.sync_version
+              });
             } else {
               await createInstitution.mutateAsync(payload);
             }
+            await clearOfflineDraft('institution', institution?.id, userId);
             onCreated();
             onClose();
           } catch {
@@ -548,6 +597,7 @@ function ParticipationCreateDialog({
   onCreated
 }: ParticipationDialogProps) {
   const createCommittee = useCreateCommitteeMutation();
+  const userId = useOptionalAuth()?.user?.id;
   const createCooperative = useCreateCooperativeMutation();
   const updateCommittee = useUpdateCommitteeMutation();
   const updateCooperative = useUpdateCooperativeMutation();
@@ -558,7 +608,9 @@ function ParticipationCreateDialog({
   const {
     formState: { errors },
     handleSubmit,
-    register
+    register,
+    reset,
+    watch
   } = useForm<CommitteeCreateInput & CooperativeCreateInput>({
     defaultValues: {
       closed_on: record?.closed_on ?? '',
@@ -584,6 +636,13 @@ function ParticipationCreateDialog({
     createCooperative.isPending ||
     updateCommittee.isPending ||
     updateCooperative.isPending;
+  useOfflineDraft({
+    entityId: record?.id,
+    entityType: kind,
+    reset,
+    userId,
+    watch
+  });
 
   return (
     <FormDialog
@@ -611,18 +670,21 @@ function ParticipationCreateDialog({
             if (kind === 'committee' && committee) {
               await updateCommittee.mutateAsync({
                 id: committee.id,
-                payload: payload as CommitteeCreateInput
+                payload: payload as CommitteeCreateInput,
+                syncVersion: committee.sync_version
               });
             } else if (kind === 'cooperative' && cooperative) {
               await updateCooperative.mutateAsync({
                 id: cooperative.id,
-                payload: payload as CooperativeCreateInput
+                payload: payload as CooperativeCreateInput,
+                syncVersion: cooperative.sync_version
               });
             } else {
               await createRecord.mutateAsync(
                 payload as CommitteeCreateInput & CooperativeCreateInput
               );
             }
+            await clearOfflineDraft(kind, record?.id, userId);
             onCreated();
             onClose();
           } catch {
@@ -693,7 +755,10 @@ export function ImpactRecordCreateDialog({
   onCreated
 }: ImpactRecordDialogProps) {
   const createImpact = useCreateImpactRecordMutation();
+  const userId = useOptionalAuth()?.user?.id;
   const updateImpact = useUpdateImpactRecordMutation();
+  const [approvalSubmission, setApprovalSubmission] =
+    useState<ApprovalSubmission | null>(null);
   const isEditing = Boolean(impactRecord);
   const resourcesQuery = useResourcesQuery({
     community: communityId,
@@ -705,7 +770,9 @@ export function ImpactRecordCreateDialog({
     formState: { errors },
     handleSubmit,
     register,
-    setValue
+    reset,
+    setValue,
+    watch
   } = useForm<Omit<ImpactRecordCreateInput, 'resource'> & { resource: string }>({
     defaultValues: {
       as_of_date: impactRecord?.as_of_date ?? '',
@@ -723,6 +790,13 @@ export function ImpactRecordCreateDialog({
   });
   const mutationError = createImpact.error ?? updateImpact.error;
   const isPending = createImpact.isPending || updateImpact.isPending;
+  useOfflineDraft({
+    entityId: impactRecord?.id,
+    entityType: 'impact_record',
+    reset,
+    userId,
+    watch
+  });
 
   useEffect(() => {
     if (
@@ -756,19 +830,39 @@ export function ImpactRecordCreateDialog({
           };
 
           try {
-            if (impactRecord) {
-              await updateImpact.mutateAsync({ id: impactRecord.id, payload });
-            } else {
-              await createImpact.mutateAsync(payload);
+            const result = impactRecord
+              ? await updateImpact.mutateAsync({
+                  id: impactRecord.id,
+                  payload,
+                  syncVersion: impactRecord.sync_version
+                })
+              : await createImpact.mutateAsync(payload);
+            await clearOfflineDraft('impact_record', impactRecord?.id, userId);
+            if (isOfflineQueuedResult(result)) {
+              onCreated();
+              onClose();
+              return;
             }
-            onCreated();
-            onClose();
+            if (isApprovalSubmission(result)) {
+              setApprovalSubmission(result);
+            } else {
+              onCreated();
+              onClose();
+            }
           } catch {
             // Mutation errors render below.
           }
         })}
       >
         <FormErrorSummary error={mutationError} />
+        {approvalSubmission ? (
+          <div className="form-alert" role="status">
+            <strong>Submitted for approval</strong>
+            <span>
+              Request #{approvalSubmission.approval_request.id} is awaiting impact review.
+            </span>
+          </div>
+        ) : null}
         <div className="form-grid">
           <label className="form-field">
             <span>Resource</span>
@@ -836,8 +930,14 @@ export function ImpactRecordCreateDialog({
           <textarea rows={3} {...register('notes')} />
         </label>
         <Actions
-          isPending={isPending}
-          label={isEditing ? 'Save impact record' : 'Create impact record'}
+          isPending={isPending || Boolean(approvalSubmission)}
+          label={
+            approvalSubmission
+              ? 'Awaiting approval'
+              : isEditing
+                ? 'Save impact record'
+                : 'Create impact record'
+          }
           onClose={onClose}
         />
       </form>

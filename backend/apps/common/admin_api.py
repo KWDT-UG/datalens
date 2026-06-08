@@ -28,6 +28,52 @@ from apps.common.permissions import (
     ensure_role_groups,
     user_role_names,
 )
+from apps.communities.models import Community
+from apps.resources.models import ThematicArea
+
+
+class AssignmentFieldsMixin(serializers.Serializer):
+    assigned_districts = serializers.ListField(
+        child=serializers.CharField(max_length=255),
+        required=False,
+    )
+    assigned_community_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Community.objects.filter(is_deleted=False),
+        many=True,
+        required=False,
+        source="assigned_communities",
+    )
+    assigned_thematic_area_ids = serializers.PrimaryKeyRelatedField(
+        queryset=ThematicArea.objects.filter(is_deleted=False),
+        many=True,
+        required=False,
+        source="assigned_thematic_areas",
+    )
+
+    def validate_assigned_districts(self, value):
+        return sorted({district.strip() for district in value if district.strip()})
+
+    def pop_assignments(self, validated_data):
+        return {
+            "assigned_districts": validated_data.pop("assigned_districts", None),
+            "assigned_communities": validated_data.pop(
+                "assigned_communities", None
+            ),
+            "assigned_thematic_areas": validated_data.pop(
+                "assigned_thematic_areas", None
+            ),
+        }
+
+    def save_assignments(self, profile, assignments):
+        if assignments["assigned_districts"] is not None:
+            profile.assigned_districts = assignments["assigned_districts"]
+            profile.save(update_fields=["assigned_districts", "updated_at"])
+        if assignments["assigned_communities"] is not None:
+            profile.assigned_communities.set(assignments["assigned_communities"])
+        if assignments["assigned_thematic_areas"] is not None:
+            profile.assigned_thematic_areas.set(
+                assignments["assigned_thematic_areas"]
+            )
 
 
 def serialize_admin_user(user):
@@ -43,6 +89,17 @@ def serialize_admin_user(user):
         "role": roles[0] if roles else None,
         "workforce_type": profile.workforce_type if profile else None,
         "position_title": profile.position_title if profile else "",
+        "assigned_districts": profile.assigned_districts if profile else [],
+        "assigned_community_ids": (
+            list(profile.assigned_communities.values_list("pk", flat=True))
+            if profile
+            else []
+        ),
+        "assigned_thematic_area_ids": (
+            list(profile.assigned_thematic_areas.values_list("pk", flat=True))
+            if profile
+            else []
+        ),
         "first_name": user.first_name,
         "last_name": user.last_name,
         "last_login": user.last_login,
@@ -50,7 +107,7 @@ def serialize_admin_user(user):
     }
 
 
-class AdminUserCreateSerializer(serializers.Serializer):
+class AdminUserCreateSerializer(AssignmentFieldsMixin, serializers.Serializer):
     username = serializers.CharField(max_length=150)
     email = serializers.EmailField(required=False, allow_blank=True)
     password = serializers.CharField(min_length=8, write_only=True)
@@ -70,20 +127,22 @@ class AdminUserCreateSerializer(serializers.Serializer):
         return value
 
     def create(self, validated_data):
+        assignments = self.pop_assignments(validated_data)
         role = validated_data.pop("role")
         workforce_type = validated_data.pop("workforce_type")
         position_title = validated_data.pop("position_title", "")
         user = get_user_model().objects.create_user(**validated_data)
         assign_role(user, role)
-        UserProfile.objects.create(
+        profile = UserProfile.objects.create(
             user=user,
             workforce_type=workforce_type,
             position_title=position_title,
         )
+        self.save_assignments(profile, assignments)
         return user
 
 
-class AdminUserUpdateSerializer(serializers.Serializer):
+class AdminUserUpdateSerializer(AssignmentFieldsMixin, serializers.Serializer):
     email = serializers.EmailField(required=False, allow_blank=True)
     password = serializers.CharField(
         required=False,
@@ -122,6 +181,7 @@ class AdminUserUpdateSerializer(serializers.Serializer):
         return attrs
 
     def update(self, instance, validated_data):
+        assignments = self.pop_assignments(validated_data)
         role = validated_data.pop("role", None)
         password = validated_data.pop("password", None)
         workforce_type = validated_data.pop("workforce_type", None)
@@ -133,13 +193,18 @@ class AdminUserUpdateSerializer(serializers.Serializer):
         instance.save()
         if role is not None:
             assign_role(instance, role)
-        if workforce_type is not None or position_title is not None:
+        if (
+            workforce_type is not None
+            or position_title is not None
+            or any(value is not None for value in assignments.values())
+        ):
             profile, _created = UserProfile.objects.get_or_create(user=instance)
             if workforce_type is not None:
                 profile.workforce_type = workforce_type
             if position_title is not None:
                 profile.position_title = position_title
             profile.save()
+            self.save_assignments(profile, assignments)
         return instance
 
 
@@ -244,7 +309,10 @@ class AdminUserListCreateView(APIView):
     permission_classes = [AdminUserAccess]
 
     def get(self, request):
-        queryset = get_user_model().objects.order_by("username")
+        queryset = get_user_model().objects.prefetch_related(
+            "datalens_profile__assigned_communities",
+            "datalens_profile__assigned_thematic_areas",
+        ).order_by("username")
         search = request.query_params.get("search", "").strip()
         if search:
             queryset = queryset.filter(

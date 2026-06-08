@@ -5,7 +5,13 @@ import {
   useCreateCommunityMutation,
   useUpdateCommunityMutation
 } from '../api/queries';
-import type { Community, CommunityCreateInput } from '../api/types';
+import {
+  isOfflineQueuedResult,
+  type Community,
+  type CommunityCreateInput
+} from '../api/types';
+import { useOptionalAuth } from '../auth/AuthContext';
+import { clearOfflineDraft, useOfflineDraft } from '../offline/drafts';
 import { FormDialog, FormErrorSummary } from './FormDialog';
 
 type CommunityCreateDialogProps = {
@@ -26,13 +32,16 @@ export function CommunityCreateDialog({
   onSaved
 }: CommunityCreateDialogProps) {
   const navigate = useNavigate();
+  const userId = useOptionalAuth()?.user?.id;
   const createCommunity = useCreateCommunityMutation();
   const updateCommunity = useUpdateCommunityMutation();
   const isEditing = Boolean(community);
   const {
     formState: { errors },
     handleSubmit,
-    register
+    register,
+    reset,
+    watch
   } = useForm<CommunityCreateInput>({
     defaultValues: {
       area_name: community?.area_name ?? '',
@@ -46,6 +55,13 @@ export function CommunityCreateDialog({
   });
   const mutationError = createCommunity.error ?? updateCommunity.error;
   const isPending = createCommunity.isPending || updateCommunity.isPending;
+  useOfflineDraft({
+    entityId: community?.id,
+    entityType: 'community',
+    reset,
+    userId,
+    watch
+  });
 
   return (
     <FormDialog
@@ -67,8 +83,17 @@ export function CommunityCreateDialog({
               name: values.name.trim()
             };
             const savedCommunity = community
-              ? await updateCommunity.mutateAsync({ id: community.id, payload })
+              ? await updateCommunity.mutateAsync({
+                  id: community.id,
+                  payload,
+                  syncVersion: community.sync_version
+                })
               : await createCommunity.mutateAsync(payload);
+            await clearOfflineDraft('community', community?.id, userId);
+            if (isOfflineQueuedResult(savedCommunity)) {
+              onClose();
+              return;
+            }
             onSaved?.(savedCommunity);
             onClose();
             if (!community) {
