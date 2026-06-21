@@ -1,18 +1,20 @@
 import hashlib
 import secrets
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers, status
+from rest_framework.exceptions import APIException
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.email import EmailDeliveryError, send_transactional_email
 from apps.common.models import (
     InvitationStatus,
     UserInvitation,
@@ -21,9 +23,9 @@ from apps.common.models import (
     WorkforceType,
 )
 from apps.common.permissions import (
-    AdminUserAccess,
     GROUP_NAME_BY_ROLE,
     ROLE_CAPABILITIES,
+    AdminUserAccess,
     assign_role,
     ensure_role_groups,
     user_role_names,
@@ -210,6 +212,25 @@ class AdminUserUpdateSerializer(AssignmentFieldsMixin, serializers.Serializer):
 
 def hash_invitation_token(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def is_local_frontend_url(url):
+    hostname = urlsplit(url).hostname
+    return hostname in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+
+
+def frontend_app_url_for_request(request):
+    configured_url = settings.FRONTEND_APP_URL.rstrip("/")
+    if configured_url and not is_local_frontend_url(configured_url):
+        return configured_url
+
+    origin = request.headers.get("Origin")
+    if origin and not is_local_frontend_url(origin):
+        parsed_origin = urlsplit(origin)
+        if parsed_origin.scheme in {"http", "https"} and parsed_origin.netloc:
+            return f"{parsed_origin.scheme}://{parsed_origin.netloc}"
+
+    return configured_url
 
 
 def serialize_invitation(invitation):
@@ -415,24 +436,29 @@ class AdminInvitationListCreateView(APIView):
         serializer = AdminInvitationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         token = secrets.token_urlsafe(32)
-        invitation = UserInvitation.objects.create(
-            **serializer.validated_data,
-            token_hash=hash_invitation_token(token),
-            invited_by_user_id=request.user.id,
-            expires_at=timezone.now() + timedelta(days=7),
+        invitation_url = (
+            f"{frontend_app_url_for_request(request)}/accept-invite?token={token}"
         )
-        invitation_url = f"{settings.FRONTEND_APP_URL.rstrip('/')}/accept-invite?token={token}"
-        send_mail(
-            subject="You are invited to KWDT Data Lens",
-            message=(
-                f"You have been invited to KWDT Data Lens as "
-                f"{UserRole(invitation.role).label}.\n\n"
-                f"Accept your invitation: {invitation_url}\n\n"
-                "This invitation expires in 7 days."
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[invitation.email],
-        )
+        try:
+            with transaction.atomic():
+                invitation = UserInvitation.objects.create(
+                    **serializer.validated_data,
+                    token_hash=hash_invitation_token(token),
+                    invited_by_user_id=request.user.id,
+                    expires_at=timezone.now() + timedelta(days=7),
+                )
+                send_transactional_email(
+                    subject="You are invited to KWDT Data Lens",
+                    message=(
+                        f"You have been invited to KWDT Data Lens as "
+                        f"{UserRole(invitation.role).label}.\n\n"
+                        f"Accept your invitation: {invitation_url}\n\n"
+                        "This invitation expires in 7 days."
+                    ),
+                    recipient_list=[invitation.email],
+                )
+        except EmailDeliveryError as error:
+            raise InvitationDeliveryError() from error
         return Response(
             {
                 "data": {
@@ -444,6 +470,14 @@ class AdminInvitationListCreateView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class InvitationDeliveryError(APIException):
+    status_code = status.HTTP_502_BAD_GATEWAY
+    default_detail = (
+        "The invitation could not be delivered. Check email configuration and retry."
+    )
+    default_code = "invitation_delivery_failed"
 
 
 class AdminInvitationDetailView(APIView):
@@ -473,6 +507,7 @@ class AdminInvitationDetailView(APIView):
 
 
 class AcceptInvitationView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
     throttle_scope = "auth"
 

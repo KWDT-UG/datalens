@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+import os
 import secrets
 
 from django.contrib.auth import get_user_model
@@ -18,7 +19,7 @@ from apps.common.models import (
     UserRole,
     WorkforceType,
 )
-from apps.common.permissions import assign_role
+from apps.common.permissions import assign_role, ensure_role_groups
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.impacts.models import ImpactRecord
@@ -145,6 +146,49 @@ DEMO_USER_SPECS = [
     ),
 ]
 
+LOCAL_ADMIN_DEFAULTS = {
+    "username": "admin",
+    "password": "adm!n@pass123",
+    "email": "admin@example.test",
+}
+
+
+def seed_local_admin():
+    """Create the predictable, local-only administrator used by the demo seed."""
+    credentials = {
+        key: os.getenv(f"DATALENS_LOCAL_ADMIN_{key.upper()}", value)
+        for key, value in LOCAL_ADMIN_DEFAULTS.items()
+    }
+    ensure_role_groups()
+    user, was_created = get_user_model().objects.update_or_create(
+        username=credentials["username"],
+        defaults={
+            "email": credentials["email"],
+            "first_name": "Local",
+            "last_name": "Admin",
+            "is_active": True,
+            "is_staff": True,
+            "is_superuser": True,
+        },
+    )
+    # Reset this known development-only password on every demo seed so a
+    # developer can always log in after resetting or reseeding local data.
+    user.set_password(credentials["password"])
+    user.save()
+    assign_role(user, UserRole.SYSTEM_ADMINISTRATOR)
+    _profile, profile_created = UserProfile.objects.update_or_create(
+        user=user,
+        defaults={
+            "workforce_type": WorkforceType.STAFF,
+            "position_title": "Local System Administrator",
+        },
+    )
+    return {
+        "created": was_created + profile_created,
+        "updated": (not was_created) + (not profile_created),
+        "username": credentials["username"],
+    }
+
 
 def seed_reference_data():
     created = 0
@@ -176,6 +220,10 @@ def seed_demo_data():
 
     created = 0
     updated = 0
+
+    local_admin = seed_local_admin()
+    created += local_admin["created"]
+    updated += local_admin["updated"]
 
     def count_result(was_created):
         nonlocal created, updated
@@ -818,4 +866,5 @@ def seed_demo_data():
         "approval_request_id": approval_request.id,
         "user_count": get_user_model().objects.count(),
         "invitation_count": UserInvitation.objects.count(),
+        "local_admin_username": local_admin["username"],
     }

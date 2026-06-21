@@ -124,6 +124,23 @@ class UiReadyMilestoneTests(TestCase):
         self.assertEqual(accepted.status_code, status.HTTP_200_OK)
         self.assertIn("datalens_auth", accepted.cookies)
 
+    def test_public_auth_endpoints_ignore_stale_auth_cookie(self):
+        client = APIClient(enforce_csrf_checks=True)
+        client.cookies["datalens_auth"] = "stale-token-after-local-db-reset"
+
+        csrf_response = client.get(reverse("auth-csrf"))
+        self.assertEqual(csrf_response.status_code, status.HTTP_200_OK)
+        csrf_token = csrf_response.cookies["csrftoken"].value
+
+        login_response = client.post(
+            reverse("auth-login"),
+            {"username": "ui.user", "password": "test-password"},
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.assertIn("datalens_auth", login_response.cookies)
+
     def test_current_user_can_update_profile_details(self):
         self.client.force_authenticate(self.user)
 

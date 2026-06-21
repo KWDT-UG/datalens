@@ -2,7 +2,7 @@ COMPOSE ?= docker compose
 BACKEND ?= $(COMPOSE) run --rm backend
 FRONTEND ?= $(COMPOSE) run --rm frontend
 
-.PHONY: help bootstrap build up down logs migrate makemigrations superuser test check shell init-roles seed-reference-data seed-demo-data smoke-api frontend-install frontend-build frontend-lint frontend-test frontend-pwa-check frontend-pwa-e2e frontend-dev
+.PHONY: help bootstrap build up down logs db-reset migrate makemigrations superuser test check shell init-roles seed-reference-data seed-demo-data smoke-api frontend-install frontend-build frontend-lint frontend-test frontend-pwa-check frontend-pwa-e2e frontend-dev
 
 help:
 	@echo "KWDT Data Lens commands"
@@ -11,11 +11,12 @@ help:
 	@echo "  make up              Start backend, frontend, and PostgreSQL"
 	@echo "  make down            Stop services"
 	@echo "  make logs            Show Docker Compose logs"
+	@echo "  make db-reset        Delete the local Postgres volume, migrate, and seed reference data"
 	@echo "  make migrate         Apply migrations"
 	@echo "  make makemigrations  Create migrations"
 	@echo "  make init-roles      Create local role groups"
 	@echo "  make seed-reference-data  Seed reference data"
-	@echo "  make seed-demo-data       Seed demo data"
+	@echo "  make seed-demo-data       Seed demo data and a local test administrator"
 	@echo "  make smoke-api       Seed demo data and check API endpoint payloads"
 	@echo "  make superuser       Create a Django superuser"
 	@echo "  make test            Run Django unittest suite"
@@ -45,6 +46,12 @@ down:
 
 logs:
 	$(COMPOSE) logs -f
+
+db-reset:
+	$(COMPOSE) down -v
+	$(COMPOSE) up -d db
+	$(BACKEND) python manage.py migrate
+	$(BACKEND) python manage.py seed_reference_data
 
 migrate:
 	$(BACKEND) python manage.py migrate

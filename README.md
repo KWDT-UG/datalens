@@ -82,6 +82,16 @@ Apply migrations:
 make migrate
 ```
 
+Reset the local Docker Postgres database from scratch:
+
+```bash
+make db-reset
+```
+
+This stops the Compose stack, deletes the local Postgres volume, applies
+migrations, and seeds reference data. It is destructive and intended only for
+local development data.
+
 Create a superuser:
 
 ```bash
@@ -118,11 +128,21 @@ Seed reference data:
 make seed-reference-data
 ```
 
-Seed a small demo dataset:
+Seed a small demo dataset and a login-capable local administrator:
 
 ```bash
 make seed-demo-data
 ```
+
+The seeded administrator is for local development only:
+
+```text
+username=admin
+password=adm!n@pass123
+```
+
+Set `DATALENS_LOCAL_ADMIN_USERNAME`, `DATALENS_LOCAL_ADMIN_PASSWORD`, or
+`DATALENS_LOCAL_ADMIN_EMAIL` in `.env` before seeding to override those defaults.
 
 Run a local endpoint smoke check with demo data:
 
@@ -253,3 +273,59 @@ backend service's internal hostname and the same port, for example:
 ```text
 BACKEND_UPSTREAM=http://backend.railway.internal:8000
 ```
+
+Also set the backend service's public frontend settings to the Railway frontend
+domain so generated invitation emails and CSRF-protected browser requests use
+the staging site rather than local development defaults:
+
+```text
+FRONTEND_APP_URL=https://<frontend-service>.up.railway.app
+DJANGO_CSRF_TRUSTED_ORIGINS=https://<frontend-service>.up.railway.app
+DJANGO_ALLOWED_HOSTS=<frontend-service>.up.railway.app,<backend-service>.railway.internal
+```
+
+If `FRONTEND_APP_URL` is accidentally left as `http://localhost:5173`, the
+invitation API falls back to the browser request origin for admin-created
+invitations. The explicit Railway variable is still the canonical setting.
+
+## Invitation email delivery
+
+Without a Mailtrap token, local development uses Django's console email
+backend and prints invitation emails to backend logs. Setting
+`MAILTRAP_API_KEY` switches invitation delivery to the Mailtrap API; SMTP
+settings are not required.
+
+For safe local testing, use Mailtrap Email Sandbox. Messages appear in the
+chosen Mailtrap inbox rather than being sent to recipients:
+
+```text
+MAILTRAP_API_KEY=<mailtrap-api-token>
+MAILTRAP_USE_SANDBOX=true
+MAILTRAP_INBOX_ID=<mailtrap-sandbox-inbox-id>
+DJANGO_DEFAULT_FROM_EMAIL=KWDT Data Lens <noreply@example.test>
+FRONTEND_APP_URL=http://localhost:5173
+```
+
+To send real email in local development, staging, or production, configure
+Mailtrap Email Sending instead:
+
+```text
+MAILTRAP_API_KEY=<environment-specific-sending-token>
+MAILTRAP_USE_SANDBOX=false
+DJANGO_DEFAULT_FROM_EMAIL=KWDT Data Lens <noreply@your-verified-domain.example>
+```
+
+Mailtrap must authorize the sender address/domain before real delivery will
+succeed. Use a different Mailtrap token for local, staging, and production.
+Keep tokens only in untracked local `.env` files or the hosting platform's
+secret manager; never commit, log, or share them. If a token is exposed,
+revoke it and create a replacement in Mailtrap.
+
+After changing local email settings, recreate the backend container:
+
+```bash
+docker compose up -d --build --force-recreate backend
+```
+
+Invitation links use `FRONTEND_APP_URL`. Set it to the public frontend URL for
+staging and production so recipients do not receive a `localhost` link.
