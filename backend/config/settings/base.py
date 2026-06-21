@@ -1,6 +1,5 @@
-from pathlib import Path
 import os
-
+from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 ROOT_DIR = BASE_DIR.parent
@@ -166,4 +165,13 @@ EMAIL_BACKEND = os.getenv(
     "django.core.mail.backends.console.EmailBackend",
 )
 DEFAULT_FROM_EMAIL = os.getenv("DJANGO_DEFAULT_FROM_EMAIL", "no-reply@datalens.local")
+EMAIL_HOST = os.getenv("DJANGO_EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("DJANGO_EMAIL_PORT", "25"))
+EMAIL_HOST_USER = os.getenv("DJANGO_EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("DJANGO_EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("DJANGO_EMAIL_USE_TLS", False)
+EMAIL_USE_SSL = env_bool("DJANGO_EMAIL_USE_SSL", False)
+MAILTRAP_API_KEY = os.getenv("MAILTRAP_API_KEY", "")
+MAILTRAP_USE_SANDBOX = env_bool("MAILTRAP_USE_SANDBOX", True)
+MAILTRAP_INBOX_ID = os.getenv("MAILTRAP_INBOX_ID", "")
 FRONTEND_APP_URL = os.getenv("FRONTEND_APP_URL", "http://localhost:5173")

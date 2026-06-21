@@ -1,14 +1,15 @@
 from datetime import timedelta
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
-from django.test import TestCase
-from django.test import override_settings
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.common.email import EmailDeliveryError
 from apps.common.models import (
     InvitationStatus,
     UserInvitation,
@@ -190,6 +191,86 @@ class AdminApiTests(TestCase):
             format="json",
         )
         self.assertEqual(reused_response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @override_settings(
+        MAILTRAP_API_KEY="sandbox-token",
+        MAILTRAP_USE_SANDBOX=True,
+        MAILTRAP_INBOX_ID="123456",
+        DEFAULT_FROM_EMAIL="KWDT Data Lens <noreply@example.test>",
+        FRONTEND_APP_URL="http://frontend.test",
+    )
+    @patch("apps.common.email.import_module")
+    def test_invitation_uses_mailtrap_sandbox_when_configured(self, import_module):
+        mailtrap = MagicMock()
+        mailtrap.MailtrapClient.return_value.send.return_value = {
+            "success": True,
+            "message_ids": ["mailtrap-message-id"],
+        }
+        import_module.return_value = mailtrap
+
+        response = self.client.post(
+            reverse("admin-invitation-list"),
+            {
+                "email": "sandbox.invited@example.com",
+                "workforce_type": WorkforceType.STAFF,
+                "role": UserRole.FIELD_OFFICER,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mailtrap.MailtrapClient.assert_called_once_with(
+            token="sandbox-token",
+            sandbox=True,
+            inbox_id="123456",
+        )
+        self.assertEqual(UserInvitation.objects.count(), 1)
+
+    @patch(
+        "apps.common.admin_api.send_transactional_email",
+        side_effect=EmailDeliveryError("provider unavailable"),
+    )
+    def test_failed_invitation_delivery_rolls_back_creation(self, _send_email):
+        response = self.client.post(
+            reverse("admin-invitation-list"),
+            {
+                "email": "failed.delivery@example.com",
+                "workforce_type": WorkforceType.STAFF,
+                "role": UserRole.FIELD_OFFICER,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(UserInvitation.objects.count(), 0)
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        FRONTEND_APP_URL="http://localhost:5173",
+    )
+    def test_invitation_url_uses_request_origin_when_frontend_url_is_local(self):
+        invitation_response = self.client.post(
+            reverse("admin-invitation-list"),
+            {
+                "email": "railway.invited@example.com",
+                "first_name": "Railway",
+                "last_name": "Invite",
+                "workforce_type": WorkforceType.STAFF,
+                "position_title": "Staging Tester",
+                "role": UserRole.PROGRAMME_MANAGER,
+            },
+            format="json",
+            HTTP_ORIGIN="https://datalens-staging.up.railway.app",
+        )
+
+        self.assertEqual(invitation_response.status_code, status.HTTP_201_CREATED)
+        invitation_url = invitation_response.data["data"]["invitation_url"]
+        self.assertTrue(
+            invitation_url.startswith(
+                "https://datalens-staging.up.railway.app/accept-invite?token="
+            )
+        )
+        self.assertIn(invitation_url, mail.outbox[0].body)
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_invitation_expiry_and_revocation(self):

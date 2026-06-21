@@ -26,6 +26,7 @@ class Command(BaseCommand):
                     f"impact_records={result['impact_record_count']}, "
                     f"users={result['user_count']}, "
                     f"invitations={result['invitation_count']}, "
+                    f"local_admin={result['local_admin_username']}, "
                     f"community_id={result['community_id']}, "
                     f"resource_id={result['resource_id']}, "
                     f"approval_request_id={result['approval_request_id']}"

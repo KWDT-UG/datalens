@@ -165,6 +165,7 @@ def serialize_user(user):
 
 
 class LoginView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
     throttle_scope = "auth"
 
@@ -213,6 +214,7 @@ class LogoutView(APIView):
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class CsrfTokenView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def get(self, request):

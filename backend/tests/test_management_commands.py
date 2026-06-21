@@ -3,6 +3,8 @@ from io import StringIO
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
 
 from apps.approvals.models import ApprovalRequest
 from apps.common.models import (
@@ -80,10 +82,32 @@ class ManagementCommandTests(TestCase):
         self.assertEqual(ImpactRecord.objects.count(), 7)
         self.assertEqual(ApprovalRequest.objects.count(), 3)
         self.assertEqual(
-            get_user_model().objects.filter(username__startswith="demo.").count(),
-            8,
+            get_user_model().objects.count(),
+            9,
         )
-        self.assertEqual(UserProfile.objects.count(), 8)
+        self.assertEqual(UserProfile.objects.count(), 9)
+        local_admin = get_user_model().objects.get(username="admin")
+        self.assertTrue(local_admin.is_active)
+        self.assertTrue(local_admin.is_staff)
+        self.assertTrue(local_admin.is_superuser)
+        self.assertTrue(local_admin.check_password("adm!n@pass123"))
+        self.assertEqual(
+            set(local_admin.groups.values_list("name", flat=True)),
+            {UserRole.SYSTEM_ADMINISTRATOR},
+        )
+        self.assertEqual(
+            local_admin.datalens_profile.position_title,
+            "Local System Administrator",
+        )
+        login_response = self.client.post(
+            reverse("auth-login"),
+            {"username": "admin", "password": "adm!n@pass123"},
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            login_response.data["data"]["user"]["username"],
+            "admin",
+        )
         self.assertTrue(
             UserProfile.objects.filter(workforce_type=WorkforceType.INTERN).exists()
         )
