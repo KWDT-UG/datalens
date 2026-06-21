@@ -5,7 +5,9 @@ import {
   OutlinedArrowAltCircleRightIcon,
   CubesIcon,
   HomeIcon,
+  MoonIcon,
   SearchIcon,
+  SunIcon,
   TableIcon,
   UserCircleIcon,
   UsersIcon
@@ -23,6 +25,7 @@ import {
   hasCapability
 } from '../auth/permissions';
 import { SyncCenter } from '../offline/SyncCenter';
+import { useTheme } from '../theme/ThemeProvider';
 
 const navItems = [
   { label: 'Dashboard', to: '/dashboard', icon: HomeIcon },
@@ -52,6 +55,7 @@ export function AppShell() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [search, setSearch] = useState('');
   const displayName =
     [auth.user?.first_name, auth.user?.last_name].filter(Boolean).join(' ') ||
@@ -108,6 +112,15 @@ export function AppShell() {
           <div className="topbar__user">
             <ApiStatus />
             <SyncCenter />
+            <button
+              className="icon-button theme-toggle"
+              type="button"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {theme === 'dark' ? <SunIcon aria-hidden="true" /> : <MoonIcon aria-hidden="true" />}
+            </button>
             <span>{displayName}</span>
             <NavLink to="/profile" aria-label="Open profile">
               <UserCircleIcon />
