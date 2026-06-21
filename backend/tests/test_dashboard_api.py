@@ -17,7 +17,7 @@ from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.impacts.models import ImpactRecord
 from apps.members.models import Member
-from apps.resources.models import Resource
+from apps.resources.models import Resource, ResourceThematicArea, ThematicArea
 
 
 class DashboardApiTests(TestCase):
@@ -58,10 +58,34 @@ class DashboardApiTests(TestCase):
             owner_id=cls.group.id,
             name="Dashboard Resource",
         )
+        cls.wash = ThematicArea.objects.create(code="WASH", name="WASH")
+        cls.education = ThematicArea.objects.create(code="EDU", name="Education")
+        ResourceThematicArea.objects.create(
+            resource=cls.resource,
+            thematic_area=cls.wash,
+            is_primary=True,
+        )
         ImpactRecord.objects.create(
             resource=cls.resource,
+            as_of_date=date(2024, 8, 1),
             beneficiary_count=25,
             household_count=8,
+        )
+        cls.other_resource = Resource.objects.create(
+            community=cls.community,
+            owner_type=ResourcePartyType.GROUP,
+            owner_id=cls.group.id,
+            name="Education Resource",
+        )
+        ResourceThematicArea.objects.create(
+            resource=cls.other_resource,
+            thematic_area=cls.education,
+            is_primary=True,
+        )
+        ImpactRecord.objects.create(
+            resource=cls.other_resource,
+            as_of_date=date(2024, 6, 1),
+            beneficiary_count=12,
         )
         ApprovalRequest.objects.create(
             community=cls.community,
@@ -91,9 +115,9 @@ class DashboardApiTests(TestCase):
             "community_count": 1,
             "group_count": 1,
             "active_member_count": 1,
-            "resource_count": 1,
+            "resource_count": 2,
             "pending_approval_count": 1,
-            "beneficiary_count": 25,
+            "beneficiary_count": 37,
             "household_count": 8,
         }
         for field, value in expected.items():
@@ -105,6 +129,29 @@ class DashboardApiTests(TestCase):
         }
         self.assertIn("community", activity_types)
         self.assertIn("resource", activity_types)
+
+    def test_dashboard_filters_programme_and_exposes_interactive_data(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(
+            reverse("dashboard"),
+            {"thematic_area": "WASH", "period": "3"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data["data"]
+        self.assertEqual(data["selected_thematic_area"], "WASH")
+        self.assertEqual(data["selected_period"], "3")
+        self.assertEqual(data["metrics"]["resource_count"], 1)
+        self.assertEqual(data["metrics"]["beneficiary_count"], 25)
+        self.assertEqual(
+            data["impact_trend"],
+            [{"as_of_date": date(2024, 8, 1), "beneficiary_count": 25}],
+        )
+        programme_lenses = {item["code"]: item for item in data["programme_lenses"]}
+        self.assertEqual(programme_lenses["WASH"]["resource_count"], 1)
+        self.assertEqual(programme_lenses["EDU"]["resource_count"], 1)
+        self.assertEqual(data["attention"][0]["type"], "resource")
 
     def test_non_reviewer_pending_count_is_limited_to_own_requests(self):
         field_user = get_user_model().objects.create_user(
@@ -121,3 +168,4 @@ class DashboardApiTests(TestCase):
             response.data["data"]["metrics"]["pending_approval_count"],
             0,
         )
+from datetime import date

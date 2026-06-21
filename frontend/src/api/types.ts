@@ -195,9 +195,33 @@ export interface DashboardActivity {
   path: string;
 }
 
+export interface DashboardProgrammeLens {
+  code: string;
+  name: string;
+  resource_count: number;
+  beneficiary_count: number;
+}
+
+export interface DashboardTrendPoint {
+  as_of_date: string;
+  beneficiary_count: number;
+}
+
+export interface DashboardAttentionItem {
+  label: string;
+  detail: string;
+  path: string;
+  type: 'approval' | 'resource';
+}
+
 export interface DashboardData {
   metrics: DashboardMetrics;
   resource_status: Array<{ status: string; count: number }>;
+  programme_lenses: DashboardProgrammeLens[];
+  selected_thematic_area: string;
+  selected_period: string;
+  impact_trend: DashboardTrendPoint[];
+  attention: DashboardAttentionItem[];
   recent_activity: DashboardActivity[];
 }
 
