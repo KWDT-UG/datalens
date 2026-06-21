@@ -1,6 +1,8 @@
 import {
   BellIcon,
+  BarsIcon,
   ClipboardListIcon,
+  CloseIcon,
   CogIcon,
   OutlinedArrowAltCircleRightIcon,
   CubesIcon,
@@ -56,8 +58,10 @@ export function AppShell() {
   const [search, setSearch] = useState('');
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [navigationOpen, setNavigationOpen] = useState(false);
 
   useEffect(() => {
+    setNavigationOpen(false);
     if (location.pathname === '/search') {
       setSearch(new URLSearchParams(location.search).get('q') ?? '');
     }
@@ -79,7 +83,11 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Primary navigation">
+      <aside
+        className={`sidebar${navigationOpen ? ' is-open' : ''}`}
+        id="primary-navigation"
+        aria-label="Primary navigation"
+      >
         <div className="sidebar__brand">
           <img src="/kwdt-logo.webp" alt="Katosi Women Development Trust" />
         </div>
@@ -87,7 +95,7 @@ export function AppShell() {
           {navItems.filter((item) => !item.show || item.show(auth.user)).map((item) => {
             const Icon = item.icon;
             return (
-              <NavLink key={item.to} to={item.to} className="sidebar__link">
+              <NavLink key={item.to} to={item.to} className="sidebar__link" onClick={() => setNavigationOpen(false)}>
                 <Icon aria-hidden="true" />
                 <span>{item.label}</span>
               </NavLink>
@@ -95,8 +103,27 @@ export function AppShell() {
           })}
         </nav>
       </aside>
+      {navigationOpen ? (
+        <button
+          className="sidebar-backdrop"
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={() => setNavigationOpen(false)}
+        />
+      ) : null}
       <div className="workspace">
         <header className="topbar">
+          <button
+            className="icon-button navigation-toggle"
+            type="button"
+            onClick={() => setNavigationOpen((isOpen) => !isOpen)}
+            aria-controls="primary-navigation"
+            aria-expanded={navigationOpen}
+            aria-label={navigationOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            title={navigationOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          >
+            {navigationOpen ? <CloseIcon aria-hidden="true" /> : <BarsIcon aria-hidden="true" />}
+          </button>
           <form className="global-search" role="search" onSubmit={handleSearch}>
             <SearchIcon aria-hidden="true" />
             <input
