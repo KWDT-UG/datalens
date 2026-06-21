@@ -163,10 +163,10 @@ export function useHealthQuery() {
   });
 }
 
-export function useDashboardQuery() {
+export function useDashboardQuery(params: Record<string, string | number | undefined> = {}) {
   return useQuery({
-    queryKey: ['dashboard'],
-    queryFn: () => apiGet<DataEnvelope<DashboardData>>('/api/v1/dashboard/'),
+    queryKey: ['dashboard', params],
+    queryFn: () => apiGet<DataEnvelope<DashboardData>>('/api/v1/dashboard/', params),
     staleTime: 30_000
   });
 }

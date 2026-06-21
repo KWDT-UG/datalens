@@ -2,6 +2,7 @@ import { SyncAltIcon } from '@patternfly/react-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useHealthQuery } from '../api/queries';
 import { useAuth } from '../auth/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
 import { offlineDb, type PendingSyncRecord } from './db';
@@ -36,6 +37,7 @@ function badgeStatus(record: PendingSyncRecord) {
 export function SyncCenter() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const health = useHealthQuery();
   const [records, setRecords] = useState<PendingSyncRecord[]>([]);
   const [open, setOpen] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
@@ -87,17 +89,32 @@ export function SyncCenter() {
       ).length,
     [records]
   );
+  const indicator = !online || health.isError
+    ? 'offline'
+    : attentionCount > 0
+      ? 'pending'
+      : health.isLoading || health.data?.status !== 'ok'
+        ? 'checking'
+        : 'online';
+  const indicatorLabel = {
+    checking: 'Checking connection',
+    offline: 'Offline',
+    online: 'Online and up to date',
+    pending: `${attentionCount} change${attentionCount === 1 ? '' : 's'} need attention`
+  }[indicator];
 
   return (
     <>
       <button
-        className="sync-center-button"
+        className={`sync-center-button sync-center-button--${indicator}`}
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={`Open sync center, ${attentionCount} items need attention`}
+        aria-label={`Open sync center. ${indicatorLabel}.`}
+        title={indicatorLabel}
       >
         <SyncAltIcon aria-hidden="true" />
-        <span>{online ? 'Sync' : 'Offline'}</span>
+        <span>Sync</span>
+        <i className="sync-center-button__indicator" aria-hidden="true" />
         {attentionCount ? <strong>{attentionCount}</strong> : null}
       </button>
 

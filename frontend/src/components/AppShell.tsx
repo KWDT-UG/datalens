@@ -1,11 +1,15 @@
 import {
   BellIcon,
+  BarsIcon,
   ClipboardListIcon,
+  CloseIcon,
   CogIcon,
   OutlinedArrowAltCircleRightIcon,
   CubesIcon,
   HomeIcon,
+  MoonIcon,
   SearchIcon,
+  SunIcon,
   TableIcon,
   UserCircleIcon,
   UsersIcon
@@ -15,7 +19,6 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
-import { useHealthQuery } from '../api/queries';
 import { useAuth } from '../auth/AuthContext';
 import {
   canReviewApprovals,
@@ -23,6 +26,7 @@ import {
   hasCapability
 } from '../auth/permissions';
 import { SyncCenter } from '../offline/SyncCenter';
+import { useTheme } from '../theme/ThemeProvider';
 
 const navItems = [
   { label: 'Dashboard', to: '/dashboard', icon: HomeIcon },
@@ -40,25 +44,24 @@ const navItems = [
   }
 ];
 
-function ApiStatus() {
-  const { data, isError, isLoading } = useHealthQuery();
-  const state = isLoading ? 'Checking' : isError ? 'Offline' : data?.status === 'ok' ? 'Online' : 'Unknown';
-
-  return <span className={`api-status api-status--${state.toLowerCase()}`}>{state}</span>;
-}
+const paletteOptions = [
+  { value: 'sun', label: 'KWDT Reference', description: 'Stone, taupe, and focused orange' },
+  { value: 'lake', label: 'Lake & Sun', description: 'Lake teal with warm highlights' }
+] as const;
 
 export function AppShell() {
   const auth = useAuth();
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme, palette, setPalette, toggleTheme } = useTheme();
   const [search, setSearch] = useState('');
-  const displayName =
-    [auth.user?.first_name, auth.user?.last_name].filter(Boolean).join(' ') ||
-    auth.user?.username ||
-    'User';
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [navigationOpen, setNavigationOpen] = useState(false);
 
   useEffect(() => {
+    setNavigationOpen(false);
     if (location.pathname === '/search') {
       setSearch(new URLSearchParams(location.search).get('q') ?? '');
     }
@@ -73,19 +76,26 @@ export function AppShell() {
   }
 
   async function handleLogout() {
+    setAccountOpen(false);
     await auth.logout();
     queryClient.clear();
   }
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Primary navigation">
-        <div className="sidebar__brand">KWDT</div>
+      <aside
+        className={`sidebar${navigationOpen ? ' is-open' : ''}`}
+        id="primary-navigation"
+        aria-label="Primary navigation"
+      >
+        <div className="sidebar__brand">
+          <img src="/kwdt-logo.webp" alt="Katosi Women Development Trust" />
+        </div>
         <nav className="sidebar__nav">
           {navItems.filter((item) => !item.show || item.show(auth.user)).map((item) => {
             const Icon = item.icon;
             return (
-              <NavLink key={item.to} to={item.to} className="sidebar__link">
+              <NavLink key={item.to} to={item.to} className="sidebar__link" onClick={() => setNavigationOpen(false)}>
                 <Icon aria-hidden="true" />
                 <span>{item.label}</span>
               </NavLink>
@@ -93,8 +103,27 @@ export function AppShell() {
           })}
         </nav>
       </aside>
+      {navigationOpen ? (
+        <button
+          className="sidebar-backdrop"
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={() => setNavigationOpen(false)}
+        />
+      ) : null}
       <div className="workspace">
         <header className="topbar">
+          <button
+            className="icon-button navigation-toggle"
+            type="button"
+            onClick={() => setNavigationOpen((isOpen) => !isOpen)}
+            aria-controls="primary-navigation"
+            aria-expanded={navigationOpen}
+            aria-label={navigationOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            title={navigationOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          >
+            {navigationOpen ? <CloseIcon aria-hidden="true" /> : <BarsIcon aria-hidden="true" />}
+          </button>
           <form className="global-search" role="search" onSubmit={handleSearch}>
             <SearchIcon aria-hidden="true" />
             <input
@@ -106,15 +135,84 @@ export function AppShell() {
             />
           </form>
           <div className="topbar__user">
-            <ApiStatus />
             <SyncCenter />
-            <span>{displayName}</span>
-            <NavLink to="/profile" aria-label="Open profile">
-              <UserCircleIcon />
-            </NavLink>
-            <button className="icon-button" type="button" onClick={handleLogout} aria-label="Sign out" title="Sign out">
-              <OutlinedArrowAltCircleRightIcon />
-            </button>
+            <div className="theme-picker">
+              <button
+                className="icon-button theme-toggle"
+                type="button"
+                onClick={() => setAppearanceOpen((isOpen) => !isOpen)}
+                aria-expanded={appearanceOpen}
+                aria-label="Choose appearance"
+                title="Choose appearance"
+              >
+                {theme === 'dark' ? <MoonIcon aria-hidden="true" /> : <SunIcon aria-hidden="true" />}
+              </button>
+              {appearanceOpen ? (
+                <div className="theme-picker__panel" aria-label="Appearance options">
+                  <p>Display mode</p>
+                  <div className="theme-picker__modes">
+                    <button
+                      className={theme === 'light' ? 'is-active' : ''}
+                      type="button"
+                      aria-pressed={theme === 'light'}
+                      onClick={() => theme === 'dark' && toggleTheme()}
+                    >
+                      Light
+                    </button>
+                    <button
+                      className={theme === 'dark' ? 'is-active' : ''}
+                      type="button"
+                      aria-pressed={theme === 'dark'}
+                      onClick={() => theme === 'light' && toggleTheme()}
+                    >
+                      Dark
+                    </button>
+                  </div>
+                  <p>Colour direction</p>
+                  <div className="theme-picker__palettes">
+                    {paletteOptions.map((option) => (
+                      <button
+                        className={`theme-picker__palette theme-picker__palette--${option.value}${
+                          palette === option.value ? ' is-active' : ''
+                        }`}
+                        key={option.value}
+                        type="button"
+                        aria-pressed={palette === option.value}
+                        onClick={() => setPalette(option.value)}
+                      >
+                        <span aria-hidden="true" />
+                        <strong>{option.label}</strong>
+                        <small>{option.description}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <div className="account-menu">
+              <button
+                className="account-menu__trigger"
+                type="button"
+                onClick={() => setAccountOpen((isOpen) => !isOpen)}
+                aria-expanded={accountOpen}
+                aria-label="Open account menu"
+                title="Account"
+              >
+                <UserCircleIcon aria-hidden="true" />
+              </button>
+              {accountOpen ? (
+                <div className="account-menu__panel" aria-label="Account menu">
+                  <NavLink to="/profile" onClick={() => setAccountOpen(false)}>
+                    <UserCircleIcon aria-hidden="true" />
+                    Profile
+                  </NavLink>
+                  <button type="button" onClick={handleLogout}>
+                    <OutlinedArrowAltCircleRightIcon aria-hidden="true" />
+                    Sign out
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
         <main className="workspace__content">
