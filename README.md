@@ -157,9 +157,10 @@ make frontend-install
 make frontend-build
 ```
 
-The application includes a light/dark theme toggle in the top bar. A selected
-theme is stored locally on the device and is applied before the React app loads,
-so it remains available while the installed PWA is offline.
+The application includes an Appearance control in the top bar. It provides
+light/dark modes plus KWDT Reference and Lake & Sun palette
+directions. Selections are stored locally on the device and applied before the
+React app loads, so they remain available while the installed PWA is offline.
 
 Run the production-style Nginx frontend image:
 

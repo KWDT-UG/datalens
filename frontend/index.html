@@ -7,17 +7,24 @@
     <script>
       (() => {
         const storedTheme = localStorage.getItem('kwdt-theme');
+        const storedPalette = localStorage.getItem('kwdt-palette');
         const theme =
           storedTheme === 'dark' || storedTheme === 'light'
             ? storedTheme
             : matchMedia('(prefers-color-scheme: dark)').matches
               ? 'dark'
               : 'light';
+        const palette = storedPalette === 'lake' ? storedPalette : 'sun';
+        const themeColors = {
+          sun: { dark: '#22201e', light: '#fbfbfa' },
+          lake: { dark: '#0e252a', light: '#f3f8f7' }
+        };
         document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.palette = palette;
         document.documentElement.style.colorScheme = theme;
         document.querySelector('meta[name="theme-color"]')?.setAttribute(
           'content',
-          theme === 'dark' ? '#111111' : '#f5f7fb'
+          themeColors[palette][theme]
         );
       })();
     </script>
