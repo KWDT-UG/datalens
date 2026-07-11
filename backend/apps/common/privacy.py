@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 from apps.common.models import UserRole
+from apps.common.permissions import user_is_mvp_staff_admin
 
 
 PII_FIELDS = {
@@ -42,7 +43,7 @@ FINANCIAL_FIELDS = {"value_amount", "value_currency"}
 
 
 def _communications_only(user):
-    if not user or not user.is_authenticated or user.is_superuser:
+    if not user or not user.is_authenticated or user_is_mvp_staff_admin(user):
         return False
     roles = set(user.groups.values_list("name", flat=True))
     return roles == {UserRole.COMMUNICATIONS_VIEWER}

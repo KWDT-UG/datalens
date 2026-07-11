@@ -2,6 +2,7 @@ from django.db.models import Q
 from rest_framework.exceptions import PermissionDenied
 
 from apps.common.models import UserRole
+from apps.common.permissions import user_is_mvp_staff_admin
 
 
 COMMUNITY_LOOKUPS = {
@@ -29,7 +30,7 @@ def _profile(user):
 
 
 def _scoped_roles(user):
-    if not user or not user.is_authenticated or user.is_superuser:
+    if not user or not user.is_authenticated or user_is_mvp_staff_admin(user):
         return set()
     role_names = set(user.groups.values_list("name", flat=True))
     return role_names.intersection(

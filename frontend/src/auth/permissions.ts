@@ -25,6 +25,9 @@ export const capabilities = {
 } as const;
 
 export function hasCapability(user: AuthUser | null, capability: string) {
+  if (user?.is_staff || user?.is_superuser) {
+    return true;
+  }
   return Boolean(user?.capabilities.includes(capability));
 }
 

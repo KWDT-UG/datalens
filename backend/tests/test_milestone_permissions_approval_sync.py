@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 
 from apps.approvals.models import ApprovalRequest
 from apps.common.models import ApprovalActionType, ApprovalStatus, ResourcePartyType, UserRole
-from apps.common.permissions import assign_role
+from apps.common.permissions import assign_role, user_capabilities
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.resources.models import Resource
@@ -109,22 +109,38 @@ class PermissionApprovalSyncMilestoneTests(TestCase):
                 self.assertEqual(response.status_code, case["expected"])
                 self.client.force_authenticate(None)
 
-    def test_unassigned_and_staff_users_do_not_receive_implicit_product_access(self):
-        cases = [
-            {"username": "unassigned.user", "is_staff": False},
-            {"username": "django.staff", "is_staff": True},
-        ]
+    def test_unassigned_user_without_staff_does_not_receive_product_access(self):
+        user = get_user_model().objects.create_user(
+            username="unassigned.user",
+            password="test-password",
+            is_staff=False,
+        )
+        self.client.force_authenticate(user)
+        response = self.client.get(reverse("community-list"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-        for case in cases:
-            with self.subTest(username=case["username"]):
-                user = get_user_model().objects.create_user(
-                    username=case["username"],
-                    password="test-password",
-                    is_staff=case["is_staff"],
-                )
-                self.client.force_authenticate(user)
-                response = self.client.get(reverse("community-list"))
-                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+    def test_staff_user_receives_mvp_admin_access(self):
+        user = get_user_model().objects.create_user(
+            username="django.staff",
+            password="test-password",
+            is_staff=True,
+        )
+
+        self.assertIn("manage_users", user_capabilities(user))
+        self.assertIn("manage_operations", user_capabilities(user))
+        self.client.force_authenticate(user)
+
+        read_response = self.client.get(reverse("community-list"))
+        create_response = self.client.post(
+            reverse("community-list"),
+            {"name": "Staff Created Community"},
+            format="json",
+        )
+        admin_response = self.client.get(reverse("admin-user-list"))
+
+        self.assertEqual(read_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(admin_response.status_code, status.HTTP_200_OK)
 
     def test_all_mvp_roles_enforce_domain_permissions(self):
         cases = [

@@ -137,6 +137,12 @@ COMMUNICATIONS_READ_BASENAMES = {
 COMMUNICATIONS_BLOCKED_ACTIONS = {"institutions", "members", "memberships"}
 
 
+def user_is_mvp_staff_admin(user):
+    """Temporary MVP rule: Django staff users can exercise all product actions."""
+
+    return bool(user and user.is_authenticated and (user.is_staff or user.is_superuser))
+
+
 def ensure_role_groups():
     with transaction.atomic():
         for group_name in GROUP_NAME_BY_ROLE.values():
@@ -171,7 +177,7 @@ def user_role_names(user):
 def user_capabilities(user):
     if not user or not user.is_authenticated:
         return set()
-    if user.is_superuser:
+    if user_is_mvp_staff_admin(user):
         return ALL_CAPABILITIES
     return set().union(
         *(ROLE_CAPABILITIES.get(role, set()) for role in user_role_names(user))
