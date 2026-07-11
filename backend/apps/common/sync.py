@@ -24,7 +24,11 @@ from apps.common.models import (
     ApprovalSubmissionSource,
     SyncMutationReceipt,
 )
-from apps.common.permissions import SUBMIT_FOR_APPROVAL, user_has_capability
+from apps.common.permissions import (
+    SUBMIT_FOR_APPROVAL,
+    user_has_capability,
+    user_is_mvp_staff_admin,
+)
 from apps.common.scoping import enforce_change_scope, scope_queryset_for_user
 
 MAX_SYNC_RECORDS = 100
@@ -357,7 +361,7 @@ class SyncPushView(APIView):
                     payload=payload,
                     instance=instance,
                 )
-                if decision.required and not request.user.is_superuser:
+                if decision.required and not user_is_mvp_staff_admin(request.user):
                     if not user_has_capability(request.user, SUBMIT_FOR_APPROVAL):
                         raise ValidationError(
                             {

@@ -154,6 +154,7 @@ class ApprovalPolicyMixin:
         from apps.common.permissions import (
             MANAGE_RESOURCE_FINANCIALS,
             user_has_capability,
+            user_is_mvp_staff_admin,
         )
         from apps.common.scoping import enforce_change_scope
 
@@ -178,7 +179,7 @@ class ApprovalPolicyMixin:
             raise PermissionDenied(
                 "User cannot change sensitive resource financial values."
             )
-        if self.request.user.is_superuser:
+        if user_is_mvp_staff_admin(self.request.user):
             return None
 
         decision = approval_policy_for_change(
