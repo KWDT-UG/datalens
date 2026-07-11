@@ -1,16 +1,19 @@
 import { PlusIcon, SearchIcon, UploadIcon } from '@patternfly/react-icons';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, NavLink, useParams } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 
 import {
   useCommitteesQuery,
   useCommunityQuery,
   useCooperativesQuery,
+  useGroupMembersQuery,
+  useGroupQuery,
   useGroupsQuery,
   useArchiveRecordsMutation,
   useImpactRecordsQuery,
   useInstitutionsQuery,
+  useMemberQuery,
   useMembersQuery,
   useResourcesQuery
 } from '../api/queries';
@@ -61,6 +64,7 @@ type TableRow = {
   label: string;
   cells: ReactNode[];
 };
+type BreakdownRecord = Member | Group | Institution | Committee | Cooperative | Resource | ImpactRecord;
 
 const sectionKeys = sections.map((item) => item.key);
 const createLabels: Record<SectionKey, string> = {
@@ -98,6 +102,10 @@ function formatCount(value?: number) {
   return new Intl.NumberFormat().format(value ?? 0);
 }
 
+function formatDateTime(value?: string | null) {
+  return value ? new Date(value).toLocaleString() : 'Not recorded';
+}
+
 function formatMoney(amount?: string, currency = 'UGX') {
   if (!amount) {
     return 'Not recorded';
@@ -107,6 +115,28 @@ function formatMoney(amount?: string, currency = 'UGX') {
 
 function memberName(member: Member) {
   return [member.preferred_name || member.first_name, member.last_name].filter(Boolean).join(' ');
+}
+
+function syncUpdatedAt(record: BreakdownRecord) {
+  return 'updated_at' in record ? record.updated_at : undefined;
+}
+
+function DetailItem({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value || 'Not recorded'}</dd>
+    </div>
+  );
+}
+
+function DetailSection({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <section className="record-detail__section">
+      <h3>{title}</h3>
+      {children}
+    </section>
+  );
 }
 
 const tableConfigs: Record<
@@ -326,10 +356,232 @@ const tableConfigs: Record<
   }
 };
 
+type BreakdownRecordDetailPageProps = {
+  activeSection: SectionKey;
+  canManage: boolean;
+  communityName: string;
+  communityId: number;
+  groupMembers: Member[];
+  groupMembersLoading: boolean;
+  isLoading: boolean;
+  onEdit: (record: BreakdownRecord) => void;
+  record: BreakdownRecord | null;
+};
+
+function BreakdownRecordDetailPage({
+  activeSection,
+  canManage,
+  communityId,
+  communityName,
+  groupMembers,
+  groupMembersLoading,
+  isLoading,
+  onEdit,
+  record
+}: BreakdownRecordDetailPageProps) {
+  const title = record
+    ? activeSection === 'members'
+      ? memberName(record as Member)
+      : activeSection === 'impact'
+        ? `Impact record ${(record as ImpactRecord).id}`
+        : 'name' in record
+          ? record.name
+          : `Record ${record.id}`
+    : 'Record details';
+  const sectionLabel = sections.find((item) => item.key === activeSection)?.label ?? 'Breakdown';
+  const backTo = `/communities/${communityId}/${activeSection}`;
+
+  return (
+    <div className="record-page" aria-labelledby="record-detail-title">
+      <nav className="breadcrumbs" aria-label="Breadcrumb">
+        <Link to="/communities">Communities</Link>
+        <span>›</span>
+        <Link to={`/communities/${communityId}`}>{communityName}</Link>
+        <span>›</span>
+        <Link to={backTo}>{sectionLabel}</Link>
+        <span>›</span>
+        <span>{title}</span>
+      </nav>
+
+      {isLoading ? <div className="state-box">Loading record details...</div> : null}
+      {!isLoading && !record ? (
+        <div className="state-box">
+          This record is not available yet. <Link to={backTo}>Return to {tableConfigs[activeSection].itemName}</Link>.
+        </div>
+      ) : null}
+      {record ? (
+        <>
+          <header className="record-page__hero">
+            <div>
+              <Link className="record-page__back" to={backTo}>← Back to {tableConfigs[activeSection].itemName}</Link>
+              <span className="record-detail__eyebrow">{sectionLabel}</span>
+              <h1 id="record-detail-title">{title}</h1>
+              <p>
+                {communityName} · Last updated {formatDateTime(syncUpdatedAt(record))}
+              </p>
+              {'status' in record ? <StatusBadge status={record.status} /> : null}
+            </div>
+            {canManage ? (
+              <button className="button button--primary" type="button" onClick={() => onEdit(record)}>
+                Edit {archiveConfigs[activeSection].itemName}
+              </button>
+            ) : null}
+          </header>
+
+          <div className="record-page__layout">
+            <aside className="record-page__snapshot">
+              <span>Record type</span>
+              <strong>{sectionLabel}</strong>
+              {'status' in record ? (
+                <>
+                  <span>Status</span>
+                  <StatusBadge status={record.status} />
+                </>
+              ) : null}
+              <span>Updated</span>
+              <strong>{formatDateTime(syncUpdatedAt(record))}</strong>
+            </aside>
+            <div className="record-page__content">
+              {activeSection === 'groups' ? (
+                <GroupDetailContent
+                  group={record as Group}
+                  members={groupMembers}
+                  membersLoading={groupMembersLoading}
+                />
+              ) : activeSection === 'members' ? (
+                <MemberDetailContent member={record as Member} />
+              ) : (
+                <GenericRecordDetail activeSection={activeSection} record={record} />
+              )}
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function GroupDetailContent({
+  group,
+  members,
+  membersLoading
+}: {
+  group: Group;
+  members: Member[];
+  membersLoading: boolean;
+}) {
+  return (
+    <>
+      <DetailSection title="Key details">
+        <dl className="record-detail__grid">
+          <DetailItem label="Code" value={group.code || 'Not recorded'} />
+          <DetailItem label="Meeting day" value={group.meeting_day || 'Not recorded'} />
+          <DetailItem label="Formed" value={formatDate(group.formed_on)} />
+          <DetailItem label="Closed" value={formatDate(group.closed_on)} />
+        </dl>
+        {group.notes ? <p className="record-detail__notes">{group.notes}</p> : null}
+      </DetailSection>
+      <DetailSection title="Activity snapshot">
+        <div className="record-detail__stat-grid">
+          <span>
+            <strong>{membersLoading ? '—' : formatCount(members.length)}</strong>
+            Members
+          </span>
+          <span>
+            <strong>{formatDateTime(syncUpdatedAt(group))}</strong>
+            Updated
+          </span>
+        </div>
+      </DetailSection>
+      <DetailSection title="Members in this group">
+        {membersLoading ? <div className="state-box">Loading group members...</div> : null}
+        {!membersLoading && members.length === 0 ? <p className="table-note">No active members recorded for this group.</p> : null}
+        {members.length > 0 ? (
+          <div className="record-detail__related-list">
+            {members.slice(0, 6).map((member) => (
+              <Link key={member.id} to={`/communities/${group.community}/members/${member.id}`}>
+                <span>
+                  <strong>{memberName(member)}</strong>
+                  <small>{member.member_number || member.phone || 'Member details'}</small>
+                </span>
+                <StatusBadge status={member.status} />
+              </Link>
+            ))}
+          </div>
+        ) : null}
+      </DetailSection>
+    </>
+  );
+}
+
+function MemberDetailContent({ member }: { member: Member }) {
+  return (
+    <>
+      <DetailSection title="Personal details">
+        <dl className="record-detail__grid">
+          <DetailItem label="Member #" value={member.member_number || 'Not recorded'} />
+          <DetailItem label="Preferred name" value={member.preferred_name || 'Not recorded'} />
+          <DetailItem label="Phone" value={member.phone || 'Not recorded'} />
+          <DetailItem label="Email" value={member.email ? <a href={`mailto:${member.email}`}>{member.email}</a> : 'Not recorded'} />
+          <DetailItem label="Gender" value={formatLabel(member.gender)} />
+          <DetailItem label="Date of birth" value={formatDate(member.date_of_birth)} />
+        </dl>
+      </DetailSection>
+      <DetailSection title="Participation">
+        <dl className="record-detail__grid">
+          <DetailItem
+            label="Current group"
+            value={
+              member.group_name ? (
+                <Link to={`/communities/${member.community}/groups/${member.group}`}>{member.group_name}</Link>
+              ) : (
+                `Group #${member.group}`
+              )
+            }
+          />
+          <DetailItem label="Joined" value={formatDate(member.joined_on)} />
+          <DetailItem label="Left" value={formatDate(member.left_on)} />
+          <DetailItem label="Deceased" value={formatDate(member.deceased_on)} />
+        </dl>
+      </DetailSection>
+      <DetailSection title="Address and notes">
+        <dl className="record-detail__grid">
+          <DetailItem label="Address" value={member.address_text || 'Not recorded'} />
+        </dl>
+        {member.notes ? <p className="record-detail__notes">{member.notes}</p> : null}
+      </DetailSection>
+    </>
+  );
+}
+
+function GenericRecordDetail({
+  activeSection,
+  record
+}: {
+  activeSection: SectionKey;
+  record: BreakdownRecord;
+}) {
+  const rows = tableConfigs[activeSection].exportRows([record]).at(0) ?? {};
+  return (
+    <DetailSection title="Record fields">
+      <dl className="record-detail__grid">
+        {Object.entries(rows)
+          .filter(([, value]) => value !== undefined && value !== null && value !== '')
+          .slice(0, 12)
+          .map(([key, value]) => (
+            <DetailItem key={key} label={formatLabel(key)} value={String(value)} />
+          ))}
+      </dl>
+    </DetailSection>
+  );
+}
+
 export function CommunityDetailPage() {
   const { user } = useAuth();
-  const { communityId, section = 'groups' } = useParams();
+  const navigate = useNavigate();
+  const { communityId, section = 'groups', recordId } = useParams();
   const activeSection = isSectionKey(section) ? section : 'groups';
+  const selectedRecordId = recordId && /^\d+$/.test(recordId) ? Number(recordId) : null;
   const manageCapability =
     activeSection === 'resources'
       ? capabilities.manageResources
@@ -398,6 +650,33 @@ export function CommunityDetailPage() {
   };
   const records = sectionQuery.data?.results ?? [];
   const rows = tableConfig.toRows(records);
+  const selectedRecordFromPage = selectedRecordId
+    ? records.find((record) => record.id === selectedRecordId) ?? null
+    : null;
+  const groupDetailQuery = useGroupQuery(
+    selectedRecordId ?? undefined,
+    activeSection === 'groups' && Boolean(selectedRecordId)
+  );
+  const memberDetailQuery = useMemberQuery(
+    selectedRecordId ?? undefined,
+    activeSection === 'members' && Boolean(selectedRecordId)
+  );
+  const selectedRecord =
+    activeSection === 'groups'
+      ? groupDetailQuery.data ?? selectedRecordFromPage
+      : activeSection === 'members'
+        ? memberDetailQuery.data ?? selectedRecordFromPage
+        : selectedRecordFromPage;
+  const selectedGroupMembersQuery = useGroupMembersQuery(
+    activeSection === 'groups' ? (selectedRecordId ?? undefined) : undefined,
+    activeSection === 'groups' && Boolean(selectedRecordId)
+  );
+  const selectedRecordIsLoading =
+    activeSection === 'groups'
+      ? groupDetailQuery.isLoading
+      : activeSection === 'members'
+        ? memberDetailQuery.isLoading
+        : sectionQuery.isLoading;
   const pageCount = Math.max(1, Math.ceil((sectionQuery.data?.count ?? 0) / sectionPageSize));
   const archiveConfig = archiveConfigs[activeSection];
   const archiveRecords = useArchiveRecordsMutation(archiveConfig.key, archiveConfig.path);
@@ -436,6 +715,30 @@ export function CommunityDetailPage() {
     setEditingImpactRecord(null);
     setSelectedIds([]);
   }, [activeSection, communityId]);
+
+  function openRecordDetail(rowId: number) {
+    if (communityId) {
+      navigate(`/communities/${communityId}/${activeSection}/${rowId}`);
+    }
+  }
+
+  function editRecord(record: BreakdownRecord) {
+    if (activeSection === 'groups') {
+      setEditingGroup(record as Group);
+    } else if (activeSection === 'members') {
+      setEditingMember(record as Member);
+    } else if (activeSection === 'institutions') {
+      setEditingInstitution(record as Institution);
+    } else if (activeSection === 'committees') {
+      setEditingCommittee(record as Committee);
+    } else if (activeSection === 'cooperatives') {
+      setEditingCooperative(record as Cooperative);
+    } else if (activeSection === 'resources') {
+      setEditingResource(record as Resource);
+    } else if (activeSection === 'impact') {
+      setEditingImpactRecord(record as ImpactRecord);
+    }
+  }
 
   function handleCreated() {
     setSearch('');
@@ -708,6 +1011,25 @@ export function CommunityDetailPage() {
     return null;
   }
 
+  if (selectedRecordId && community) {
+    return (
+      <section className="page-panel page-panel--detail">
+        <BreakdownRecordDetailPage
+          activeSection={activeSection}
+          canManage={canManage}
+          communityId={community.id}
+          communityName={community.name}
+          groupMembers={selectedGroupMembersQuery.data ?? []}
+          groupMembersLoading={selectedGroupMembersQuery.isLoading}
+          isLoading={selectedRecordIsLoading}
+          onEdit={editRecord}
+          record={selectedRecord}
+        />
+        {renderEditDialog()}
+      </section>
+    );
+  }
+
   return (
     <section className="page-panel page-panel--detail">
       <nav className="breadcrumbs" aria-label="Breadcrumb">
@@ -841,7 +1163,7 @@ export function CommunityDetailPage() {
                       </thead>
                       <tbody>
                         {rows.map((row) => (
-                          <tr key={row.id}>
+                          <tr className={row.id === selectedRecordId ? 'is-selected' : ''} key={row.id}>
                             <td>
                               {canArchive ? <input
                                 type="checkbox"
@@ -851,7 +1173,17 @@ export function CommunityDetailPage() {
                               /> : null}
                             </td>
                             {row.cells.map((cell, index) => (
-                              <td key={`${row.id}-${tableConfig.columns[index]}`}>{cell}</td>
+                              <td key={`${row.id}-${tableConfig.columns[index]}`}>
+                                {index === 0 ? (
+                                  <button
+                                    className="table-link"
+                                    type="button"
+                                    onClick={() => openRecordDetail(row.id)}
+                                  >
+                                    {cell}
+                                  </button>
+                                ) : cell}
+                              </td>
                             ))}
                             {canManage ? (
                               <td>{renderRowActions(row.id)}</td>

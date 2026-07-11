@@ -368,6 +368,14 @@ export function useMembersQuery(params: ListParams, enabled = true) {
   return useListQuery<Member>('members', '/api/v1/members/', params, enabled);
 }
 
+export function useMemberQuery(memberId?: string | number, enabled = true) {
+  return useQuery({
+    queryKey: ['member', memberId],
+    queryFn: () => apiGet<Member>(`/api/v1/members/${memberId}/`),
+    enabled: Boolean(memberId) && enabled
+  });
+}
+
 export function useCreateMemberMutation() {
   return useCreateListMutation<Member, MemberCreateInput>(
     'members',
@@ -386,6 +394,22 @@ export function useUpdateMemberMutation() {
 
 export function useGroupsQuery(params: ListParams, enabled = true) {
   return useListQuery<Group>('groups', '/api/v1/groups/', params, enabled);
+}
+
+export function useGroupQuery(groupId?: string | number, enabled = true) {
+  return useQuery({
+    queryKey: ['group', groupId],
+    queryFn: () => apiGet<Group>(`/api/v1/groups/${groupId}/`),
+    enabled: Boolean(groupId) && enabled
+  });
+}
+
+export function useGroupMembersQuery(groupId?: string | number, enabled = true) {
+  return useQuery({
+    queryKey: ['group-members', groupId],
+    queryFn: () => apiGet<Member[]>(`/api/v1/groups/${groupId}/members/`),
+    enabled: Boolean(groupId) && enabled
+  });
 }
 
 export function useCreateGroupMutation() {

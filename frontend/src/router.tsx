@@ -35,6 +35,10 @@ export const router = createBrowserRouter([
             path: 'communities/:communityId/:section',
             element: <CommunityDetailPage />
           },
+          {
+            path: 'communities/:communityId/:section/:recordId',
+            element: <CommunityDetailPage />
+          },
           { path: 'resources', element: <ResourcesPage /> },
           { path: 'impact', element: <ImpactPage /> },
           { path: 'search', element: <SearchPage /> },
