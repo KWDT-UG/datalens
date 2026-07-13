@@ -15,6 +15,7 @@ import type {
   AuthUser,
   Committee,
   CommitteeCreateInput,
+  CommitteeMembership,
   Community,
   CommunityCreateInput,
   Cooperative,
@@ -450,6 +451,15 @@ export function useUpdateInstitutionMutation() {
 
 export function useCommitteesQuery(params: ListParams, enabled = true) {
   return useListQuery<Committee>('committees', '/api/v1/committees/', params, enabled);
+}
+
+export function useCommitteeMembershipsQuery(params: ListParams, enabled = true) {
+  return useListQuery<CommitteeMembership>(
+    'committee-memberships',
+    '/api/v1/committee-memberships/',
+    params,
+    enabled
+  );
 }
 
 export function useCreateCommitteeMutation() {

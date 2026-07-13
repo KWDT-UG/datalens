@@ -352,6 +352,17 @@ export interface CommitteeCreateInput {
   closed_on?: string;
 }
 
+export interface CommitteeMembership extends SyncMetadata {
+  id: number;
+  committee: number;
+  member: number;
+  role_name?: string;
+  status?: RecordStatus;
+  start_date?: string | null;
+  end_date?: string | null;
+  notes?: string;
+}
+
 export interface Cooperative extends SyncMetadata {
   id: number;
   community: number;

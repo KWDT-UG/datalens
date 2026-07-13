@@ -475,6 +475,7 @@ def seed_demo_data():
     )
 
     committee_specs = [
+        ("Demo Savings Group Leadership Committee", "group_leadership", date(2024, 2, 1)),
         ("Demo Oversight Committee", "oversight", date(2024, 3, 10)),
         ("Resource Allocation Committee", "resource_allocation", date(2024, 4, 15)),
         ("Impact Review Committee", "impact_review", date(2024, 5, 20)),
@@ -493,6 +494,9 @@ def seed_demo_data():
         )
 
     committee_membership_specs = [
+        ("Demo Savings Group Leadership Committee", "001", "Chairperson"),
+        ("Demo Savings Group Leadership Committee", "002", "Secretary"),
+        ("Demo Savings Group Leadership Committee", "003", "Treasurer"),
         ("Demo Oversight Committee", "001", "Chairperson"),
         ("Demo Oversight Committee", "002", "Secretary"),
         ("Demo Oversight Committee", "007", "Member"),
