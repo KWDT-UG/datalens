@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import { apiDelete, apiGet, apiPatch, apiPost, initializeCsrf } from './client';
 import { useOptionalAuth } from '../auth/AuthContext';
 import { executeOrQueue } from '../offline/sync';
 import type {
@@ -36,6 +36,8 @@ import type {
   Member,
   MemberCreateInput,
   PaginatedResponse,
+  PasswordResetConfirmInput,
+  PasswordResetRequestInput,
   ProfileUpdateInput,
   Resource,
   ResourceCreateInput,
@@ -146,6 +148,20 @@ export function useRevokeAdminInvitationMutation() {
   });
 }
 
+export function useResendAdminInvitationMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiPost<
+        DataEnvelope<{ invitation: AdminInvitation; invitation_url: string }>,
+        Record<string, never>
+      >(`/api/v1/admin/invitations/${id}/resend/`, {}),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['admin-invitations'] })
+  });
+}
+
 export function useAcceptInvitationMutation() {
   return useMutation({
     mutationFn: (payload: { token: string; username: string; password: string }) =>
@@ -153,6 +169,45 @@ export function useAcceptInvitationMutation() {
         '/api/v1/auth/accept-invitation/',
         payload
       )
+  });
+}
+
+export function usePasswordResetRequestMutation() {
+  return useMutation({
+    mutationFn: async (payload: PasswordResetRequestInput) => {
+      await initializeCsrf();
+      return apiPost<
+        DataEnvelope<{ message: string }>,
+        PasswordResetRequestInput
+      >('/api/v1/auth/password-reset/request/', payload);
+    }
+  });
+}
+
+export function usePasswordResetConfirmMutation() {
+  return useMutation({
+    mutationFn: async (payload: PasswordResetConfirmInput) => {
+      await initializeCsrf();
+      return apiPost<
+        DataEnvelope<{ message: string }>,
+        PasswordResetConfirmInput
+      >('/api/v1/auth/password-reset/confirm/', payload);
+    }
+  });
+}
+
+export function usePasswordResetTokenQuery(uid: string, token: string) {
+  return useQuery({
+    queryKey: ['password-reset-token', uid, token],
+    queryFn: () =>
+      apiGet<DataEnvelope<{ valid: boolean }>>(
+        '/api/v1/auth/password-reset/validate/',
+        { uid, token }
+      ),
+    enabled: Boolean(uid && token),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    retry: false
   });
 }
 

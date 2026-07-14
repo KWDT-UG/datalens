@@ -1,9 +1,8 @@
 import hashlib
 import secrets
 from datetime import timedelta
-from urllib.parse import urlsplit
+from html import escape
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Q
@@ -15,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.email import EmailDeliveryError, send_transactional_email
+from apps.common.frontend import frontend_app_url_for_request
 from apps.common.models import (
     InvitationStatus,
     UserInvitation,
@@ -32,6 +32,10 @@ from apps.common.permissions import (
 )
 from apps.communities.models import Community
 from apps.resources.models import ThematicArea
+
+
+INVITATION_TOKEN_LIFETIME_DAYS = 7
+EXPIRED_INVITATION_VISIBLE_DAYS = 15
 
 
 class AssignmentFieldsMixin(serializers.Serializer):
@@ -214,30 +218,13 @@ def hash_invitation_token(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def is_local_frontend_url(url):
-    hostname = urlsplit(url).hostname
-    return hostname in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
-
-
-def frontend_app_url_for_request(request):
-    configured_url = settings.FRONTEND_APP_URL.rstrip("/")
-    if configured_url and not is_local_frontend_url(configured_url):
-        return configured_url
-
-    origin = request.headers.get("Origin")
-    if origin and not is_local_frontend_url(origin):
-        parsed_origin = urlsplit(origin)
-        if parsed_origin.scheme in {"http", "https"} and parsed_origin.netloc:
-            return f"{parsed_origin.scheme}://{parsed_origin.netloc}"
-
-    return configured_url
-
-
 def serialize_invitation(invitation):
+    now = timezone.now()
     is_expired = (
         invitation.status == InvitationStatus.PENDING
-        and invitation.expires_at <= timezone.now()
+        and invitation.expires_at <= now
     )
+    effective_status = "expired" if is_expired else invitation.status
     return {
         "id": invitation.id,
         "email": invitation.email,
@@ -246,13 +233,81 @@ def serialize_invitation(invitation):
         "workforce_type": invitation.workforce_type,
         "position_title": invitation.position_title,
         "role": invitation.role,
-        "status": "expired" if is_expired else invitation.status,
+        "status": effective_status,
         "invited_by_user_id": invitation.invited_by_user_id,
         "invited_at": invitation.invited_at,
+        "last_sent_at": invitation.last_sent_at,
+        "resend_count": invitation.resend_count,
         "expires_at": invitation.expires_at,
         "accepted_at": invitation.accepted_at,
         "accepted_user_id": invitation.accepted_user_id,
+        "revoked_at": invitation.revoked_at,
+        "can_resend": is_expired,
     }
+
+
+def invitation_url_for_token(request, token):
+    return f"{frontend_app_url_for_request(request)}/accept-invite?token={token}"
+
+
+def build_invitation_html(invitation_url, role_label):
+    escaped_url = escape(invitation_url, quote=True)
+    escaped_role = escape(role_label)
+    return (
+        f"<p>You have been invited to KWDT Data Lens as {escaped_role}.</p>"
+        "<p>"
+        f'<a href="{escaped_url}" '
+        'style="display:inline-block;padding:10px 16px;background:#8c745e;'
+        'color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;">'
+        "Accept invitation"
+        "</a>"
+        "</p>"
+        "<p>If the button does not work, copy and paste this link into your browser:</p>"
+        f'<p><a href="{escaped_url}">{escaped_url}</a></p>'
+        f"<p>This invitation expires in {INVITATION_TOKEN_LIFETIME_DAYS} days.</p>"
+    )
+
+
+def send_invitation_email(invitation, invitation_url):
+    role_label = UserRole(invitation.role).label
+    send_transactional_email(
+        subject="You are invited to KWDT Data Lens",
+        message=(
+            f"You have been invited to KWDT Data Lens as {role_label}.\n\n"
+            f"Accept your invitation: {invitation_url}\n\n"
+            f"This invitation expires in {INVITATION_TOKEN_LIFETIME_DAYS} days."
+        ),
+        html_message=build_invitation_html(invitation_url, role_label),
+        recipient_list=[invitation.email],
+    )
+
+
+def invitation_queryset_for_status(status_filter):
+    now = timezone.now()
+    expired_visible_after = now - timedelta(days=EXPIRED_INVITATION_VISIBLE_DAYS)
+    queryset = UserInvitation.objects.all()
+    if status_filter in {"", "visible", None}:
+        return queryset.filter(
+            status=InvitationStatus.PENDING,
+            expires_at__gte=expired_visible_after,
+        )
+    if status_filter == "pending":
+        return queryset.filter(
+            status=InvitationStatus.PENDING,
+            expires_at__gt=now,
+        )
+    if status_filter == "expired":
+        return queryset.filter(
+            status=InvitationStatus.PENDING,
+            expires_at__lte=now,
+        )
+    if status_filter == "all":
+        return queryset
+    if status_filter in InvitationStatus.values:
+        return queryset.filter(status=status_filter)
+    raise serializers.ValidationError(
+        {"status": "Use pending, expired, accepted, revoked, visible, or all."}
+    )
 
 
 class AdminInvitationCreateSerializer(serializers.Serializer):
@@ -420,14 +475,15 @@ class AdminInvitationListCreateView(APIView):
     permission_classes = [AdminUserAccess]
 
     def get(self, request):
+        status_filter = request.query_params.get("status", "visible")
         invitations = [
             serialize_invitation(invitation)
-            for invitation in UserInvitation.objects.all()
+            for invitation in invitation_queryset_for_status(status_filter)
         ]
         return Response(
             {
                 "data": {"invitations": invitations},
-                "meta": {"count": len(invitations)},
+                "meta": {"count": len(invitations), "status": status_filter},
                 "errors": [],
             }
         )
@@ -436,27 +492,18 @@ class AdminInvitationListCreateView(APIView):
         serializer = AdminInvitationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         token = secrets.token_urlsafe(32)
-        invitation_url = (
-            f"{frontend_app_url_for_request(request)}/accept-invite?token={token}"
-        )
+        invitation_url = invitation_url_for_token(request, token)
         try:
             with transaction.atomic():
+                now = timezone.now()
                 invitation = UserInvitation.objects.create(
                     **serializer.validated_data,
                     token_hash=hash_invitation_token(token),
                     invited_by_user_id=request.user.id,
-                    expires_at=timezone.now() + timedelta(days=7),
+                    last_sent_at=now,
+                    expires_at=now + timedelta(days=INVITATION_TOKEN_LIFETIME_DAYS),
                 )
-                send_transactional_email(
-                    subject="You are invited to KWDT Data Lens",
-                    message=(
-                        f"You have been invited to KWDT Data Lens as "
-                        f"{UserRole(invitation.role).label}.\n\n"
-                        f"Accept your invitation: {invitation_url}\n\n"
-                        "This invitation expires in 7 days."
-                    ),
-                    recipient_list=[invitation.email],
-                )
+                send_invitation_email(invitation, invitation_url)
         except EmailDeliveryError as error:
             raise InvitationDeliveryError() from error
         return Response(
@@ -496,10 +543,64 @@ class AdminInvitationDetailView(APIView):
                 {"status": "Only pending invitations can be revoked."}
             )
         invitation.status = InvitationStatus.REVOKED
-        invitation.save(update_fields=["status"])
+        invitation.revoked_at = timezone.now()
+        invitation.save(update_fields=["status", "revoked_at"])
         return Response(
             {
                 "data": {"invitation": serialize_invitation(invitation)},
+                "meta": {},
+                "errors": [],
+            }
+        )
+
+
+class AdminInvitationResendView(APIView):
+    permission_classes = [AdminUserAccess]
+
+    def post(self, request, invitation_id):
+        invitation = UserInvitation.objects.filter(pk=invitation_id).first()
+        if invitation is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        now = timezone.now()
+        if invitation.status != InvitationStatus.PENDING or invitation.expires_at > now:
+            raise serializers.ValidationError(
+                {"invitation": "Only expired invitations can be resent."}
+            )
+        if get_user_model().objects.filter(email__iexact=invitation.email).exists():
+            raise serializers.ValidationError(
+                {"email": "A user with this email already exists."}
+            )
+
+        token = secrets.token_urlsafe(32)
+        invitation_url = invitation_url_for_token(request, token)
+        try:
+            with transaction.atomic():
+                invitation.token_hash = hash_invitation_token(token)
+                invitation.expires_at = now + timedelta(
+                    days=INVITATION_TOKEN_LIFETIME_DAYS
+                )
+                invitation.last_sent_at = now
+                invitation.resend_count += 1
+                invitation.revoked_at = None
+                invitation.save(
+                    update_fields=[
+                        "token_hash",
+                        "expires_at",
+                        "last_sent_at",
+                        "resend_count",
+                        "revoked_at",
+                    ]
+                )
+                send_invitation_email(invitation, invitation_url)
+        except EmailDeliveryError as error:
+            raise InvitationDeliveryError() from error
+
+        return Response(
+            {
+                "data": {
+                    "invitation": serialize_invitation(invitation),
+                    "invitation_url": invitation_url,
+                },
                 "meta": {},
                 "errors": [],
             }

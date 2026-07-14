@@ -1,6 +1,9 @@
+import re
 from datetime import date
+from urllib.parse import parse_qs, urlsplit
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
@@ -140,6 +143,207 @@ class UiReadyMilestoneTests(TestCase):
         )
         self.assertEqual(login_response.status_code, status.HTTP_200_OK)
         self.assertIn("datalens_auth", login_response.cookies)
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        FRONTEND_APP_URL="https://app.example.test",
+    )
+    def test_password_reset_request_sends_generic_response_and_email(self):
+        response = self.client.post(
+            reverse("auth-password-reset-request"),
+            {"identifier": "UI@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("If an active account matches", response.data["data"]["message"])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["ui@example.com"])
+        self.assertIn("https://app.example.test/reset-password?", mail.outbox[0].body)
+        self.assertIn(
+            "\nhttps://app.example.test/reset-password?",
+            mail.outbox[0].body,
+        )
+        self.assertEqual(len(mail.outbox[0].alternatives), 1)
+        html_body, mime_type = mail.outbox[0].alternatives[0]
+        self.assertEqual(mime_type, "text/html")
+        self.assertIn(
+            '<a href="https://app.example.test/reset-password?',
+            html_body,
+        )
+        self.assertIn("Reset your password</a>", html_body)
+
+        unknown_response = self.client.post(
+            reverse("auth-password-reset-request"),
+            {"identifier": "unknown@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(unknown_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(unknown_response.data["data"], response.data["data"])
+        self.assertEqual(len(mail.outbox), 1)
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        FRONTEND_APP_URL="https://app.example.test",
+    )
+    def test_password_reset_confirm_changes_password_and_revokes_tokens(self):
+        login_response = self.client.post(
+            reverse("auth-login"),
+            {"username": "ui.user", "password": "test-password"},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+
+        request_response = self.client.post(
+            reverse("auth-password-reset-request"),
+            {"identifier": "ui.user"},
+            format="json",
+        )
+        self.assertEqual(request_response.status_code, status.HTTP_200_OK)
+        reset_url = re.search(r"https://\S+", mail.outbox[0].body).group(0)
+        query = parse_qs(urlsplit(reset_url).query)
+
+        confirm_response = self.client.post(
+            reverse("auth-password-reset-confirm"),
+            {
+                "uid": query["uid"][0],
+                "token": query["token"][0],
+                "new_password": "Reset-Password-2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(confirm_response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("Reset-Password-2026!"))
+        me_response = self.client.get(reverse("auth-me"))
+        self.assertEqual(me_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        FRONTEND_APP_URL="https://app.example.test",
+    )
+    def test_password_reset_link_cannot_be_reused_after_success(self):
+        request_response = self.client.post(
+            reverse("auth-password-reset-request"),
+            {"identifier": "ui.user"},
+            format="json",
+        )
+        self.assertEqual(request_response.status_code, status.HTTP_200_OK)
+        reset_url = re.search(r"https://\S+", mail.outbox[0].body).group(0)
+        query = parse_qs(urlsplit(reset_url).query)
+        payload = {
+            "uid": query["uid"][0],
+            "token": query["token"][0],
+            "new_password": "Reset-Password-2026!",
+        }
+
+        validation_before = self.client.get(
+            reverse("auth-password-reset-validate"),
+            {"uid": payload["uid"], "token": payload["token"]},
+        )
+        first_response = self.client.post(
+            reverse("auth-password-reset-confirm"),
+            payload,
+            format="json",
+        )
+        validation_after = self.client.get(
+            reverse("auth-password-reset-validate"),
+            {"uid": payload["uid"], "token": payload["token"]},
+        )
+        replay_response = self.client.post(
+            reverse("auth-password-reset-confirm"),
+            {
+                **payload,
+                "new_password": "Another-Reset-Password-2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(validation_before.status_code, status.HTTP_200_OK)
+        self.assertTrue(validation_before.data["data"]["valid"])
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(validation_after.status_code, status.HTTP_200_OK)
+        self.assertFalse(validation_after.data["data"]["valid"])
+        self.assertEqual(replay_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("token", replay_response.data)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("Reset-Password-2026!"))
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_password_reset_confirm_rejects_invalid_token(self):
+        request_response = self.client.post(
+            reverse("auth-password-reset-request"),
+            {"identifier": "ui.user"},
+            format="json",
+        )
+        self.assertEqual(request_response.status_code, status.HTTP_200_OK)
+        reset_url = re.search(r"http://\S+", mail.outbox[0].body).group(0)
+        query = parse_qs(urlsplit(reset_url).query)
+
+        response = self.client.post(
+            reverse("auth-password-reset-confirm"),
+            {
+                "uid": query["uid"][0],
+                "token": "not-a-real-token",
+                "new_password": "Reset-Password-2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("token", response.data)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("test-password"))
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_password_reset_confirm_rejects_reusing_current_password(self):
+        request_response = self.client.post(
+            reverse("auth-password-reset-request"),
+            {"identifier": "ui.user"},
+            format="json",
+        )
+        self.assertEqual(request_response.status_code, status.HTTP_200_OK)
+        reset_url = re.search(r"http://\S+", mail.outbox[0].body).group(0)
+        query = parse_qs(urlsplit(reset_url).query)
+
+        response = self.client.post(
+            reverse("auth-password-reset-confirm"),
+            {
+                "uid": query["uid"][0],
+                "token": query["token"][0],
+                "new_password": "test-password",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("new_password", response.data)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("test-password"))
+
+    def test_password_reset_request_requires_csrf_when_checks_are_enabled(self):
+        client = APIClient(enforce_csrf_checks=True)
+        payload = {"identifier": "ui@example.com"}
+
+        denied = client.post(
+            reverse("auth-password-reset-request"),
+            payload,
+            format="json",
+        )
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+        csrf_response = client.get(reverse("auth-csrf"))
+        csrf_token = csrf_response.cookies["csrftoken"].value
+        accepted = client.post(
+            reverse("auth-password-reset-request"),
+            payload,
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
 
     def test_current_user_can_update_profile_details(self):
         self.client.force_authenticate(self.user)

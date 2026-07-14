@@ -296,6 +296,7 @@ class AdminApiTests(TestCase):
         self.assertEqual(revoke_response.status_code, status.HTTP_200_OK)
         invitation.refresh_from_db()
         self.assertEqual(invitation.status, InvitationStatus.REVOKED)
+        self.assertIsNotNone(invitation.revoked_at)
 
         expired = UserInvitation.objects.create(
             email="expired.intern@example.com",
@@ -305,8 +306,71 @@ class AdminApiTests(TestCase):
             invited_by_user_id=self.system_admin.id,
             expires_at=timezone.now() - timedelta(minutes=1),
         )
+        stale_expired = UserInvitation.objects.create(
+            email="stale.expired@example.com",
+            workforce_type=WorkforceType.INTERN,
+            role=UserRole.COMMUNICATIONS_VIEWER,
+            token_hash="1" * 64,
+            invited_by_user_id=self.system_admin.id,
+            expires_at=timezone.now() - timedelta(days=16),
+        )
         list_response = self.client.get(reverse("admin-invitation-list"))
         serialized = {
             item["id"]: item for item in list_response.data["data"]["invitations"]
         }
         self.assertEqual(serialized[expired.id]["status"], "expired")
+        self.assertNotIn(invitation.id, serialized)
+        self.assertNotIn(stale_expired.id, serialized)
+
+        all_response = self.client.get(reverse("admin-invitation-list"), {"status": "all"})
+        all_ids = {item["id"] for item in all_response.data["data"]["invitations"]}
+        self.assertIn(invitation.id, all_ids)
+        self.assertIn(stale_expired.id, all_ids)
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        FRONTEND_APP_URL="http://frontend.test",
+    )
+    def test_expired_invitation_can_be_resent(self):
+        invitation = UserInvitation.objects.create(
+            email="resend.intern@example.com",
+            first_name="Resend",
+            last_name="Intern",
+            workforce_type=WorkforceType.INTERN,
+            role=UserRole.FIELD_OFFICER,
+            token_hash="2" * 64,
+            invited_by_user_id=self.system_admin.id,
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+
+        response = self.client.post(
+            reverse("admin-invitation-resend", kwargs={"invitation_id": invitation.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.status, InvitationStatus.PENDING)
+        self.assertGreater(invitation.expires_at, timezone.now() + timedelta(days=6))
+        self.assertIsNotNone(invitation.last_sent_at)
+        self.assertEqual(invitation.resend_count, 1)
+        self.assertNotEqual(invitation.token_hash, "2" * 64)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(response.data["data"]["invitation_url"], mail.outbox[0].body)
+        self.assertEqual(response.data["data"]["invitation"]["status"], "pending")
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_active_invitation_cannot_be_resent(self):
+        invitation = UserInvitation.objects.create(
+            email="active.invite@example.com",
+            workforce_type=WorkforceType.STAFF,
+            role=UserRole.FIELD_OFFICER,
+            token_hash="3" * 64,
+            invited_by_user_id=self.system_admin.id,
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+
+        response = self.client.post(
+            reverse("admin-invitation-resend", kwargs={"invitation_id": invitation.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

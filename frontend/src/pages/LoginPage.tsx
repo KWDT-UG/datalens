@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 import { ApiClientError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -74,6 +74,9 @@ export function LoginPage() {
               value={password}
             />
           </label>
+          <Link className="login-panel__text-link" to="/forgot-password">
+            Forgot password?
+          </Link>
           <button className="button button--primary" disabled={isSubmitting} type="submit">
             {isSubmitting ? 'Signing in...' : 'Sign in'}
           </button>
