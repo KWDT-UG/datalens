@@ -2,7 +2,7 @@ COMPOSE ?= docker compose
 BACKEND ?= $(COMPOSE) run --rm backend
 FRONTEND ?= $(COMPOSE) run --rm frontend
 
-.PHONY: help bootstrap build up down logs db-reset migrate makemigrations superuser test check shell init-roles seed-reference-data seed-demo-data smoke-api frontend-install frontend-build frontend-lint frontend-test frontend-pwa-check frontend-pwa-e2e frontend-dev
+.PHONY: help bootstrap build up down logs db-reset migrate makemigrations superuser test check shell init-roles seed-reference-data seed-demo-data purge-invitations smoke-api frontend-install frontend-build frontend-lint frontend-test frontend-pwa-check frontend-pwa-e2e frontend-dev
 
 help:
 	@echo "KWDT Data Lens commands"
@@ -17,6 +17,7 @@ help:
 	@echo "  make init-roles      Create local role groups"
 	@echo "  make seed-reference-data  Seed reference data"
 	@echo "  make seed-demo-data       Seed demo data and a local test administrator"
+	@echo "  make purge-invitations    Delete accepted/revoked/expired invitations older than 30 days"
 	@echo "  make smoke-api       Seed demo data and check API endpoint payloads"
 	@echo "  make superuser       Create a Django superuser"
 	@echo "  make test            Run Django unittest suite"
@@ -67,6 +68,9 @@ seed-reference-data:
 
 seed-demo-data:
 	$(BACKEND) python manage.py seed_demo_data
+
+purge-invitations:
+	$(BACKEND) python manage.py purge_invitations --older-than-days 30
 
 smoke-api:
 	$(BACKEND) python manage.py smoke_api --seed-demo-data --username api-smoke --create-user

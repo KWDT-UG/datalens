@@ -655,6 +655,18 @@ a {
   font-weight: 700;
 }
 
+.login-panel__text-link {
+  justify-self: start;
+  color: var(--blue-strong);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.login-panel__text-link:hover {
+  text-decoration: underline;
+}
+
 .login-form {
   display: grid;
   gap: 18px;

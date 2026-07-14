@@ -237,8 +237,11 @@ class UserInvitation(models.Model):
     )
     invited_by_user_id = models.PositiveBigIntegerField()
     invited_at = models.DateTimeField(auto_now_add=True)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    resend_count = models.PositiveIntegerField(default=0)
     expires_at = models.DateTimeField()
     accepted_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
     accepted_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,

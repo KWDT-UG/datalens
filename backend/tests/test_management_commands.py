@@ -1,9 +1,11 @@
 from io import StringIO
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 
 from apps.approvals.models import ApprovalRequest
@@ -166,3 +168,55 @@ class ManagementCommandTests(TestCase):
             {UserRole.PROGRAMME_MANAGER},
         )
         self.assertIn("API smoke check passed.", stdout.getvalue())
+
+    def test_purge_invitations_removes_terminal_records_after_retention(self):
+        now = timezone.now()
+        cases = [
+            {
+                "email": "accepted.old@example.com",
+                "status": InvitationStatus.ACCEPTED,
+                "token_hash": "a" * 64,
+                "accepted_at": now - timedelta(days=31),
+                "expires_at": now - timedelta(days=40),
+                "should_purge": True,
+            },
+            {
+                "email": "revoked.old@example.com",
+                "status": InvitationStatus.REVOKED,
+                "token_hash": "b" * 64,
+                "revoked_at": now - timedelta(days=31),
+                "expires_at": now + timedelta(days=1),
+                "should_purge": True,
+            },
+            {
+                "email": "expired.old@example.com",
+                "status": InvitationStatus.PENDING,
+                "token_hash": "c" * 64,
+                "expires_at": now - timedelta(days=31),
+                "should_purge": True,
+            },
+            {
+                "email": "expired.recent@example.com",
+                "status": InvitationStatus.PENDING,
+                "token_hash": "d" * 64,
+                "expires_at": now - timedelta(days=15),
+                "should_purge": False,
+            },
+        ]
+        for case in cases:
+            invitation_data = {
+                key: value for key, value in case.items() if key != "should_purge"
+            }
+            UserInvitation.objects.create(
+                workforce_type=WorkforceType.STAFF,
+                role=UserRole.FIELD_OFFICER,
+                invited_by_user_id=1,
+                **invitation_data,
+            )
+
+        stdout = StringIO()
+        call_command("purge_invitations", "--older-than-days", "30", stdout=stdout)
+
+        self.assertIn("Purged 3 invitation(s)", stdout.getvalue())
+        remaining_emails = set(UserInvitation.objects.values_list("email", flat=True))
+        self.assertEqual(remaining_emails, {"expired.recent@example.com"})

@@ -15,7 +15,7 @@ class EmailDeliveryError(Exception):
     """Raised when a configured provider cannot accept an email."""
 
 
-def send_transactional_email(*, subject, message, recipient_list):
+def send_transactional_email(*, subject, message, recipient_list, html_message=None):
     """Send through Mailtrap when configured, otherwise use Django's backend."""
     if not settings.MAILTRAP_API_KEY:
         try:
@@ -24,6 +24,7 @@ def send_transactional_email(*, subject, message, recipient_list):
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=recipient_list,
+                html_message=html_message,
             )
         except Exception as error:
             logger.warning(
@@ -56,12 +57,15 @@ def send_transactional_email(*, subject, message, recipient_list):
                 settings.MAILTRAP_INBOX_ID if settings.MAILTRAP_USE_SANDBOX else None
             ),
         )
-        email = mailtrap.Mail(
-            sender=mailtrap.Address(email=sender_email, name=sender_name),
-            to=[mailtrap.Address(email=recipient) for recipient in recipient_list],
-            subject=subject,
-            text=message,
-        )
+        mail_kwargs = {
+            "sender": mailtrap.Address(email=sender_email, name=sender_name),
+            "to": [mailtrap.Address(email=recipient) for recipient in recipient_list],
+            "subject": subject,
+            "text": message,
+        }
+        if html_message:
+            mail_kwargs["html"] = html_message
+        email = mailtrap.Mail(**mail_kwargs)
         result = client.send(email)
     except Exception as error:
         logger.warning(

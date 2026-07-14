@@ -12,6 +12,7 @@ import { CommunityDetailPage } from './pages/CommunityDetailPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ImpactPage } from './pages/ImpactPage';
 import { LoginPage } from './pages/LoginPage';
+import { PasswordResetPage } from './pages/PasswordResetPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ReportsPage } from './pages/ReportsPage';
 import { ResourcesPage } from './pages/ResourcesPage';
@@ -20,6 +21,8 @@ import { SearchPage } from './pages/SearchPage';
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/accept-invite', element: <AcceptInvitationPage /> },
+  { path: '/forgot-password', element: <PasswordResetPage /> },
+  { path: '/reset-password', element: <PasswordResetPage /> },
   {
     path: '/',
     element: <ProtectedRoute />,

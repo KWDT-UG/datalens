@@ -73,6 +73,16 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
+export interface PasswordResetRequestInput {
+  identifier: string;
+}
+
+export interface PasswordResetConfirmInput {
+  uid: string;
+  token: string;
+  new_password: string;
+}
+
 export interface AdminAccount {
   id: number;
   username: string;
@@ -141,9 +151,13 @@ export interface AdminInvitation {
   status: InvitationStatus;
   invited_by_user_id: number;
   invited_at: string;
+  last_sent_at: string | null;
+  resend_count: number;
   expires_at: string;
   accepted_at: string | null;
   accepted_user_id: number | null;
+  revoked_at: string | null;
+  can_resend: boolean;
 }
 
 export interface AdminInvitationCreateInput {

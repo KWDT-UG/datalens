@@ -9,6 +9,7 @@ import {
   useCommunitiesQuery,
   useCreateAdminInvitationMutation,
   useCreateAdminUserMutation,
+  useResendAdminInvitationMutation,
   useRevokeAdminInvitationMutation,
   useUpdateAdminUserMutation,
   useThematicAreasQuery
@@ -408,6 +409,7 @@ export function AdminPage() {
   });
   const thematicAreasQuery = useThematicAreasQuery();
   const invitationsQuery = useAdminInvitationsQuery();
+  const resendInvitation = useResendAdminInvitationMutation();
   const revokeInvitation = useRevokeAdminInvitationMutation();
   const updateUser = useUpdateAdminUserMutation();
   const accounts = usersQuery.data?.data.users ?? [];
@@ -434,6 +436,14 @@ export function AdminPage() {
       return;
     }
     await revokeInvitation.mutateAsync(invitationId);
+  }
+
+  async function resend(invitationId: number) {
+    if (!window.confirm('Resend this expired invitation?')) {
+      return;
+    }
+    const response = await resendInvitation.mutateAsync(invitationId);
+    setInvitationUrl(response.data.invitation_url);
   }
 
   return (
@@ -519,6 +529,12 @@ export function AdminPage() {
       {updateUser.isError ? (
         <div className="state-box state-box--error">{updateUser.error.message}</div>
       ) : null}
+      {resendInvitation.isError ? (
+        <div className="state-box state-box--error">{resendInvitation.error.message}</div>
+      ) : null}
+      {revokeInvitation.isError ? (
+        <div className="state-box state-box--error">{revokeInvitation.error.message}</div>
+      ) : null}
 
       {!usersQuery.isLoading && accounts.length > 0 ? (
         <div className="table-wrap">
@@ -602,7 +618,7 @@ export function AdminPage() {
         <div>
           <h2>Invitations</h2>
           <p className="page-header__description">
-            Pending invitations expire after seven days and can be revoked before acceptance.
+            Pending invitations expire after seven days. Recently expired invitations remain visible for resend.
           </p>
         </div>
         {invitationsQuery.isLoading ? <div className="state-box">Loading invitations...</div> : null}
@@ -635,14 +651,26 @@ export function AdminPage() {
                     <td>{formatCapability(invitation.status)}</td>
                     <td>{formatDate(invitation.expires_at)}</td>
                     <td>
-                      <button
-                        className="button button--secondary"
-                        type="button"
-                        disabled={invitation.status !== 'pending' || revokeInvitation.isPending}
-                        onClick={() => void revoke(invitation.id)}
-                      >
-                        Revoke
-                      </button>
+                      <div className="row-actions">
+                        {invitation.can_resend ? (
+                          <button
+                            className="button button--primary"
+                            type="button"
+                            disabled={resendInvitation.isPending}
+                            onClick={() => void resend(invitation.id)}
+                          >
+                            Resend
+                          </button>
+                        ) : null}
+                        <button
+                          className="button button--secondary"
+                          type="button"
+                          disabled={invitation.status !== 'pending' || revokeInvitation.isPending}
+                          onClick={() => void revoke(invitation.id)}
+                        >
+                          Revoke
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
