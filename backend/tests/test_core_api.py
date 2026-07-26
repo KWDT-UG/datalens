@@ -33,6 +33,7 @@ class CoreApiTests(TestCase):
             community=cls.community,
             code="GRP-1",
             name="Primary Group",
+            sub_county="Mpunge",
         )
         cls.other_group = Group.objects.create(
             community=cls.other_community,
@@ -92,9 +93,10 @@ class CoreApiTests(TestCase):
                     "community": self.community.id,
                     "code": "GRP-3",
                     "name": "Created Group",
+                    "sub_county": "Ntenjeru",
                 },
-                "patch": {"meeting_day": "Tuesday"},
-                "patch_field": "meeting_day",
+                "patch": {"sub_county": "Nakisunga"},
+                "patch_field": "sub_county",
             },
             {
                 "label": "members",

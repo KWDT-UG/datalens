@@ -21,6 +21,7 @@ class GroupSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer)
             "formed_on",
             "closed_on",
             "meeting_day",
+            "sub_county",
             "notes",
             "approval_status",
             "pending_approval_request_id",

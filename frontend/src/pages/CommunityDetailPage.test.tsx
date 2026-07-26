@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -58,7 +58,7 @@ function installGroupWorkspaceFetchMock() {
     name: 'Katosi Community',
     status: 'active',
     group_count: 1,
-    member_count: 2,
+    member_count: 27,
     resource_count: 1
   };
   const group = {
@@ -71,6 +71,7 @@ function installGroupWorkspaceFetchMock() {
     formed_on: '2024-01-15',
     meeting_day: 'Thursday',
     notes: 'Coordinates local water access work.',
+    sub_county: 'Mpunge',
     updated_at: '2026-06-15T10:30:00Z'
   };
   const members = [
@@ -94,7 +95,20 @@ function installGroupWorkspaceFetchMock() {
       member_number: 'MEM-11',
       status: 'active',
       joined_on: '2024-02-15'
-    }
+    },
+    ...Array.from({ length: 25 }, (_, index) => {
+      const memberId = index + 12;
+      return {
+        id: memberId,
+        community: community.id,
+        group: group.id,
+        first_name: 'Member',
+        last_name: String(memberId),
+        member_number: `MEM-${memberId}`,
+        status: memberId === 36 ? 'inactive' : 'active',
+        joined_on: '2024-03-01'
+      };
+    })
   ];
   const resources = [
     {
@@ -169,6 +183,9 @@ function installGroupWorkspaceFetchMock() {
       if (url.pathname === '/api/v1/groups/2/') {
         return jsonResponse(group);
       }
+      if (url.pathname === '/api/v1/members/10/') {
+        return jsonResponse(members[0]);
+      }
       if (url.pathname === '/api/v1/groups/2/members/') {
         return jsonResponse(members);
       }
@@ -223,7 +240,12 @@ describe('CommunityDetailPage group workspace', () => {
     expect(screen.getByText('Active members')).toBeInTheDocument();
     expect(screen.getByText('Group resources')).toBeInTheDocument();
     expect(screen.getByText('Coordinates local water access work.')).toBeInTheDocument();
+    expect(screen.getAllByText('Mpunge').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
+    const workspaceTabs = within(screen.getByRole('navigation', { name: 'Group workspace sections' }));
+    expect(
+      workspaceTabs.getAllByRole('button').map((button) => button.textContent)
+    ).toEqual(['Overview', 'Members', 'Resources', 'Trainings', 'Committees']);
     expect(screen.getByRole('button', { name: 'Trainings' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Committees' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Upcoming trainings' })).toBeInTheDocument();
@@ -237,8 +259,22 @@ describe('CommunityDetailPage group workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Members' }));
     expect(screen.getByText('Amina Kato')).toBeInTheDocument();
     expect(screen.getByText('Beatrice Naki')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled();
+    expect(screen.queryByRole('link', { name: 'Member 36' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(await screen.findByRole('link', { name: 'Member 36' })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Filter group members by status'), 'inactive');
+    expect(await screen.findByRole('link', { name: 'Member 36' })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Filter group members by status'), 'all');
+    await user.type(screen.getByLabelText('Search group members'), 'Amina');
+    expect(screen.getByRole('link', { name: 'Amina Kato' })).toBeInTheDocument();
+    expect(screen.queryByText('Beatrice Naki')).not.toBeInTheDocument();
+    await user.click(screen.getByText('Amina Kato'));
+    const parentGroupBackLink = await screen.findByRole('link', { name: '← Back to Demo Savings Group' });
+    expect(parentGroupBackLink).toHaveAttribute('href', '/communities/1/groups/2');
 
-    await user.click(screen.getByRole('button', { name: 'Resources' }));
+    await user.click(parentGroupBackLink);
+    await user.click(await screen.findByRole('button', { name: 'Resources' }));
     expect(screen.getByText('Irrigation Pump')).toBeInTheDocument();
     expect(screen.getByText('UGX 1,200,000')).toBeInTheDocument();
 

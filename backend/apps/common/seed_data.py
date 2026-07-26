@@ -347,13 +347,13 @@ def seed_demo_data():
     )
 
     group_specs = [
-        ("KWDT-DEMO-GRP", "Demo Savings Group", "Thursday", date(2024, 1, 15)),
-        ("KWDT-DEMO-YOUTH", "Youth Enterprise Group", "Tuesday", date(2024, 2, 7)),
-        ("KWDT-DEMO-WASH", "Water Users Group", "Friday", date(2024, 3, 12)),
-        ("KWDT-DEMO-ENV", "Environment Stewardship Group", "Monday", date(2023, 11, 22)),
+        ("KWDT-DEMO-GRP", "Demo Savings Group", "Mpunge", "Thursday", date(2024, 1, 15)),
+        ("KWDT-DEMO-YOUTH", "Youth Enterprise Group", "Ntenjeru", "Tuesday", date(2024, 2, 7)),
+        ("KWDT-DEMO-WASH", "Water Users Group", "Mpunge", "Friday", date(2024, 3, 12)),
+        ("KWDT-DEMO-ENV", "Environment Stewardship Group", "Nakisunga", "Monday", date(2023, 11, 22)),
     ]
     groups = {}
-    for code, name, meeting_day, formed_on in group_specs:
+    for code, name, sub_county, meeting_day, formed_on in group_specs:
         groups[code] = upsert(
             Group,
             {"community": community, "code": code},
@@ -362,6 +362,7 @@ def seed_demo_data():
                 "status": "active",
                 "formed_on": formed_on,
                 "meeting_day": meeting_day,
+                "sub_county": sub_county,
                 "notes": "Seeded demo group for MVP workflow testing.",
             },
         )
@@ -374,6 +375,7 @@ def seed_demo_data():
             "status": "active",
             "formed_on": date(2024, 5, 1),
             "meeting_day": "Wednesday",
+            "sub_county": "Bweyale",
             "notes": "Second-community group for cross-community API checks.",
         },
     )
