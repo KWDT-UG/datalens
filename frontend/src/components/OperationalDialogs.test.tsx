@@ -37,7 +37,8 @@ const group: Group = {
   community: community.id,
   code: 'CORE-1',
   name: 'Core Group',
-  status: 'active'
+  status: 'active',
+  sub_county: 'Mpunge'
 };
 const member: Member = {
   id: 3,
@@ -269,6 +270,56 @@ describe.each(cases)('$path dialog', (dialogCase) => {
       expect(call.path).toBe(`${dialogCase.path}${dialogCase.editId}/`);
       expect(Object.values(call.body)).toContain(dialogCase.updatedValue);
     });
+  });
+});
+
+it('captures sub-county in the group create and edit form', async () => {
+  const fetchMock = installCrudFetchMock({ groups: [group], resources: [resource] });
+  const user = userEvent.setup();
+
+  renderWithProviders(
+    <GroupCreateDialog
+      communityId={community.id}
+      {...commonCallbacks}
+    />
+  );
+
+  await user.type(screen.getByLabelText('Group name'), 'Sub County Group');
+  await user.type(screen.getByLabelText('Group code'), 'SUB-1');
+  await user.type(screen.getByLabelText('Sub-county'), 'Ntenjeru');
+  await user.click(screen.getByRole('button', { name: 'Create group' }));
+
+  await waitFor(() => {
+    const call = mutationCall(fetchMock);
+    expect(call.method).toBe('POST');
+    expect(call.path).toBe('/api/v1/groups/');
+    expect(call.body.sub_county).toBe('Ntenjeru');
+  });
+});
+
+it('prefills and updates group sub-county', async () => {
+  const fetchMock = installCrudFetchMock({ groups: [group], resources: [resource] });
+  const user = userEvent.setup();
+
+  renderWithProviders(
+    <GroupCreateDialog
+      communityId={community.id}
+      group={group}
+      {...commonCallbacks}
+    />
+  );
+
+  const subCountyField = screen.getByLabelText('Sub-county');
+  expect(subCountyField).toHaveValue('Mpunge');
+  await user.clear(subCountyField);
+  await user.type(subCountyField, 'Nakisunga');
+  await user.click(screen.getByRole('button', { name: 'Save group' }));
+
+  await waitFor(() => {
+    const call = mutationCall(fetchMock);
+    expect(call.method).toBe('PATCH');
+    expect(call.path).toBe('/api/v1/groups/2/');
+    expect(call.body.sub_county).toBe('Nakisunga');
   });
 });
 

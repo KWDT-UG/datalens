@@ -21,6 +21,7 @@ class Group(CoreModel):
     formed_on = models.DateField(null=True, blank=True)
     closed_on = models.DateField(null=True, blank=True)
     meeting_day = models.CharField(max_length=32, blank=True)
+    sub_county = models.CharField(max_length=128, blank=True)
     notes = models.TextField(blank=True)
 
     class Meta:

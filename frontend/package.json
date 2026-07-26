@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "pwa:check": "npm run build && node scripts/check-pwa.mjs",
+    "pwa:check": "npm run build && npm run pwa:verify",
+    "pwa:verify": "node scripts/check-pwa.mjs",
     "test:e2e": "playwright test",
     "preview": "vite preview --host 0.0.0.0",
     "lint": "tsc --noEmit",

@@ -259,6 +259,7 @@ export interface Group extends SyncMetadata {
   formed_on?: string | null;
   closed_on?: string | null;
   meeting_day?: string;
+  sub_county?: string;
   notes?: string;
 }
 
@@ -270,6 +271,7 @@ export interface GroupCreateInput {
   formed_on?: string;
   closed_on?: string;
   meeting_day?: string;
+  sub_county?: string;
   notes?: string;
 }
 

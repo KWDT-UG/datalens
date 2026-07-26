@@ -1,7 +1,7 @@
 import { PlusIcon, SearchIcon, UploadIcon } from '@patternfly/react-icons';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import {
   useCommitteeMembershipsQuery,
@@ -48,6 +48,7 @@ import { downloadCsv, toggleVisibleSelection } from '../utils/listActions';
 import { PaginationLabel } from './CommunitiesPage';
 
 const sectionPageSize = 10;
+const groupMemberPageSize = 25;
 
 const sections = [
   { key: 'groups', label: 'Groups', countField: 'group_count', ordering: 'name' },
@@ -68,6 +69,12 @@ type TableRow = {
 };
 type BreakdownRecord = Member | Group | Institution | Committee | Cooperative | Resource | ImpactRecord;
 type GroupWorkspaceTab = 'overview' | 'resources' | 'trainings' | 'committees' | 'members';
+type MemberDetailNavigationState = {
+  parentGroup?: {
+    id: number;
+    name: string;
+  };
+};
 type DemoGroupTraining = {
   id: string;
   title: string;
@@ -94,10 +101,17 @@ type DemoGroupTraining = {
 const sectionKeys = sections.map((item) => item.key);
 const groupWorkspaceTabs: Array<{ key: GroupWorkspaceTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
+  { key: 'members', label: 'Members' },
   { key: 'resources', label: 'Resources' },
   { key: 'trainings', label: 'Trainings' },
-  { key: 'committees', label: 'Committees' },
-  { key: 'members', label: 'Members' }
+  { key: 'committees', label: 'Committees' }
+];
+const groupMemberStatusOptions = [
+  { value: 'all', label: 'All statuses' },
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+  { value: 'deceased', label: 'Deceased' },
+  { value: 'exited', label: 'Exited' }
 ];
 const demoGroupTrainingsByCode: Record<string, DemoGroupTraining[]> = {
   'KWDT-DEMO-GRP': [
@@ -218,6 +232,17 @@ function sumNumbers(values: Array<number | undefined>): number {
   return values.reduce<number>((total, value) => total + (value ?? 0), 0);
 }
 
+function getParentGroupNavigationState(state: unknown) {
+  if (!state || typeof state !== 'object' || !('parentGroup' in state)) {
+    return undefined;
+  }
+  const parentGroup = (state as MemberDetailNavigationState).parentGroup;
+  if (!parentGroup || typeof parentGroup.id !== 'number' || typeof parentGroup.name !== 'string') {
+    return undefined;
+  }
+  return parentGroup;
+}
+
 function syncUpdatedAt(record: BreakdownRecord) {
   return 'updated_at' in record ? record.updated_at : undefined;
 }
@@ -283,7 +308,7 @@ const tableConfigs: Record<
       }))
   },
   groups: {
-    columns: ['Group name', 'Code', 'Meeting day', 'Formed', 'Status'],
+    columns: ['Group name', 'Code', 'Sub-county', 'Meeting day', 'Formed', 'Status'],
     exportRows: (records) =>
       (records as Group[]).map((group) => ({
         code: group.code,
@@ -292,6 +317,7 @@ const tableConfigs: Record<
         id: group.id,
         meeting_day: group.meeting_day,
         name: group.name,
+        sub_county: group.sub_county,
         status: group.status
       })),
     itemName: 'groups',
@@ -302,6 +328,7 @@ const tableConfigs: Record<
         cells: [
           group.name,
           group.code || 'Not recorded',
+          group.sub_county || 'Not recorded',
           group.meeting_day || 'Not recorded',
           formatDate(group.formed_on),
           <StatusBadge status={group.status} />
@@ -494,6 +521,7 @@ function BreakdownRecordDetailPage({
   onEdit,
   record
 }: BreakdownRecordDetailPageProps) {
+  const location = useLocation();
   const title = record
     ? activeSection === 'members'
       ? memberName(record as Member)
@@ -504,7 +532,10 @@ function BreakdownRecordDetailPage({
           : `Record ${record.id}`
     : 'Record details';
   const sectionLabel = sections.find((item) => item.key === activeSection)?.label ?? 'Breakdown';
-  const backTo = `/communities/${communityId}/${activeSection}`;
+  const parentGroup = activeSection === 'members' ? getParentGroupNavigationState(location.state) : undefined;
+  const backTo = parentGroup ? `/communities/${communityId}/groups/${parentGroup.id}` : `/communities/${communityId}/${activeSection}`;
+  const backLabel = parentGroup?.name ?? tableConfigs[activeSection].itemName;
+  const backCrumbLabel = parentGroup?.name ?? sectionLabel;
 
   return (
     <div className="record-page" aria-labelledby="record-detail-title">
@@ -513,7 +544,7 @@ function BreakdownRecordDetailPage({
         <span>›</span>
         <Link to={`/communities/${communityId}`}>{communityName}</Link>
         <span>›</span>
-        <Link to={backTo}>{sectionLabel}</Link>
+        <Link to={backTo}>{backCrumbLabel}</Link>
         <span>›</span>
         <span>{title}</span>
       </nav>
@@ -521,7 +552,7 @@ function BreakdownRecordDetailPage({
       {isLoading ? <div className="state-box">Loading record details...</div> : null}
       {!isLoading && !record ? (
         <div className="state-box">
-          This record is not available yet. <Link to={backTo}>Return to {tableConfigs[activeSection].itemName}</Link>.
+          This record is not available yet. <Link to={backTo}>Return to {backLabel}</Link>.
         </div>
       ) : null}
       {record ? (
@@ -546,7 +577,7 @@ function BreakdownRecordDetailPage({
         <>
           <header className="record-page__hero">
             <div>
-              <Link className="record-page__back" to={backTo}>← Back to {tableConfigs[activeSection].itemName}</Link>
+              <Link className="record-page__back" to={backTo}>← Back to {backLabel}</Link>
               <span className="record-detail__eyebrow">{sectionLabel}</span>
               <h1 id="record-detail-title">{title}</h1>
               <p>
@@ -626,6 +657,7 @@ function GroupWorkspaceDetailPage({
   const impactHouseholds = sumNumbers(impactRecords.map((impact) => impact.household_count));
   const groupMeta = [
     group.code ? `Code ${group.code}` : null,
+    group.sub_county ? group.sub_county : null,
     group.meeting_day ? `Meets ${group.meeting_day}` : null,
     group.formed_on ? `Formed ${formatDate(group.formed_on)}` : null
   ].filter(Boolean);
@@ -856,6 +888,10 @@ function GroupOverviewTab({
               Meeting day
             </span>
             <span>
+              <strong>{group.sub_county || 'Not recorded'}</strong>
+              Sub-county
+            </span>
+            <span>
               <strong>{newestMember ? memberName(newestMember) : 'Not recorded'}</strong>
               Newest member
             </span>
@@ -879,6 +915,37 @@ function GroupMembersTab({
   members: Member[];
   membersLoading: boolean;
 }) {
+  const [memberSearch, setMemberSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const filteredMembers = useMemo(() => {
+    const searchValue = memberSearch.trim().toLowerCase();
+    return members.filter((member) => {
+      const matchesStatus = statusFilter === 'all' || member.status === statusFilter;
+      if (!matchesStatus) {
+        return false;
+      }
+      if (!searchValue) {
+        return true;
+      }
+      return [
+        memberName(member),
+        member.member_number,
+        member.phone,
+        member.email
+      ].some((value) => value?.toLowerCase().includes(searchValue));
+    });
+  }, [memberSearch, members, statusFilter]);
+  const pageCount = Math.max(1, Math.ceil(filteredMembers.length / groupMemberPageSize));
+  const visibleMembers = filteredMembers.slice(
+    (page - 1) * groupMemberPageSize,
+    page * groupMemberPageSize
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [memberSearch, statusFilter, members.length]);
+
   if (membersLoading) {
     return <div className="state-box">Loading group members...</div>;
   }
@@ -887,18 +954,83 @@ function GroupMembersTab({
   }
 
   return (
-    <div className="group-card-grid group-card-grid--members">
-      {members.map((member) => (
-        <Link className="group-workspace-card" key={member.id} to={`/communities/${group.community}/members/${member.id}`}>
-          <span className="group-workspace-card__title">{memberName(member)}</span>
-          <span>{member.member_number || 'Member number not recorded'}</span>
-          <span>{member.phone || member.email || 'Contact not recorded'}</span>
-          <span className="group-workspace-card__footer">
-            Joined {formatDate(member.joined_on)}
-            <StatusBadge status={member.status} />
-          </span>
-        </Link>
-      ))}
+    <div className="group-members-roster">
+      <div className="group-members-roster__toolbar">
+        <div>
+          <strong>{formatCount(filteredMembers.length)}</strong>
+          <span>{filteredMembers.length === members.length ? 'members in this group' : `of ${formatCount(members.length)} members`}</span>
+        </div>
+        <label className="compact-filter">
+          Search
+          <input
+            aria-label="Search group members"
+            value={memberSearch}
+            onChange={(event) => setMemberSearch(event.target.value)}
+            placeholder="Name, number, phone, email"
+          />
+        </label>
+        <label className="compact-filter">
+          Status
+          <select
+            aria-label="Filter group members by status"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            {groupMemberStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {filteredMembers.length === 0 ? (
+        <div className="state-box">No members match the current search or status filter.</div>
+      ) : (
+        <>
+          <div className="table-wrap">
+            <table className="data-table group-members-roster__table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Member number</th>
+                  <th>Contact</th>
+                  <th>Joined</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleMembers.map((member) => (
+                  <tr key={member.id}>
+                    <td>
+                      <Link
+                        className="table-link"
+                        state={{ parentGroup: { id: group.id, name: group.name } } satisfies MemberDetailNavigationState}
+                        to={`/communities/${group.community}/members/${member.id}`}
+                      >
+                        {memberName(member)}
+                      </Link>
+                    </td>
+                    <td>{member.member_number || 'Not recorded'}</td>
+                    <td>{member.phone || member.email || 'Not recorded'}</td>
+                    <td>{formatDate(member.joined_on)}</td>
+                    <td><StatusBadge status={member.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {filteredMembers.length > groupMemberPageSize ? (
+            <PaginationLabel
+              page={page}
+              pageCount={pageCount}
+              total={filteredMembers.length}
+              itemName="members"
+              onPrevious={() => setPage((current) => Math.max(1, current - 1))}
+              onNext={() => setPage((current) => Math.min(pageCount, current + 1))}
+            />
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

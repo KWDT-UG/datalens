@@ -43,7 +43,12 @@ class CoreModelTests(TestCase):
             (
                 "group",
                 Group.objects.create,
-                {"community": self.community, "code": "GRP-C", "name": "New Group"},
+                {
+                    "community": self.community,
+                    "code": "GRP-C",
+                    "name": "New Group",
+                    "sub_county": "Mpunge",
+                },
             ),
             (
                 "member",
@@ -74,6 +79,8 @@ class CoreModelTests(TestCase):
                 self.assertIsNotNone(instance.pk)
                 self.assertEqual(instance.sync_version, 1)
                 self.assertFalse(instance.is_deleted)
+                if label == "group":
+                    self.assertEqual(instance.sub_county, "Mpunge")
 
     def test_group_unique_constraints_are_community_scoped(self):
         cases = [

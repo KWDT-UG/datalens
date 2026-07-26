@@ -2229,7 +2229,7 @@ h2 {
 
 .group-overview-context-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -2255,12 +2255,59 @@ h2 {
   gap: 14px;
 }
 
-.group-card-grid--members {
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-}
-
 .group-card-grid--resources {
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.group-members-roster {
+  display: grid;
+  gap: 14px;
+}
+
+.group-members-roster__toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.group-members-roster__toolbar > div {
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  margin-right: auto;
+  color: var(--muted);
+}
+
+.group-members-roster__toolbar strong {
+  color: var(--text);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.group-members-roster__toolbar span {
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.group-members-roster__toolbar .compact-filter {
+  min-width: 220px;
+}
+
+.group-members-roster__table {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.group-members-roster__table th,
+.group-members-roster__table td {
+  padding-top: 13px;
+  padding-bottom: 13px;
 }
 
 .group-committee-grid {
@@ -3192,7 +3239,6 @@ a.group-workspace-card:hover {
     gap: 20px;
   }
 
-  .group-card-grid--members,
   .group-card-grid--resources,
   .group-training-workspace,
   .group-committee-grid,

@@ -154,7 +154,8 @@ export function GroupCreateDialog({
       meeting_day: group?.meeting_day ?? '',
       name: group?.name ?? '',
       notes: group?.notes ?? '',
-      status: group?.status ?? 'active'
+      status: group?.status ?? 'active',
+      sub_county: group?.sub_county ?? ''
     }
   });
   const mutationError = createGroup.error ?? updateGroup.error;
@@ -182,7 +183,7 @@ export function GroupCreateDialog({
               ...values,
               code: values.code.trim(),
               name: values.name.trim(),
-              ...optionalTextFields(values, ['closed_on', 'formed_on', 'meeting_day', 'notes'])
+              ...optionalTextFields(values, ['closed_on', 'formed_on', 'meeting_day', 'notes', 'sub_county'])
             };
             if (group) {
               await updateGroup.mutateAsync({
@@ -216,6 +217,10 @@ export function GroupCreateDialog({
           <label className="form-field">
             <span>Meeting day</span>
             <input {...register('meeting_day')} />
+          </label>
+          <label className="form-field">
+            <span>Sub-county</span>
+            <input {...register('sub_county')} />
           </label>
           <label className="form-field">
             <span>Status</span>

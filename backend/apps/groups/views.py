@@ -23,9 +23,9 @@ class GroupViewSet(
 ):
     queryset = Group.objects.select_related("community").all()
     serializer_class = GroupSerializer
-    filter_fields = ("community", "status")
-    search_fields = ("code", "name", "community__name")
-    ordering_fields = ("code", "name", "formed_on", "closed_on", "created_at")
+    filter_fields = ("community", "status", "sub_county")
+    search_fields = ("code", "name", "sub_county", "community__name")
+    ordering_fields = ("code", "name", "sub_county", "formed_on", "closed_on", "created_at")
 
     @action(detail=True, methods=["get"])
     def members(self, request, pk=None):
