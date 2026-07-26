@@ -44,6 +44,8 @@ jobs:
   frontend-checks:
     name: Frontend checks
     runs-on: ubuntu-latest
+    env:
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
     defaults:
       run:
         working-directory: frontend
@@ -68,8 +70,13 @@ jobs:
       - name: Run frontend tests
         run: npm run test:run
 
-      - name: Build and verify PWA
-        run: npm run pwa:check
+      - name: Build PWA
+        timeout-minutes: 10
+        run: npm run build
+
+      - name: Verify PWA artifacts
+        timeout-minutes: 2
+        run: npm run pwa:verify
 
   build-and-push-backend:
     name: Build and push backend image
