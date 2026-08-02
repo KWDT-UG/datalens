@@ -5,6 +5,8 @@ from .models import (
     ResourceBeneficiary,
     ResourceStatusEvent,
     ResourceThematicArea,
+    ResourcePaymentObligation,
+    ResourcePaymentTransaction,
     ThematicArea,
 )
 
@@ -47,3 +49,17 @@ class ResourceStatusEventAdmin(admin.ModelAdmin):
     list_display = ("resource", "event_type", "effective_at", "recorded_by_user_id")
     list_filter = ("event_type",)
     search_fields = ("resource__name", "notes")
+
+
+@admin.register(ResourcePaymentObligation)
+class ResourcePaymentObligationAdmin(admin.ModelAdmin):
+    list_display = ("resource", "obligation_type", "principal_amount", "currency", "status")
+    list_filter = ("obligation_type", "status", "currency")
+    search_fields = ("resource__name", "terms_notes")
+
+
+@admin.register(ResourcePaymentTransaction)
+class ResourcePaymentTransactionAdmin(admin.ModelAdmin):
+    list_display = ("obligation", "entry_type", "amount", "effective_on")
+    list_filter = ("entry_type", "effective_on")
+    search_fields = ("obligation__resource__name", "reference", "voucher_number")

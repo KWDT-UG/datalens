@@ -76,6 +76,44 @@ class BeneficiaryRelationshipType(models.TextChoices):
     INDIRECT = "indirect", "Indirect"
 
 
+class BeneficiaryScope(models.TextChoices):
+    INDIVIDUAL = "individual", "Individual"
+    HOUSEHOLD = "household", "Household"
+    COLLECTIVE = "collective", "Collective"
+
+
+class PaymentObligationType(models.TextChoices):
+    ACQUISITION = "acquisition", "Acquisition"
+    MAINTENANCE = "maintenance", "Maintenance"
+    OTHER = "other", "Other"
+
+
+class PaymentFrequency(models.TextChoices):
+    ONE_TIME = "one_time", "One time"
+    WEEKLY = "weekly", "Weekly"
+    MONTHLY = "monthly", "Monthly"
+    CUSTOM = "custom", "Custom"
+
+
+class PaymentObligationStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    ACTIVE = "active", "Active"
+    SUSPENDED = "suspended", "Suspended"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class PaymentEntryType(models.TextChoices):
+    DEPOSIT = "deposit", "Deposit"
+    INSTALLMENT = "installment", "Installment"
+    PENALTY = "penalty", "Penalty"
+    FEE = "fee", "Fee"
+    WAIVER = "waiver", "Waiver"
+    REFUND = "refund", "Refund"
+    ADJUSTMENT_DEBIT = "adjustment_debit", "Debit adjustment"
+    ADJUSTMENT_CREDIT = "adjustment_credit", "Credit adjustment"
+    REVERSAL = "reversal", "Reversal"
+
+
 class ResourceType(models.TextChoices):
     LIVESTOCK = "livestock", "Livestock"
     TOOL = "tool", "Tool"

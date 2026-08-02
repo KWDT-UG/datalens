@@ -29,6 +29,8 @@ from apps.resources.models import (
     ResourceBeneficiary,
     ResourceStatusEvent,
     ResourceThematicArea,
+    ResourcePaymentObligation,
+    ResourcePaymentTransaction,
     ThematicArea,
 )
 from apps.resources.serializers import (
@@ -36,6 +38,8 @@ from apps.resources.serializers import (
     ResourceSerializer,
     ResourceStatusEventSerializer,
     ResourceThematicAreaSerializer,
+    ResourcePaymentObligationSerializer,
+    ResourcePaymentTransactionSerializer,
     ThematicAreaSerializer,
 )
 
@@ -53,6 +57,14 @@ APPROVAL_ENTITY_REGISTRY = {
     "resource_beneficiary": (ResourceBeneficiary, ResourceBeneficiarySerializer),
     "resource_thematic_area": (ResourceThematicArea, ResourceThematicAreaSerializer),
     "resource_status_event": (ResourceStatusEvent, ResourceStatusEventSerializer),
+    "resource_payment_obligation": (
+        ResourcePaymentObligation,
+        ResourcePaymentObligationSerializer,
+    ),
+    "resource_payment_transaction": (
+        ResourcePaymentTransaction,
+        ResourcePaymentTransactionSerializer,
+    ),
     "impact_record": (ImpactRecord, ImpactRecordSerializer),
 }
 

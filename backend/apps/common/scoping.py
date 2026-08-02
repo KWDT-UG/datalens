@@ -18,6 +18,8 @@ COMMUNITY_LOOKUPS = {
     "resources.resourcebeneficiary": "resource__community_id",
     "resources.resourcestatusevent": "resource__community_id",
     "resources.resourcethematicarea": "resource__community_id",
+    "resources.resourcepaymentobligation": "resource__community_id",
+    "resources.resourcepaymenttransaction": "obligation__resource__community_id",
     "impacts.impactrecord": "resource__community_id",
     "approvals.approvalrequest": "community_id",
 }

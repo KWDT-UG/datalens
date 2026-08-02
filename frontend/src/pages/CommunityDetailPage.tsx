@@ -45,6 +45,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../auth/AuthContext';
 import { capabilities, hasCapability } from '../auth/permissions';
 import { downloadCsv, toggleVisibleSelection } from '../utils/listActions';
+import { formatQuantity } from '../utils/formatQuantity';
 import { PaginationLabel } from './CommunitiesPage';
 
 const sectionPageSize = 10;
@@ -213,11 +214,11 @@ function formatDateTime(value?: string | null) {
   return value ? new Date(value).toLocaleString() : 'Not recorded';
 }
 
-function formatMoney(amount?: string, currency = 'UGX') {
+function formatMoney(amount?: string, currency: string | null = 'UGX') {
   if (!amount) {
     return 'Not recorded';
   }
-  return `${currency} ${Number(amount).toLocaleString()}`;
+  return `${currency ?? 'UGX'} ${Number(amount).toLocaleString()}`;
 }
 
 function memberName(member: Member) {
@@ -225,7 +226,7 @@ function memberName(member: Member) {
 }
 
 function formatResourceQuantity(resource: Resource) {
-  return [resource.quantity, resource.unit].filter(Boolean).join(' ') || 'Quantity not recorded';
+  return formatQuantity(resource.quantity, resource.unit, 'Quantity not recorded');
 }
 
 function sumNumbers(values: Array<number | undefined>): number {
@@ -416,7 +417,7 @@ const tableConfigs: Record<
       }))
   },
   resources: {
-    columns: ['Resource name', 'Type', 'Owner', 'Quantity', 'Value', 'Themes', 'Status'],
+    columns: ['Resource name', 'Type', 'Owner', 'Quantity', 'Financial position', 'Themes', 'Status'],
     exportRows: (records) =>
       (records as Resource[]).map((resource) => ({
         community: resource.community,
@@ -441,9 +442,11 @@ const tableConfigs: Record<
         cells: [
           resource.name,
           formatLabel(resource.resource_type),
-          `${formatLabel(resource.owner_type)} #${resource.owner_id ?? 'unknown'}`,
-          [resource.quantity, resource.unit].filter(Boolean).join(' ') || 'Not recorded',
-          formatMoney(resource.value_amount, resource.value_currency),
+          resource.owner_display ?? formatLabel(resource.owner_type),
+          formatQuantity(resource.quantity, resource.unit),
+          resource.payment_summary
+            ? `${formatMoney(resource.payment_summary.total_paid, resource.payment_summary.currency)} paid · ${formatMoney(resource.payment_summary.remaining_amount, resource.payment_summary.currency)} remaining`
+            : formatMoney(resource.value_amount, resource.value_currency),
           resource.thematic_areas?.map((area) => area.code).join(', ') || 'Not recorded',
           <StatusBadge status={resource.status} />
         ]
@@ -720,7 +723,7 @@ function GroupWorkspaceDetailPage({
           <GroupMembersTab group={group} members={members} membersLoading={membersLoading} />
         ) : null}
         {activeTab === 'resources' ? (
-          <GroupResourcesTab resources={resources} resourcesLoading={resourcesLoading} />
+          <GroupResourcesTab group={group} resources={resources} resourcesLoading={resourcesLoading} />
         ) : null}
         {activeTab === 'trainings' ? (
           <GroupTrainingsTab groupName={group.name} trainings={trainings} />
@@ -861,11 +864,22 @@ function GroupOverviewTab({
           {!resourcesLoading && featuredResources.length > 0 ? (
             <div className="group-overview-stack">
               {featuredResources.map((resource) => (
-                <article key={resource.id}>
+                <Link
+                  key={resource.id}
+                  state={{ resourceOrigin: {
+                    label: group.name,
+                    path: `/communities/${group.community}/groups/${group.id}`
+                  } }}
+                  to={`/resources/${resource.id}`}
+                >
                   <strong>{resource.name}</strong>
                   <span>{formatLabel(resource.resource_type)} · {formatResourceQuantity(resource)}</span>
-                  <em>{formatMoney(resource.value_amount, resource.value_currency)}</em>
-                </article>
+                  <em>
+                    {resource.payment_summary
+                      ? `${formatMoney(resource.payment_summary.total_paid, resource.payment_summary.currency)} paid · ${formatMoney(resource.payment_summary.remaining_amount, resource.payment_summary.currency)} remaining`
+                      : formatMoney(resource.value_amount, resource.value_currency)}
+                  </em>
+                </Link>
               ))}
             </div>
           ) : null}
@@ -1036,9 +1050,11 @@ function GroupMembersTab({
 }
 
 function GroupResourcesTab({
+  group,
   resources,
   resourcesLoading
 }: {
+  group: Group;
   resources: Resource[];
   resourcesLoading: boolean;
 }) {
@@ -1046,13 +1062,21 @@ function GroupResourcesTab({
     return <div className="state-box">Loading group resources...</div>;
   }
   if (resources.length === 0) {
-    return <div className="state-box">No resources owned by this group are recorded yet.</div>;
+    return <div className="state-box">No resources owned by or linked to this group are recorded yet.</div>;
   }
 
   return (
     <div className="group-card-grid group-card-grid--resources">
       {resources.map((resource) => (
-        <article className="group-workspace-card" key={resource.id}>
+        <Link
+          className="group-workspace-card"
+          key={resource.id}
+          state={{ resourceOrigin: {
+            label: group.name,
+            path: `/communities/${group.community}/groups/${group.id}`
+          } }}
+          to={`/resources/${resource.id}`}
+        >
           <span className="group-workspace-card__title">{resource.name}</span>
           <span>{formatLabel(resource.resource_type)}</span>
           <span>{formatResourceQuantity(resource)}</span>
@@ -1060,10 +1084,12 @@ function GroupResourcesTab({
             <span>{resource.thematic_areas.map((area) => area.code).join(', ')}</span>
           ) : null}
           <span className="group-workspace-card__footer">
-            {formatMoney(resource.value_amount, resource.value_currency)}
+            {resource.payment_summary
+              ? `${formatMoney(resource.payment_summary.total_paid, resource.payment_summary.currency)} paid · ${formatMoney(resource.payment_summary.remaining_amount, resource.payment_summary.currency)} remaining`
+              : formatMoney(resource.value_amount, resource.value_currency)}
             <StatusBadge status={resource.status} />
           </span>
-        </article>
+        </Link>
       ))}
     </div>
   );
@@ -1327,6 +1353,11 @@ function GroupCommitteesTab({
 }
 
 function MemberDetailContent({ member }: { member: Member }) {
+  const resourcesQuery = useResourcesQuery(
+    { page: 1, page_size: 100, linked_member: member.id, ordering: 'name' },
+    Boolean(member.id)
+  );
+  const resources = resourcesQuery.data?.results ?? [];
   return (
     <>
       <DetailSection title="Personal details">
@@ -1361,6 +1392,35 @@ function MemberDetailContent({ member }: { member: Member }) {
           <DetailItem label="Address" value={member.address_text || 'Not recorded'} />
         </dl>
         {member.notes ? <p className="record-detail__notes">{member.notes}</p> : null}
+      </DetailSection>
+      <DetailSection title="Resources and repayments">
+        {resourcesQuery.isLoading ? <div className="state-box">Loading linked resources...</div> : null}
+        {resourcesQuery.isError ? <div className="state-box state-box--error">Unable to load linked resources.</div> : null}
+        {!resourcesQuery.isLoading && !resourcesQuery.isError && resources.length === 0 ? (
+          <div className="state-box">No individual or household resources are linked to this member.</div>
+        ) : null}
+        <div className="resource-party-list">
+          {resources.map((resource) => (
+            <Link
+              key={resource.id}
+              state={{ resourceOrigin: {
+                label: memberName(member),
+                path: `/communities/${member.community}/members/${member.id}`
+              } }}
+              to={`/resources/${resource.id}`}
+            >
+              <span>
+                <strong>{resource.name}</strong>
+                {formatLabel(resource.resource_type)} · {resource.owner_id === member.id && resource.owner_type === 'member' ? 'Owner' : 'Beneficiary'}
+              </span>
+              <small>
+                {resource.payment_summary
+                  ? `${formatMoney(resource.payment_summary.total_paid, resource.payment_summary.currency)} paid · ${formatMoney(resource.payment_summary.remaining_amount, resource.payment_summary.currency)} remaining`
+                  : formatLabel(resource.status)}
+              </small>
+            </Link>
+          ))}
+        </div>
       </DetailSection>
     </>
   );
@@ -1487,24 +1547,18 @@ export function CommunityDetailPage() {
   const selectedGroupResourceParams = useMemo(
     () => ({
       community: communityId,
-      owner_type: 'group',
+      linked_group: selectedRecordId ?? undefined,
       page: 1,
       page_size: 100,
       ordering: 'name'
     }),
-    [communityId]
+    [communityId, selectedRecordId]
   );
   const selectedGroupResourcesQuery = useResourcesQuery(
     selectedGroupResourceParams,
     activeSection === 'groups' && Boolean(selectedRecordId)
   );
-  const selectedGroupResources = useMemo(
-    () =>
-      (selectedGroupResourcesQuery.data?.results ?? []).filter(
-        (resource) => resource.owner_type === 'group' && resource.owner_id === selectedRecordId
-      ),
-    [selectedGroupResourcesQuery.data?.results, selectedRecordId]
-  );
+  const selectedGroupResources = selectedGroupResourcesQuery.data?.results ?? [];
   const selectedGroupImpactParams = useMemo(
     () => ({
       community: communityId,
@@ -1614,7 +1668,16 @@ export function CommunityDetailPage() {
   }, [activeSection, communityId]);
 
   function openRecordDetail(rowId: number) {
-    if (communityId) {
+    if (activeSection === 'resources') {
+      navigate(`/resources/${rowId}`, {
+        state: {
+          resourceOrigin: {
+            label: `${community?.name ?? 'community'} resources`,
+            path: `/communities/${communityId}/resources`
+          }
+        }
+      });
+    } else if (communityId) {
       navigate(`/communities/${communityId}/${activeSection}/${rowId}`);
     }
   }

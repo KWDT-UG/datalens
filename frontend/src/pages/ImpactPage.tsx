@@ -189,7 +189,7 @@ export function ImpactPage() {
           <strong>{formatCount(summary?.record_count)}</strong>
         </article>
         <article className="metric-card">
-          <span>Beneficiaries</span>
+          <span>People reached</span>
           <strong>{formatCount(summary?.beneficiary_count)}</strong>
         </article>
         <article className="metric-card">
@@ -209,7 +209,7 @@ export function ImpactPage() {
           {(byCommunityQuery.data?.data ?? []).slice(0, 6).map((row) => (
             <div className="report-row" key={row.community}>
               <span>{row.community_name}</span>
-              <strong>{formatCount(row.beneficiary_count)} beneficiaries</strong>
+              <strong>{formatCount(row.beneficiary_count)} people reached</strong>
             </div>
           ))}
         </section>
@@ -219,7 +219,7 @@ export function ImpactPage() {
           {(byResourceQuery.data?.data ?? []).slice(0, 6).map((row) => (
             <div className="report-row" key={row.resource}>
               <span>{row.resource_name}</span>
-              <strong>{formatCount(row.beneficiary_count)} beneficiaries</strong>
+              <strong>{formatCount(row.beneficiary_count)} people reached</strong>
             </div>
           ))}
         </section>
@@ -265,7 +265,7 @@ export function ImpactPage() {
                 <th>As of</th>
                 <th>Period</th>
                 <th>Resource</th>
-                <th>Beneficiaries</th>
+                <th>People reached</th>
                 <th>Households</th>
                 <th>Members</th>
                 <th>Institutions</th>

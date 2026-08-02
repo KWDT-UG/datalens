@@ -22,6 +22,10 @@ RESOURCE_APPROVAL_ENTITIES = {
     "resource_thematic_area",
     "resource_status_event",
 }
+FINANCIAL_RESOURCE_ENTITIES = {
+    "resource_payment_obligation",
+    "resource_payment_transaction",
+}
 FINANCIAL_RESOURCE_FIELDS = {"value_amount", "value_currency"}
 
 
@@ -37,10 +41,13 @@ def required_capability_for_entity(entity_type):
         MANAGE_IMPACT,
         MANAGE_OPERATIONS,
         MANAGE_RESOURCES,
+        MANAGE_RESOURCE_FINANCIALS,
     )
 
     if entity_type == "impact_record":
         return MANAGE_IMPACT
+    if entity_type in FINANCIAL_RESOURCE_ENTITIES:
+        return MANAGE_RESOURCE_FINANCIALS
     if entity_type in RESOURCE_APPROVAL_ENTITIES | {"thematic_area"}:
         return MANAGE_RESOURCES
     return MANAGE_OPERATIONS
@@ -58,6 +65,13 @@ def approval_policy_for_change(
             True,
             ApprovalReviewScope.IMPACT,
             "Impact records require monitoring and evaluation review.",
+        )
+
+    if entity_type in FINANCIAL_RESOURCE_ENTITIES:
+        return ApprovalPolicyDecision(
+            True,
+            ApprovalReviewScope.FINANCE,
+            "Resource payment changes require finance review.",
         )
 
     if entity_type in RESOURCE_APPROVAL_ENTITIES:
@@ -159,6 +173,20 @@ def community_id_for_change(*, entity_type, payload, instance=None):
         from apps.resources.models import Resource
 
         return _related_community_id(Resource, payload.get("resource"))
+    if entity_type == "resource_payment_obligation":
+        from apps.resources.models import Resource
+
+        return _related_community_id(Resource, payload.get("resource"))
+    if entity_type == "resource_payment_transaction":
+        from apps.resources.models import ResourcePaymentObligation
+
+        obligation_id = payload.get("obligation")
+        if not obligation_id:
+            return None
+        return ResourcePaymentObligation.objects.filter(pk=obligation_id).values_list(
+            "resource__community_id",
+            flat=True,
+        ).first()
     if entity_type == "impact_record":
         from apps.resources.models import Resource
 
@@ -188,6 +216,16 @@ def _related_community_id(model, object_id):
     return model.objects.filter(pk=object_id).values_list(
         "community_id", flat=True
     ).first()
+
+
+def user_can_bypass_approval(user, entity_type):
+    """Financial records require review for every user except superusers."""
+
+    if entity_type in FINANCIAL_RESOURCE_ENTITIES:
+        return bool(user and user.is_authenticated and user.is_superuser)
+    from apps.common.permissions import user_is_mvp_staff_admin
+
+    return user_is_mvp_staff_admin(user)
 
 
 def build_diff_summary(*, payload, instance=None):

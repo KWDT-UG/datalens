@@ -141,6 +141,7 @@ class ApprovalPolicyMixin:
             community_id_for_change,
             queue_approval_request,
             resource_change_is_financial,
+            user_can_bypass_approval,
         )
         from apps.approvals.serializers import ApprovalRequestSerializer
 
@@ -154,7 +155,6 @@ class ApprovalPolicyMixin:
         from apps.common.permissions import (
             MANAGE_RESOURCE_FINANCIALS,
             user_has_capability,
-            user_is_mvp_staff_admin,
         )
         from apps.common.scoping import enforce_change_scope
 
@@ -179,7 +179,7 @@ class ApprovalPolicyMixin:
             raise PermissionDenied(
                 "User cannot change sensitive resource financial values."
             )
-        if user_is_mvp_staff_admin(self.request.user):
+        if user_can_bypass_approval(self.request.user, entity_type):
             return None
 
         decision = approval_policy_for_change(

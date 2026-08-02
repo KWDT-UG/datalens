@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -6,6 +7,8 @@ from django.test import TestCase
 
 from apps.common.models import (
     BeneficiaryRelationshipType,
+    BeneficiaryScope,
+    PaymentEntryType,
     ResourceEventType,
     ResourcePartyType,
     ResourceType,
@@ -20,6 +23,8 @@ from apps.resources.models import (
     ResourceBeneficiary,
     ResourceStatusEvent,
     ResourceThematicArea,
+    ResourcePaymentObligation,
+    ResourcePaymentTransaction,
     ThematicArea,
 )
 
@@ -154,6 +159,11 @@ class ResourceModelTests(TestCase):
                     beneficiary_type=beneficiary_type,
                     beneficiary_id=beneficiary_id,
                     relationship_type=BeneficiaryRelationshipType.PRIMARY,
+                    benefit_scope=(
+                        BeneficiaryScope.INDIVIDUAL
+                        if beneficiary_type == ResourcePartyType.MEMBER
+                        else BeneficiaryScope.COLLECTIVE
+                    ),
                 )
                 beneficiary.full_clean()
 
@@ -197,3 +207,88 @@ class ResourceModelTests(TestCase):
 
         self.assertIsNotNone(event.pk)
         self.assertEqual(event.resource_id, resource.id)
+
+    def test_benefit_scope_and_active_beneficiary_uniqueness(self):
+        resource = Resource.objects.create(
+            **self._resource_payload(ResourcePartyType.GROUP, self.group.id)
+        )
+        invalid = ResourceBeneficiary(
+            resource=resource,
+            beneficiary_type=ResourcePartyType.GROUP,
+            beneficiary_id=self.group.id,
+            benefit_scope=BeneficiaryScope.HOUSEHOLD,
+        )
+        with self.assertRaises(ValidationError):
+            invalid.full_clean()
+
+        ResourceBeneficiary.objects.create(
+            resource=resource,
+            beneficiary_type=ResourcePartyType.MEMBER,
+            beneficiary_id=self.member.id,
+            benefit_scope=BeneficiaryScope.HOUSEHOLD,
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ResourceBeneficiary.objects.create(
+                resource=resource,
+                beneficiary_type=ResourcePartyType.MEMBER,
+                beneficiary_id=self.member.id,
+                benefit_scope=BeneficiaryScope.INDIVIDUAL,
+            )
+
+    def test_payment_summary_and_full_reversal(self):
+        resource = Resource.objects.create(
+            **self._resource_payload(ResourcePartyType.GROUP, self.group.id)
+        )
+        beneficiary = ResourceBeneficiary.objects.create(
+            resource=resource,
+            beneficiary_type=ResourcePartyType.MEMBER,
+            beneficiary_id=self.member.id,
+            benefit_scope=BeneficiaryScope.HOUSEHOLD,
+        )
+        obligation = ResourcePaymentObligation.objects.create(
+            resource=resource,
+            resource_beneficiary=beneficiary,
+            responsible_party_type=ResourcePartyType.MEMBER,
+            responsible_party_id=self.member.id,
+            principal_amount=Decimal("1000.00"),
+            deposit_required_amount=Decimal("200.00"),
+            due_on=date(2026, 1, 1),
+        )
+        deposit = ResourcePaymentTransaction.objects.create(
+            obligation=obligation,
+            entry_type=PaymentEntryType.DEPOSIT,
+            amount=Decimal("200.00"),
+            effective_on=date(2025, 12, 1),
+        )
+        ResourcePaymentTransaction.objects.create(
+            obligation=obligation,
+            entry_type=PaymentEntryType.INSTALLMENT,
+            amount=Decimal("300.00"),
+            effective_on=date(2025, 12, 15),
+        )
+        summary = obligation.financial_summary(as_of=date(2025, 12, 20))
+        self.assertEqual(summary["total_paid"], Decimal("500.00"))
+        self.assertEqual(summary["remaining_amount"], Decimal("500.00"))
+        self.assertEqual(summary["deposit_paid_amount"], Decimal("200.00"))
+
+        reversal = ResourcePaymentTransaction(
+            obligation=obligation,
+            entry_type=PaymentEntryType.REVERSAL,
+            amount=Decimal("199.00"),
+            effective_on=date(2025, 12, 20),
+            reverses=deposit,
+        )
+        with self.assertRaises(ValidationError):
+            reversal.full_clean()
+
+        valid_reversal = ResourcePaymentTransaction.objects.create(
+            obligation=obligation,
+            entry_type=PaymentEntryType.REVERSAL,
+            amount=deposit.amount,
+            effective_on=date(2025, 12, 20),
+            reverses=deposit,
+        )
+        self.assertIsNotNone(valid_reversal.pk)
+        reversed_summary = obligation.financial_summary(as_of=date(2025, 12, 21))
+        self.assertEqual(reversed_summary["total_paid"], Decimal("300.00"))
+        self.assertEqual(reversed_summary["remaining_amount"], Decimal("700.00"))

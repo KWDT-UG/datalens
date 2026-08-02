@@ -8,6 +8,8 @@ from rest_framework.test import APIClient
 
 from apps.common.models import (
     BeneficiaryRelationshipType,
+    BeneficiaryScope,
+    PaymentEntryType,
     ResourceEventType,
     ResourcePartyType,
     ResourceStatus,
@@ -25,6 +27,8 @@ from apps.resources.models import (
     ResourceBeneficiary,
     ResourceStatusEvent,
     ResourceThematicArea,
+    ResourcePaymentObligation,
+    ResourcePaymentTransaction,
     ThematicArea,
 )
 
@@ -93,6 +97,7 @@ class ResourceApiTests(TestCase):
             beneficiary_type=ResourcePartyType.MEMBER,
             beneficiary_id=cls.member.id,
             relationship_type=BeneficiaryRelationshipType.PRIMARY,
+            benefit_scope=BeneficiaryScope.HOUSEHOLD,
         )
         cls.status_event = ResourceStatusEvent.objects.create(
             resource=cls.resource,
@@ -318,3 +323,80 @@ class ResourceApiTests(TestCase):
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
                 self.assertEqual(response.data["count"], 1)
                 self.assertEqual(response.data["results"][0]["id"], case["expected_id"])
+
+    def test_linked_resource_filters_include_member_benefits(self):
+        by_member = self.client.get(
+            reverse("resource-list"),
+            {"linked_member": self.member.id},
+        )
+        by_group = self.client.get(
+            reverse("resource-list"),
+            {"linked_group": self.group.id},
+        )
+        self.assertEqual([row["id"] for row in by_member.data["results"]], [self.resource.id])
+        self.assertEqual([row["id"] for row in by_group.data["results"]], [self.resource.id])
+
+    def test_payment_post_is_finance_approved_and_offline_mutation_is_rejected(self):
+        self.client.force_authenticate(self.admin_user)
+        obligation_response = self.client.post(
+            reverse("resource-payment-obligation-list"),
+            {
+                "resource": self.resource.id,
+                "resource_beneficiary": self.resource_beneficiary.id,
+                "responsible_party_type": ResourcePartyType.MEMBER,
+                "responsible_party_id": self.member.id,
+                "principal_amount": "1000.00",
+                "deposit_required_amount": "200.00",
+                "currency": "UGX",
+            },
+            format="json",
+        )
+        self.assertEqual(obligation_response.status_code, status.HTTP_201_CREATED)
+        obligation_id = obligation_response.data["id"]
+
+        self.client.force_authenticate(self.user)
+        payment_response = self.client.post(
+            reverse("resource-payment-transaction-list"),
+            {
+                "obligation": obligation_id,
+                "entry_type": PaymentEntryType.DEPOSIT,
+                "amount": "200.00",
+                "effective_on": "2026-06-01",
+            },
+            format="json",
+        )
+        self.assertEqual(
+            payment_response.status_code,
+            status.HTTP_202_ACCEPTED,
+            payment_response.data,
+        )
+        self.assertEqual(
+            payment_response.data["approval_request"]["review_scope"],
+            "finance",
+        )
+        self.assertFalse(ResourcePaymentTransaction.objects.exists())
+
+        offline_response = self.client.post(
+            reverse("sync-push"),
+            {
+                "changes": [
+                    {
+                        "entity_type": "resource_payment_transaction",
+                        "action": "create",
+                        "client_mutation_id": "offline-money-1",
+                        "payload": {
+                            "obligation": obligation_id,
+                            "entry_type": PaymentEntryType.INSTALLMENT,
+                            "amount": "100.00",
+                            "effective_on": "2026-06-02",
+                        },
+                    }
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(offline_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            offline_response.data["errors"][0]["code"],
+            "unsupported_offline_mutation",
+        )

@@ -38,6 +38,8 @@ from apps.participation.views import (
 from apps.resources.views import (
     ResourceBeneficiaryViewSet,
     ResourceThematicAreaViewSet,
+    ResourcePaymentObligationViewSet,
+    ResourcePaymentTransactionViewSet,
     ResourceViewSet,
     ThematicAreaViewSet,
 )
@@ -57,6 +59,16 @@ router.register(
     "committee-memberships",
     CommitteeMembershipViewSet,
     basename="committee-membership",
+)
+router.register(
+    "resource-payment-obligations",
+    ResourcePaymentObligationViewSet,
+    basename="resource-payment-obligation",
+)
+router.register(
+    "resource-payment-transactions",
+    ResourcePaymentTransactionViewSet,
+    basename="resource-payment-transaction",
 )
 router.register("cooperatives", CooperativeViewSet, basename="cooperative")
 router.register(

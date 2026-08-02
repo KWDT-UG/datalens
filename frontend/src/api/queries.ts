@@ -41,6 +41,11 @@ import type {
   ProfileUpdateInput,
   Resource,
   ResourceCreateInput,
+  ResourceDetail,
+  ResourcePaymentObligation,
+  ResourcePaymentObligationInput,
+  ResourcePaymentTransaction,
+  ResourcePaymentTransactionInput,
   ThematicArea
 } from './types';
 
@@ -555,6 +560,68 @@ export function useUpdateCooperativeMutation() {
 
 export function useResourcesQuery(params: ListParams, enabled = true) {
   return useListQuery<Resource>('resources', '/api/v1/resources/', params, enabled);
+}
+
+export function useResourceDetailQuery(id?: number) {
+  return useQuery({
+    queryKey: ['resource-detail', id],
+    queryFn: () => apiGet<ResourceDetail>(`/api/v1/resources/${id}/detail/`),
+    enabled: Boolean(id)
+  });
+}
+
+export function useCreateResourcePaymentObligationMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ResourcePaymentObligationInput) =>
+      apiPost<ResourcePaymentObligation | ApprovalSubmission, ResourcePaymentObligationInput>(
+        '/api/v1/resource-payment-obligations/',
+        payload
+      ),
+    onSuccess: (_result, payload) => {
+      queryClient.invalidateQueries({ queryKey: ['resource-detail', payload.resource] });
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
+    }
+  });
+}
+
+export function useCreateResourcePaymentTransactionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ResourcePaymentTransactionInput) =>
+      apiPost<ResourcePaymentTransaction | ApprovalSubmission, ResourcePaymentTransactionInput>(
+        '/api/v1/resource-payment-transactions/',
+        payload
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resource-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
+    }
+  });
+}
+
+export function useReverseResourcePaymentTransactionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload
+    }: {
+      id: number;
+      payload: { effective_on: string; reference?: string; notes?: string };
+    }) =>
+      apiPost<
+        ResourcePaymentTransaction | ApprovalSubmission,
+        { effective_on: string; reference?: string; notes?: string }
+      >(
+        `/api/v1/resource-payment-transactions/${id}/reverse/`,
+        payload
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resource-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
+    }
+  });
 }
 
 export function useCreateResourceMutation() {

@@ -914,8 +914,9 @@ export function ImpactRecordCreateDialog({
             <input type="date" {...register('period_end')} />
           </label>
           <label className="form-field">
-            <span>Beneficiaries</span>
+            <span>Total people reached</span>
             <input type="number" min={0} {...register('beneficiary_count', { valueAsNumber: true })} />
+            <small>Include everyone served, such as both students and staff for a school resource.</small>
           </label>
           <label className="form-field">
             <span>Households</span>

@@ -409,6 +409,99 @@ export interface ResourceThematicArea {
   is_primary: boolean;
 }
 
+export interface ResourceBeneficiary extends SyncMetadata {
+  id: number;
+  resource: number;
+  beneficiary_type: string;
+  beneficiary_id?: number;
+  beneficiary_display?: string | null;
+  relationship_type: string;
+  benefit_scope: 'individual' | 'household' | 'collective' | string;
+  notes?: string;
+}
+
+export interface ResourceBeneficiarySummary {
+  count: number;
+  items: ResourceBeneficiary[];
+}
+
+export interface ResourceFinancialSummary {
+  obligation_count?: number;
+  principal_amount: string;
+  additional_charges: string;
+  total_paid: string;
+  total_credited: string;
+  remaining_amount: string;
+  percent_paid: string;
+  deposit_required_amount?: string;
+  deposit_paid_amount?: string;
+  repayment_state: 'not_started' | 'on_track' | 'overdue' | 'paid' | string;
+  next_due_on?: string | null;
+  currency?: string | null;
+}
+
+export interface ResourcePaymentObligation extends SyncMetadata {
+  id: number;
+  resource: number;
+  resource_beneficiary: number;
+  responsible_party_type: string;
+  responsible_party_id?: number;
+  responsible_party_display?: string | null;
+  obligation_type: 'acquisition' | 'maintenance' | 'other' | string;
+  principal_amount: string;
+  currency: string;
+  deposit_required_amount?: string | null;
+  payment_frequency: 'one_time' | 'weekly' | 'monthly' | 'custom' | string;
+  installment_amount?: string | null;
+  starts_on?: string | null;
+  due_on?: string | null;
+  status: 'draft' | 'active' | 'suspended' | 'cancelled' | string;
+  terms_notes?: string;
+  financial_summary?: ResourceFinancialSummary | null;
+}
+
+export interface ResourcePaymentObligationInput {
+  resource: number;
+  resource_beneficiary: number;
+  responsible_party_type: string;
+  responsible_party_id: number;
+  obligation_type: string;
+  principal_amount: string;
+  currency: string;
+  deposit_required_amount?: string;
+  payment_frequency: string;
+  installment_amount?: string;
+  starts_on?: string;
+  due_on?: string;
+  status: string;
+  terms_notes?: string;
+}
+
+export interface ResourcePaymentTransaction extends SyncMetadata {
+  id: number;
+  obligation: number;
+  entry_type: string;
+  amount: string;
+  effective_on: string;
+  reference?: string;
+  voucher_number?: string;
+  notes?: string;
+  received_from_type?: string;
+  received_from_id?: number | null;
+  reverses?: number | null;
+  recorded_by_user_id?: number | null;
+}
+
+export interface ResourcePaymentTransactionInput {
+  obligation: number;
+  entry_type: 'deposit' | 'installment';
+  amount: string;
+  effective_on: string;
+  reference?: string;
+  voucher_number?: string;
+  notes?: string;
+}
+
 export interface ThematicArea {
   id: number;
   code: string;
@@ -427,6 +520,7 @@ export interface Resource extends SyncMetadata {
   status?: RecordStatus;
   owner_type?: string;
   owner_id?: number;
+  owner_display?: string | null;
   quantity?: string;
   unit?: string;
   value_amount?: string;
@@ -436,10 +530,27 @@ export interface Resource extends SyncMetadata {
   serial_or_tag_number?: string;
   source_notes?: string;
   thematic_areas?: ResourceThematicArea[];
+  beneficiary_summary?: ResourceBeneficiarySummary;
+  payment_summary?: ResourceFinancialSummary | null;
   updated_at?: string;
   approval_status?: ApprovalStatus | null;
   pending_approval_request_id?: number | null;
   approval_history_count?: number;
+}
+
+export interface ResourceDetail {
+  resource: Resource;
+  beneficiaries: ResourceBeneficiary[];
+  status_events: Array<{
+    id: number;
+    resource: number;
+    event_type: string;
+    effective_at: string;
+    notes?: string;
+  }>;
+  impact_records: ImpactRecord[];
+  payment_obligations: ResourcePaymentObligation[];
+  payment_transactions: ResourcePaymentTransaction[];
 }
 
 export interface ResourceCreateInput {
