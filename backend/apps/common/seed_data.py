@@ -1,6 +1,6 @@
-from datetime import date, datetime, timedelta, timezone
 import os
 import secrets
+from datetime import date, datetime, timedelta, timezone
 
 from django.contrib.auth import get_user_model
 
@@ -8,14 +8,15 @@ from apps.approvals.models import ApprovalRequest
 from apps.common.models import (
     ApprovalActionType,
     BeneficiaryRelationshipType,
+    BeneficiaryScope,
     ImpactMethod,
     InvitationStatus,
     ResourceEventType,
     ResourcePartyType,
     ResourceStatus,
     ResourceType,
-    UserProfile,
     UserInvitation,
+    UserProfile,
     UserRole,
     WorkforceType,
 )
@@ -38,7 +39,6 @@ from apps.resources.models import (
     ResourceThematicArea,
     ThematicArea,
 )
-
 
 REFERENCE_THEMATIC_AREAS = [
     {
@@ -694,23 +694,79 @@ def seed_demo_data():
     )
 
     beneficiary_specs = [
-        ("Demo Irrigation Pump", ResourcePartyType.INSTITUTION, institutions["KWDT-DEMO-INS"]),
-        ("Demo Irrigation Pump", ResourcePartyType.GROUP, groups["KWDT-DEMO-WASH"]),
-        ("School Water Storage Tank", ResourcePartyType.INSTITUTION, institutions["KWDT-DEMO-INS"]),
-        ("School Water Storage Tank", ResourcePartyType.MEMBER, members["KWDT-DEMO-MEM-009"]),
-        ("Goat Rearing Starter Kit", ResourcePartyType.MEMBER, members["KWDT-DEMO-MEM-004"]),
-        ("Cooperative Seed Grant", ResourcePartyType.COOPERATIVE, cooperatives["Demo Farmers Cooperative"]),
-        ("Community Center Roofing Materials", ResourcePartyType.COMMUNITY, community),
-        ("Craft Cooperative Sewing Machines", ResourcePartyType.COOPERATIVE, cooperatives["Demo Craft Cooperative"]),
-        ("Craft Cooperative Sewing Machines", ResourcePartyType.INSTITUTION, institutions["KWDT-DEMO-CC"]),
+        (
+            "Demo Irrigation Pump",
+            ResourcePartyType.INSTITUTION,
+            institutions["KWDT-DEMO-INS"],
+            BeneficiaryRelationshipType.SECONDARY,
+            BeneficiaryScope.COLLECTIVE,
+        ),
+        (
+            "Demo Irrigation Pump",
+            ResourcePartyType.GROUP,
+            groups["KWDT-DEMO-WASH"],
+            BeneficiaryRelationshipType.PRIMARY,
+            BeneficiaryScope.COLLECTIVE,
+        ),
+        (
+            "School Water Storage Tank",
+            ResourcePartyType.INSTITUTION,
+            institutions["KWDT-DEMO-INS"],
+            BeneficiaryRelationshipType.PRIMARY,
+            BeneficiaryScope.COLLECTIVE,
+        ),
+        (
+            "Goat Rearing Starter Kit",
+            ResourcePartyType.MEMBER,
+            members["KWDT-DEMO-MEM-004"],
+            BeneficiaryRelationshipType.PRIMARY,
+            BeneficiaryScope.INDIVIDUAL,
+        ),
+        (
+            "Cooperative Seed Grant",
+            ResourcePartyType.COOPERATIVE,
+            cooperatives["Demo Farmers Cooperative"],
+            BeneficiaryRelationshipType.PRIMARY,
+            BeneficiaryScope.COLLECTIVE,
+        ),
+        (
+            "Community Center Roofing Materials",
+            ResourcePartyType.COMMUNITY,
+            community,
+            BeneficiaryRelationshipType.PRIMARY,
+            BeneficiaryScope.COLLECTIVE,
+        ),
+        (
+            "Craft Cooperative Sewing Machines",
+            ResourcePartyType.COOPERATIVE,
+            cooperatives["Demo Craft Cooperative"],
+            BeneficiaryRelationshipType.PRIMARY,
+            BeneficiaryScope.COLLECTIVE,
+        ),
+        (
+            "Craft Cooperative Sewing Machines",
+            ResourcePartyType.INSTITUTION,
+            institutions["KWDT-DEMO-CC"],
+            BeneficiaryRelationshipType.SECONDARY,
+            BeneficiaryScope.COLLECTIVE,
+        ),
     ]
+    # Remove the legacy demo link that incorrectly treated one school contact as
+    # an individual beneficiary of a facility serving the whole school.
+    ResourceBeneficiary.objects.filter(
+        resource=resources["School Water Storage Tank"],
+        beneficiary_type=ResourcePartyType.MEMBER,
+        beneficiary_id=members["KWDT-DEMO-MEM-009"].id,
+        notes="Seeded demo resource beneficiary.",
+    ).update(is_deleted=True)
     beneficiary = None
-    for index, (resource_name, beneficiary_type, target) in enumerate(beneficiary_specs):
-        relationship_type = (
-            BeneficiaryRelationshipType.PRIMARY
-            if index % 3 != 0
-            else BeneficiaryRelationshipType.SECONDARY
-        )
+    for (
+        resource_name,
+        beneficiary_type,
+        target,
+        relationship_type,
+        benefit_scope,
+    ) in beneficiary_specs:
         beneficiary = upsert(
             ResourceBeneficiary,
             {
@@ -720,6 +776,8 @@ def seed_demo_data():
             },
             {
                 "relationship_type": relationship_type,
+                "benefit_scope": benefit_scope,
+                "is_deleted": False,
                 "notes": "Seeded demo resource beneficiary.",
             },
         )
@@ -791,7 +849,11 @@ def seed_demo_data():
                 "household_count": household_count,
                 "member_count": member_count,
                 "institution_count": institution_count,
-                "notes": "Seeded demo impact record.",
+                "notes": (
+                    "245 students and staff served by the school water tank."
+                    if resource_name == "School Water Storage Tank"
+                    else "Seeded demo impact record."
+                ),
                 "method": ImpactMethod.OBSERVED,
             },
         )

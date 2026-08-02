@@ -16,6 +16,7 @@ import { PasswordResetPage } from './pages/PasswordResetPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ReportsPage } from './pages/ReportsPage';
 import { ResourcesPage } from './pages/ResourcesPage';
+import { ResourceDetailPage } from './pages/ResourceDetailPage';
 import { SearchPage } from './pages/SearchPage';
 
 export const router = createBrowserRouter([
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
             element: <CommunityDetailPage />
           },
           { path: 'resources', element: <ResourcesPage /> },
+          { path: 'resources/:resourceId', element: <ResourceDetailPage /> },
           { path: 'impact', element: <ImpactPage /> },
           { path: 'search', element: <SearchPage /> },
           {

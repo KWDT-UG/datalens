@@ -1,5 +1,5 @@
-from io import StringIO
 from datetime import timedelta
+from io import StringIO
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
@@ -11,6 +11,7 @@ from rest_framework import status
 from apps.approvals.models import ApprovalRequest
 from apps.common.models import (
     InvitationStatus,
+    ResourcePartyType,
     UserInvitation,
     UserProfile,
     UserRole,
@@ -79,9 +80,41 @@ class ManagementCommandTests(TestCase):
         self.assertEqual(Resource.objects.filter(name="Demo Irrigation Pump").count(), 1)
         self.assertEqual(Resource.objects.count(), 7)
         self.assertEqual(ResourceThematicArea.objects.count(), 11)
-        self.assertEqual(ResourceBeneficiary.objects.count(), 9)
+        self.assertEqual(
+            ResourceBeneficiary.objects.filter(is_deleted=False).count(),
+            8,
+        )
         self.assertEqual(ResourceStatusEvent.objects.count(), 11)
         self.assertEqual(ImpactRecord.objects.count(), 7)
+        school_tank = Resource.objects.get(name="School Water Storage Tank")
+        self.assertEqual(school_tank.owner_type, ResourcePartyType.INSTITUTION)
+        self.assertFalse(
+            ResourceBeneficiary.objects.filter(
+                resource=school_tank,
+                beneficiary_type=ResourcePartyType.MEMBER,
+                is_deleted=False,
+            ).exists()
+        )
+        school_recipient = ResourceBeneficiary.objects.get(
+            resource=school_tank,
+            is_deleted=False,
+        )
+        self.assertEqual(
+            school_recipient.beneficiary_type,
+            ResourcePartyType.INSTITUTION,
+        )
+        self.assertEqual(school_recipient.benefit_scope, "collective")
+        school_impact = ImpactRecord.objects.get(resource=school_tank)
+        self.assertEqual(school_impact.beneficiary_type, ResourcePartyType.INSTITUTION)
+        self.assertEqual(
+            (
+                school_impact.beneficiary_count,
+                school_impact.household_count,
+                school_impact.member_count,
+                school_impact.institution_count,
+            ),
+            (245, 0, 0, 1),
+        )
         self.assertEqual(ApprovalRequest.objects.count(), 3)
         self.assertEqual(
             get_user_model().objects.count(),
@@ -149,6 +182,24 @@ class ManagementCommandTests(TestCase):
         self.assertIn("OK   communities", output)
         self.assertIn("OK   resource-detail", output)
         self.assertIn("API smoke check passed.", output)
+
+    def test_seed_demo_data_archives_legacy_school_member_beneficiary(self):
+        call_command("seed_demo_data", stdout=StringIO())
+        school_tank = Resource.objects.get(name="School Water Storage Tank")
+        legacy_member = Member.objects.get(member_number="KWDT-DEMO-MEM-009")
+        legacy_link = ResourceBeneficiary.objects.create(
+            resource=school_tank,
+            beneficiary_type=ResourcePartyType.MEMBER,
+            beneficiary_id=legacy_member.id,
+            relationship_type="secondary",
+            benefit_scope="individual",
+            notes="Seeded demo resource beneficiary.",
+        )
+
+        call_command("seed_demo_data", stdout=StringIO())
+
+        legacy_link.refresh_from_db()
+        self.assertTrue(legacy_link.is_deleted)
 
     def test_smoke_api_command_can_create_role_scoped_user(self):
         stdout = StringIO()

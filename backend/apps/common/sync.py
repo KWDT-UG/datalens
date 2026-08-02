@@ -16,6 +16,7 @@ from apps.approvals.policy import (
     community_id_for_change,
     queue_approval_request,
     required_capability_for_entity,
+    user_can_bypass_approval,
 )
 from apps.approvals.serializers import ApprovalRequestSerializer
 from apps.approvals.services import APPROVAL_ENTITY_REGISTRY
@@ -26,13 +27,18 @@ from apps.common.models import (
 )
 from apps.common.permissions import (
     SUBMIT_FOR_APPROVAL,
+    VIEW_RESOURCE_FINANCIALS,
     user_has_capability,
-    user_is_mvp_staff_admin,
 )
 from apps.common.scoping import enforce_change_scope, scope_queryset_for_user
 
 MAX_SYNC_RECORDS = 100
 MAX_SYNC_PAGE_SIZE = 200
+SYNC_MUTATION_EXCLUDED_ENTITIES = {"resource_payment_transaction"}
+SYNC_FINANCIAL_ENTITIES = {
+    "resource_payment_obligation",
+    "resource_payment_transaction",
+}
 
 
 def encode_sync_cursor(updated_at, object_id):
@@ -121,6 +127,19 @@ class SyncPullView(APIView):
         has_more_by_entity = {}
 
         for current_type in entity_types:
+            if current_type in SYNC_FINANCIAL_ENTITIES and not user_has_capability(
+                request.user,
+                VIEW_RESOURCE_FINANCIALS,
+            ):
+                if entity_type:
+                    errors.append(
+                        {
+                            "attr": "entity_type",
+                            "detail": "User cannot pull resource financial records.",
+                            "code": "permission_denied",
+                        }
+                    )
+                continue
             registry_item = APPROVAL_ENTITY_REGISTRY.get(current_type)
             if registry_item is None:
                 errors.append(
@@ -250,6 +269,17 @@ class SyncPushView(APIView):
                 )
                 continue
 
+            if entity_type in SYNC_MUTATION_EXCLUDED_ENTITIES:
+                errors.append(
+                    {
+                        "index": index,
+                        "attr": "entity_type",
+                        "detail": "Payment transactions must be posted online.",
+                        "code": "unsupported_offline_mutation",
+                    }
+                )
+                continue
+
             model, serializer_class = registry_item
             required_capability = required_capability_for_entity(entity_type)
             if not user_has_capability(request.user, required_capability):
@@ -361,7 +391,10 @@ class SyncPushView(APIView):
                     payload=payload,
                     instance=instance,
                 )
-                if decision.required and not user_is_mvp_staff_admin(request.user):
+                if decision.required and not user_can_bypass_approval(
+                    request.user,
+                    entity_type,
+                ):
                     if not user_has_capability(request.user, SUBMIT_FOR_APPROVAL):
                         raise ValidationError(
                             {

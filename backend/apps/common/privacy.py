@@ -40,6 +40,24 @@ PUBLICATION_SENSITIVE_FIELDS = {
     "recorded_by_user_id",
 }
 FINANCIAL_FIELDS = {"value_amount", "value_currency"}
+FINANCIAL_FIELDS_BY_LABEL = {
+    "resources.resourcepaymentobligation": {
+        "principal_amount",
+        "currency",
+        "deposit_required_amount",
+        "installment_amount",
+        "terms_notes",
+        "financial_summary",
+    },
+    "resources.resourcepaymenttransaction": {
+        "amount",
+        "reference",
+        "voucher_number",
+        "notes",
+        "received_from_type",
+        "received_from_id",
+    },
+}
 
 
 def _communications_only(user):
@@ -66,6 +84,10 @@ def sanitize_model_representation(instance, data, user):
         user, VIEW_RESOURCE_FINANCIALS
     ):
         for field in FINANCIAL_FIELDS:
+            if field in result:
+                result[field] = None
+    if not user_has_capability(user, VIEW_RESOURCE_FINANCIALS):
+        for field in FINANCIAL_FIELDS_BY_LABEL.get(label, set()):
             if field in result:
                 result[field] = None
     if _communications_only(user):
@@ -98,6 +120,27 @@ def sanitize_approval_payload(entity_type, payload, user):
         user, VIEW_RESOURCE_FINANCIALS
     ):
         for field in FINANCIAL_FIELDS:
+            if field in result:
+                result[field] = None
+    if not user_has_capability(user, VIEW_RESOURCE_FINANCIALS):
+        financial_entities = {
+            "resource_payment_obligation": {
+                "principal_amount",
+                "currency",
+                "deposit_required_amount",
+                "installment_amount",
+                "terms_notes",
+            },
+            "resource_payment_transaction": {
+                "amount",
+                "reference",
+                "voucher_number",
+                "notes",
+                "received_from_type",
+                "received_from_id",
+            },
+        }
+        for field in financial_entities.get(entity_type, set()):
             if field in result:
                 result[field] = None
     return result

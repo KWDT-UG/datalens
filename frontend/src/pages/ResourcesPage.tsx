@@ -1,5 +1,6 @@
 import { SearchIcon, UploadIcon } from '@patternfly/react-icons';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { useArchiveRecordsMutation, useResourcesQuery } from '../api/queries';
 import type { Resource } from '../api/types';
@@ -10,6 +11,7 @@ import { ListActionError } from '../components/ListActionError';
 import { ResourceCreateDialog } from '../components/ResourceCreateDialog';
 import { StatusBadge } from '../components/StatusBadge';
 import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/listActions';
+import { formatQuantity } from '../utils/formatQuantity';
 import { PaginationLabel } from './CommunitiesPage';
 
 const pageSize = 10;
@@ -29,12 +31,18 @@ function formatMoney(resource: Resource) {
   return `${resource.value_currency ?? 'UGX'} ${Number(resource.value_amount).toLocaleString()}`;
 }
 
-function formatQuantity(resource: Resource) {
-  return [resource.quantity, resource.unit].filter(Boolean).join(' ') || 'Not recorded';
-}
-
 function formatThemes(resource: Resource) {
   return resource.thematic_areas?.map((area) => area.code).join(', ') || 'Not recorded';
+}
+
+function formatFinancialPosition(resource: Resource) {
+  const summary = resource.payment_summary;
+  if (summary) {
+    const currency = summary.currency ?? resource.value_currency ?? 'UGX';
+    return `${currency} ${Number(summary.total_paid).toLocaleString()} paid · ${Number(summary.remaining_amount).toLocaleString()} remaining`;
+  }
+  const value = formatMoney(resource);
+  return value === 'Not recorded' ? value : `${value} asset value`;
 }
 
 export function ResourcesPage() {
@@ -193,7 +201,7 @@ export function ResourcesPage() {
                 <th>Type</th>
                 <th>Owner</th>
                 <th>Quantity</th>
-                <th>Value</th>
+                <th>Financial position</th>
                 <th>Themes</th>
                 <th>Status</th>
                 <th>Acquired</th>
@@ -211,12 +219,12 @@ export function ResourcesPage() {
                       onChange={() => toggleSelected(resource.id)}
                     /> : null}
                   </td>
-                  <td>{resource.name}</td>
+                  <td><Link className="table-link" to={`/resources/${resource.id}`}>{resource.name}</Link></td>
                   <td>{resource.community_name ?? 'Not recorded'}</td>
                   <td>{formatLabel(resource.resource_type)}</td>
-                  <td>{`${formatLabel(resource.owner_type)} #${resource.owner_id ?? 'unknown'}`}</td>
-                  <td>{formatQuantity(resource)}</td>
-                  <td>{formatMoney(resource)}</td>
+                  <td>{resource.owner_display ?? formatLabel(resource.owner_type)}</td>
+                  <td>{formatQuantity(resource.quantity, resource.unit)}</td>
+                  <td>{formatFinancialPosition(resource)}</td>
                   <td>{formatThemes(resource)}</td>
                   <td>
                     <StatusBadge status={resource.status} />

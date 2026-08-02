@@ -2207,7 +2207,8 @@ h2 {
   gap: 10px;
 }
 
-.group-overview-stack article {
+.group-overview-stack article,
+.group-overview-stack > a {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -2281,6 +2282,208 @@ h2 {
   min-width: 180px;
   margin-right: auto;
   color: var(--muted);
+  text-decoration: none;
+}
+
+.group-overview-stack > a:hover {
+  border-color: var(--blue);
+}
+
+.resource-workspace__status-row,
+.resource-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.resource-workspace__status-row {
+  justify-content: flex-start;
+}
+
+.resource-workspace__status-row > span:not(.status-badge) {
+  padding: 5px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.resource-workspace__grid,
+.resource-payment-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.resource-workspace__grid > :first-child,
+.resource-payment-layout > :last-child {
+  grid-column: 1 / -1;
+}
+
+.resource-section-header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.resource-section-header h3 {
+  margin: 0;
+}
+
+.resource-party-list,
+.resource-beneficiary-grid,
+.resource-obligation-grid,
+.resource-ledger,
+.resource-timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.resource-party-list > span,
+.resource-party-list > a,
+.resource-beneficiary-grid article,
+.resource-obligation-grid article,
+.resource-ledger article {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.resource-party-list > span,
+.resource-party-list > a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.resource-party-list > a:hover {
+  border-color: var(--blue);
+}
+
+.resource-party-list > span,
+.resource-party-list > a > span,
+.resource-beneficiary-grid article {
+  display: grid;
+  gap: 4px;
+}
+
+.resource-party-list small,
+.resource-party-list span,
+.resource-beneficiary-grid article > span,
+.resource-beneficiary-grid p,
+.resource-obligation-grid article > span,
+.resource-ledger span,
+.resource-timeline time {
+  color: var(--muted);
+}
+
+.resource-beneficiary-grid,
+.resource-obligation-grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.resource-obligation-grid article {
+  display: grid;
+  gap: 12px;
+}
+
+.resource-obligation-grid header,
+.resource-ledger article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.resource-obligation-grid dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.resource-obligation-grid dl div {
+  display: grid;
+  gap: 3px;
+}
+
+.resource-obligation-grid dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.resource-obligation-grid dd {
+  margin: 0;
+}
+
+.resource-ledger article > div {
+  display: grid;
+  gap: 3px;
+  margin-right: auto;
+}
+
+.resource-ledger .is-credit {
+  color: var(--green);
+}
+
+.resource-ledger .is-debit {
+  color: var(--red);
+}
+
+.payment-progress {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.payment-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--blue);
+}
+
+.resource-timeline article {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.resource-timeline article > span {
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  outline: 2px solid var(--blue);
+  background: var(--blue);
+}
+
+.resource-timeline article > div {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+@media (max-width: 900px) {
+  .resource-workspace__grid,
+  .resource-payment-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-workspace__grid > :first-child,
+  .resource-payment-layout > :last-child {
+    grid-column: auto;
+  }
 }
 
 .group-members-roster__toolbar strong {

@@ -421,8 +421,9 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
           </label>
 
           <label className="form-field">
-            <span>Tag or serial number</span>
+            <span>Asset identifier (optional)</span>
             <input {...register('serial_or_tag_number')} />
+            <small>Use a tag, serial, facility, tank, or livestock number when one exists.</small>
           </label>
         </div>
 

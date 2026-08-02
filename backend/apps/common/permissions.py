@@ -120,6 +120,8 @@ RESOURCE_BASENAMES = {
     "resource-beneficiary",
     "resource-thematic-area",
     "thematic-area",
+    "resource-payment-obligation",
+    "resource-payment-transaction",
 }
 IMPACT_BASENAMES = {"impact-record"}
 APPROVAL_BASENAMES = {"approval-request"}
@@ -265,6 +267,20 @@ class RoleActionAccess(IsAuthenticated):
             model.objects.filter(pk=obj.pk),
             request.user,
         ).exists()
+
+
+class ResourceFinancialAccess(RoleActionAccess):
+    """Require explicit finance visibility and mutation capabilities."""
+
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        capability = (
+            VIEW_RESOURCE_FINANCIALS
+            if request.method in SAFE_METHODS
+            else MANAGE_RESOURCE_FINANCIALS
+        )
+        return user_has_capability(request.user, capability)
 
 
 class ApprovalReviewAccess(RoleActionAccess):
