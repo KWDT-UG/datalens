@@ -27,7 +27,8 @@ Implemented in this foundation pass:
 - DRF CRUD endpoints under `/api/v1/`
 - structured API error payloads with a normalized `errors` list
 - exact filtering, search, and whitelisted ordering on implemented list endpoints
-- eight KWDT-aligned MVP roles with centralized capability enforcement
+- eight KWDT-aligned job roles plus a temporary MVP full-access role, with
+  centralized capability enforcement
 - token/session/basic auth endpoints for UI integration
 - approval review actions that can apply supported create/update/delete payloads
 - offline sync endpoints for pull and conflict-detecting push/apply

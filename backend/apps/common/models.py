@@ -46,6 +46,7 @@ class UserRole(models.TextChoices):
         "Resource & Procurement Officer",
     )
     SYSTEM_ADMINISTRATOR = "system_administrator", "System Administrator"
+    MVP_FULL_ACCESS = "mvp_full_access", "MVP Full Access"
 
 
 class WorkforceType(models.TextChoices):
