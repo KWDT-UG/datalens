@@ -114,6 +114,9 @@ ROLE_CAPABILITIES = {
 }
 
 ALL_CAPABILITIES = set().union(*ROLE_CAPABILITIES.values())
+# Temporary stakeholder role for end-to-end MVP evaluation. Keep this assignment
+# explicit so it can be audited and removed without changing permanent job roles.
+ROLE_CAPABILITIES[UserRole.MVP_FULL_ACCESS] = set(ALL_CAPABILITIES)
 
 RESOURCE_BASENAMES = {
     "resource",
@@ -151,10 +154,18 @@ def ensure_role_groups():
             Group.objects.get_or_create(name=group_name)
 
 
+@transaction.atomic
 def assign_role(user, role):
     if role not in UserRole.values:
         raise ValueError(f"Unsupported Data Lens role: {role}")
+    if user.pk is None:
+        raise ValueError("A Data Lens role can only be assigned to a saved user.")
+
     ensure_role_groups()
+    # Serialize role changes for this account and roll the remove/add pair back
+    # together if either operation fails. This prevents a partial transition
+    # from leaving an existing user without a product role.
+    user.__class__._default_manager.select_for_update().get(pk=user.pk)
     user.groups.remove(
         *Group.objects.filter(
             name__in=set(GROUP_NAME_BY_ROLE.values()).union(LEGACY_ROLE_GROUPS)

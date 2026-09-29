@@ -107,6 +107,25 @@ class ApprovalPolicyTests(TestCase):
         self.resource.refresh_from_db()
         self.assertEqual(self.resource.name, "Proposed Resource Name")
 
+    def test_mvp_full_access_user_cannot_review_own_submission(self):
+        user = self.user_with_role(UserRole.MVP_FULL_ACCESS)
+        self.client.force_authenticate(user)
+
+        response = self.client.patch(
+            reverse("resource-detail", kwargs={"pk": self.resource.pk}),
+            {"name": "Full Access Proposal"},
+            format="json",
+        )
+        approval_id = response.data["approval_request"]["id"]
+        approve_response = self.client.post(
+            reverse("approval-request-approve", kwargs={"pk": approval_id}),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(approve_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("reviewer", approve_response.data)
+
     def test_resource_value_change_requires_finance_review(self):
         submitter = self.user_with_role(UserRole.RESOURCE_PROCUREMENT_OFFICER)
         programme_reviewer = self.user_with_role(UserRole.PROGRAMME_MANAGER)

@@ -180,9 +180,24 @@ class AdminUserUpdateSerializer(AssignmentFieldsMixin, serializers.Serializer):
                     {"is_active": "You cannot deactivate your own account."}
                 )
             role = attrs.get("role")
-            if role is not None and role != UserRole.SYSTEM_ADMINISTRATOR:
+            protected_roles = {
+                UserRole.SYSTEM_ADMINISTRATOR,
+                UserRole.MVP_FULL_ACCESS,
+            }
+            current_protected_roles = user_role_names(target).intersection(
+                protected_roles
+            )
+            if (
+                role is not None
+                and current_protected_roles
+                and role not in current_protected_roles
+            ):
                 raise serializers.ValidationError(
-                    {"role": "You cannot remove your own system administrator role."}
+                    {
+                        "role": (
+                            "You cannot replace your own privileged administrator role."
+                        )
+                    }
                 )
         return attrs
 

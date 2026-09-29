@@ -16,7 +16,7 @@ from apps.common.models import (
     UserRole,
     WorkforceType,
 )
-from apps.common.permissions import assign_role
+from apps.common.permissions import ALL_CAPABILITIES, assign_role, user_capabilities
 
 
 class AdminApiTests(TestCase):
@@ -60,6 +60,111 @@ class AdminApiTests(TestCase):
         response = self.client.get(reverse("admin-user-list"))
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_mvp_full_access_role_has_every_capability_and_admin_access(self):
+        full_access_user = get_user_model().objects.create_user(
+            username="mvp.full.access",
+            password="test-password",
+        )
+        assign_role(full_access_user, UserRole.MVP_FULL_ACCESS)
+        self.client.force_authenticate(full_access_user)
+
+        users_response = self.client.get(reverse("admin-user-list"))
+        roles_response = self.client.get(reverse("admin-role-list"))
+
+        self.assertEqual(user_capabilities(full_access_user), ALL_CAPABILITIES)
+        self.assertEqual(users_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(roles_response.status_code, status.HTTP_200_OK)
+        full_access_role = next(
+            role
+            for role in roles_response.data["data"]["roles"]
+            if role["value"] == UserRole.MVP_FULL_ACCESS
+        )
+        self.assertEqual(set(full_access_role["capabilities"]), ALL_CAPABILITIES)
+
+        self_update_response = self.client.patch(
+            reverse("admin-user-detail", kwargs={"user_id": full_access_user.id}),
+            {
+                "email": "updated.full.access@example.com",
+                "role": UserRole.MVP_FULL_ACCESS,
+            },
+            format="json",
+        )
+        self.assertEqual(self_update_response.status_code, status.HTTP_200_OK)
+
+        self_demote_response = self.client.patch(
+            reverse("admin-user-detail", kwargs={"user_id": full_access_user.id}),
+            {"role": UserRole.PROGRAMME_MANAGER},
+            format="json",
+        )
+        self.assertEqual(self_demote_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("role", self_demote_response.data)
+
+    def test_existing_user_can_switch_to_full_access_and_back_in_same_session(self):
+        existing_user = get_user_model().objects.create_user(
+            username="existing.viewer",
+            password="test-password",
+        )
+        assign_role(existing_user, UserRole.COMMUNICATIONS_VIEWER)
+        user_client = APIClient()
+        login_response = user_client.post(
+            reverse("auth-login"),
+            {
+                "username": existing_user.username,
+                "password": "test-password",
+            },
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+
+        promote_response = self.client.patch(
+            reverse("admin-user-detail", kwargs={"user_id": existing_user.id}),
+            {"role": UserRole.MVP_FULL_ACCESS},
+            format="json",
+        )
+        promoted_me_response = user_client.get(reverse("auth-me"))
+        promoted_admin_response = user_client.get(reverse("admin-user-list"))
+
+        self.assertEqual(promote_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(promoted_me_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            promoted_me_response.data["data"]["user"]["roles"],
+            [UserRole.MVP_FULL_ACCESS],
+        )
+        self.assertEqual(
+            set(promoted_me_response.data["data"]["user"]["capabilities"]),
+            ALL_CAPABILITIES,
+        )
+        self.assertEqual(promoted_admin_response.status_code, status.HTTP_200_OK)
+
+        revert_response = self.client.patch(
+            reverse("admin-user-detail", kwargs={"user_id": existing_user.id}),
+            {"role": UserRole.COMMUNICATIONS_VIEWER},
+            format="json",
+        )
+        reverted_me_response = user_client.get(reverse("auth-me"))
+        reverted_admin_response = user_client.get(reverse("admin-user-list"))
+
+        self.assertEqual(revert_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(reverted_me_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            reverted_me_response.data["data"]["user"]["roles"],
+            [UserRole.COMMUNICATIONS_VIEWER],
+        )
+        self.assertEqual(reverted_admin_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_failed_role_switch_preserves_the_existing_role(self):
+        with patch(
+            "apps.common.permissions.Group.objects.get",
+            side_effect=RuntimeError("simulated group assignment failure"),
+        ):
+            with self.assertRaises(RuntimeError):
+                assign_role(self.manager, UserRole.MVP_FULL_ACCESS)
+
+        self.assertEqual(
+            set(self.manager.groups.values_list("name", flat=True)),
+            {UserRole.PROGRAMME_MANAGER},
+        )
 
     def test_system_administrator_can_create_and_update_user(self):
         create_response = self.client.post(
