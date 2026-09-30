@@ -59,11 +59,18 @@ class CommunityViewSet(
         .order_by("name", "id")
     )
     serializer_class = CommunitySerializer
-    filter_fields = ("status", "country", "region_name", "district_name")
-    search_fields = ("name", "area_name", "district_name", "region_name")
+    filter_fields = (
+        "status",
+        "country",
+        "region_name",
+        "district_name",
+        "subcounty_name",
+    )
+    search_fields = ("name", "subcounty_name", "district_name", "region_name")
     ordering_fields = (
         "name",
         "country",
+        "resident_count",
         "member_count",
         "group_count",
         "committee_count",
@@ -98,10 +105,15 @@ class CommunityViewSet(
             {
                 "id": community.id,
                 "name": community.name,
+                "resident_count": community.resident_count,
                 "member_count": members.count(),
                 "group_count": groups.count(),
-                "committee_count": community.committees.filter(is_deleted=False).count(),
-                "cooperative_count": community.cooperatives.filter(is_deleted=False).count(),
+                "committee_count": community.committees.filter(
+                    is_deleted=False
+                ).count(),
+                "cooperative_count": community.cooperatives.filter(
+                    is_deleted=False
+                ).count(),
                 "resource_count": community.resources.filter(is_deleted=False).count(),
                 "institution_count": institutions.count(),
             }

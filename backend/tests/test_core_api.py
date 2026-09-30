@@ -4,7 +4,12 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.common.models import InstitutionType, MemberStatus, ResourcePartyType, UserRole
+from apps.common.models import (
+    InstitutionType,
+    MemberStatus,
+    ResourcePartyType,
+    UserRole,
+)
 from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
@@ -24,7 +29,9 @@ class CoreApiTests(TestCase):
         assign_role(cls.user, UserRole.FIELD_OFFICER)
         cls.community = Community.objects.create(
             name="Primary Community",
+            subcounty_name="Nakawa",
             district_name="Kampala",
+            resident_count=1250,
         )
         cls.other_community = Community.objects.create(
             name="Other Community",
@@ -81,9 +88,11 @@ class CoreApiTests(TestCase):
                 "create": {
                     "name": "Created Community",
                     "country": "Uganda",
+                    "subcounty_name": "Mpunge",
+                    "resident_count": 720,
                 },
-                "patch": {"notes": "Updated community notes"},
-                "patch_field": "notes",
+                "patch": {"resident_count": 735},
+                "patch_field": "resident_count",
             },
             {
                 "label": "groups",
@@ -216,6 +225,7 @@ class CoreApiTests(TestCase):
         row = response.data["results"][0]
 
         expected_counts = {
+            "resident_count": 1250,
             "member_count": 1,
             "group_count": 1,
             "committee_count": 1,
@@ -227,6 +237,14 @@ class CoreApiTests(TestCase):
             with self.subTest(field=field):
                 self.assertEqual(row[field], expected)
 
+        self.assertEqual(row["subcounty_name"], "Nakawa")
+
+        summary_response = self.client.get(
+            reverse("community-summary", kwargs={"pk": self.community.pk})
+        )
+        self.assertEqual(summary_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(summary_response.data["resident_count"], 1250)
+
         member_search_response = self.client.get(
             reverse("community-list"),
             {"member_search": "Grace"},
@@ -237,3 +255,42 @@ class CoreApiTests(TestCase):
             member_search_response.data["results"][0]["id"],
             self.community.id,
         )
+
+    def test_community_rejects_negative_resident_count(self):
+        response = self.client.post(
+            reverse("community-list"),
+            {"name": "Invalid Population", "resident_count": -1},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("resident_count", response.data)
+
+    def test_community_accepts_legacy_area_name_for_queued_changes(self):
+        response = self.client.post(
+            reverse("community-list"),
+            {"name": "Legacy Offline Community", "area_name": "Ntenjeru"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["subcounty_name"], "Ntenjeru")
+        self.assertNotIn("area_name", response.data)
+        self.assertEqual(
+            Community.objects.get(pk=response.data["id"]).subcounty_name,
+            "Ntenjeru",
+        )
+
+    def test_community_rejects_conflicting_subcounty_field_names(self):
+        response = self.client.post(
+            reverse("community-list"),
+            {
+                "name": "Conflicting Community",
+                "subcounty_name": "Mpunge",
+                "area_name": "Ntenjeru",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("area_name", response.data)

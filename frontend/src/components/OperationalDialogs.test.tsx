@@ -30,6 +30,8 @@ const community: Community = {
   id: 1,
   name: 'Core Community',
   country: 'Uganda',
+  resident_count: 1200,
+  subcounty_name: 'Mpunge',
   status: 'active'
 };
 const group: Group = {
@@ -294,6 +296,27 @@ it('captures sub-county in the group create and edit form', async () => {
     expect(call.method).toBe('POST');
     expect(call.path).toBe('/api/v1/groups/');
     expect(call.body.sub_county).toBe('Ntenjeru');
+  });
+});
+
+it('captures subcounty and resident count in the community form', async () => {
+  const fetchMock = installCrudFetchMock();
+  const user = userEvent.setup();
+
+  renderWithProviders(
+    <CommunityCreateDialog onClose={commonCallbacks.onClose} />
+  );
+
+  await user.type(screen.getByLabelText('Community name'), 'Katosi');
+  await user.type(screen.getByLabelText('Subcounty / Location'), 'Ntenjeru');
+  await user.type(screen.getByLabelText('Number of residents'), '2450');
+  await user.click(screen.getByRole('button', { name: 'Create community' }));
+
+  await waitFor(() => {
+    const call = mutationCall(fetchMock);
+    expect(call.body.subcounty_name).toBe('Ntenjeru');
+    expect(call.body.resident_count).toBe(2450);
+    expect(call.body.area_name).toBeUndefined();
   });
 });
 

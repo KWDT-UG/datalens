@@ -172,10 +172,11 @@ export interface AdminInvitationCreateInput {
 export interface Community extends SyncMetadata {
   id: number;
   name: string;
-  area_name?: string;
+  subcounty_name?: string;
   district_name?: string;
   region_name?: string;
   country?: string;
+  resident_count?: number | null;
   status?: RecordStatus;
   notes?: string;
   member_count?: number;
@@ -241,10 +242,11 @@ export interface DashboardData {
 
 export interface CommunityCreateInput {
   name: string;
-  area_name?: string;
+  subcounty_name?: string;
   district_name?: string;
   region_name?: string;
   country?: string;
+  resident_count?: number | null;
   status?: RecordStatus;
   notes?: string;
 }

@@ -16,6 +16,21 @@ function draftStorageAvailable() {
   return typeof indexedDB !== 'undefined';
 }
 
+function normalizeRenamedFields<T extends FieldValues>(entityType: string, payload: T): T {
+  if (
+    entityType !== 'community' ||
+    !Object.prototype.hasOwnProperty.call(payload, 'area_name') ||
+    Object.prototype.hasOwnProperty.call(payload, 'subcounty_name')
+  ) {
+    return payload;
+  }
+
+  const normalized = { ...payload } as Record<string, unknown>;
+  normalized.subcounty_name = normalized.area_name;
+  delete normalized.area_name;
+  return normalized as T;
+}
+
 export function useOfflineDraft<T extends FieldValues>({
   enabled = true,
   entityId,
@@ -39,7 +54,7 @@ export function useOfflineDraft<T extends FieldValues>({
       .last()
       .then((draft) => {
         if (active && draft?.payload) {
-          reset(draft.payload as T);
+          reset(normalizeRenamedFields(entityType, draft.payload as T));
         }
       })
       .catch(() => undefined)

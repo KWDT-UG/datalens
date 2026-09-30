@@ -190,10 +190,11 @@ Implement these core models first.
 Fields:
 - id
 - name
-- area_name
+- subcounty_name
 - district_name
 - region_name
 - country
+- resident_count
 - status
 - notes
 - created_at

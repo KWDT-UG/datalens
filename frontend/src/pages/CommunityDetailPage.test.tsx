@@ -57,6 +57,11 @@ function installGroupWorkspaceFetchMock() {
     id: 1,
     name: 'Katosi Community',
     status: 'active',
+    subcounty_name: 'Mpunge',
+    district_name: 'Mukono',
+    region_name: 'Central',
+    country: 'Uganda',
+    resident_count: 2450,
     group_count: 1,
     member_count: 27,
     resource_count: 1
@@ -228,6 +233,43 @@ function renderGroupWorkspace() {
     </MemoryRouter>
   );
 }
+
+function renderCommunityDetail() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      mutations: { retry: false },
+      queries: { retry: false }
+    }
+  });
+
+  return render(
+    <MemoryRouter initialEntries={['/communities/1/groups']}>
+      <QueryClientProvider client={queryClient}>
+        <Routes>
+          <Route path="/communities/:communityId/:section" element={<CommunityDetailPage />} />
+        </Routes>
+      </QueryClientProvider>
+    </MemoryRouter>
+  );
+}
+
+describe('CommunityDetailPage community summary', () => {
+  it('shows subcounty, residents, resources, and groups', async () => {
+    installGroupWorkspaceFetchMock();
+    renderCommunityDetail();
+
+    expect(await screen.findByRole('heading', { name: 'Katosi Community' })).toBeInTheDocument();
+    expect(screen.getByText('Subcounty / Location')).toBeInTheDocument();
+    expect(screen.getAllByText('Mpunge').length).toBeGreaterThan(0);
+    const summaryCard = within(
+      screen.getByRole('heading', { name: 'Community summary' }).parentElement!
+    );
+    expect(summaryCard.getByText('Residents')).toBeInTheDocument();
+    expect(summaryCard.getByText('2,450')).toBeInTheDocument();
+    expect(summaryCard.getByText('Resources')).toBeInTheDocument();
+    expect(summaryCard.getByText('Groups')).toBeInTheDocument();
+  });
+});
 
 describe('CommunityDetailPage group workspace', () => {
   it('renders group summary data and tabbed workspace sections', async () => {

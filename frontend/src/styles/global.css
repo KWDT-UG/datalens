@@ -1696,13 +1696,23 @@ h2 {
   font-size: 0.9rem;
 }
 
-.address-card {
-  max-width: 430px;
+.community-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 430px));
+  gap: 24px;
   margin-bottom: 28px;
+}
+
+.address-card {
   padding: 28px 34px;
   border: 1px solid var(--line-soft);
   border-radius: 10px;
   background: var(--surface);
+}
+
+.community-statistics-card dd {
+  font-size: 1.15rem;
+  font-weight: 700;
 }
 
 .address-card h2 {
@@ -3247,7 +3257,8 @@ a.group-workspace-card:hover {
   .report-grid,
   .breakdown__body,
   .profile-layout,
-  .dashboard-pulse-grid {
+  .dashboard-pulse-grid,
+  .community-summary-cards {
     grid-template-columns: 1fr;
   }
 

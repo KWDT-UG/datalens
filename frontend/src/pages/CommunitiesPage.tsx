@@ -15,7 +15,7 @@ import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/lis
 const pageSize = 10;
 
 function formatLocation(community: Community) {
-  return [community.area_name, community.district_name, community.region_name, community.country]
+  return [community.subcounty_name, community.district_name, community.region_name, community.country]
     .filter(Boolean)
     .join(', ');
 }
@@ -60,7 +60,6 @@ export function CommunitiesPage() {
     downloadCsv(
       'communities-current-page.csv',
       communities.map((community) => ({
-        area_name: community.area_name,
         committee_count: community.committee_count,
         cooperative_count: community.cooperative_count,
         country: community.country,
@@ -69,9 +68,11 @@ export function CommunitiesPage() {
         id: community.id,
         member_count: community.member_count,
         name: community.name,
+        resident_count: community.resident_count,
         region_name: community.region_name,
         resource_count: community.resource_count,
         status: community.status,
+        subcounty_name: community.subcounty_name,
         updated_at: community.updated_at
       }))
     );
@@ -187,14 +188,15 @@ export function CommunitiesPage() {
               <tr>
                 <th aria-label="Select community" />
                 <th>Community name</th>
-                <th>Area / location</th>
-                <th>Members</th>
+                <th>Subcounty / Location</th>
+                <th>Residents</th>
                 <th>Groups</th>
+                <th>Members</th>
                 <th>Committees</th>
                 <th>Cooperatives</th>
                 <th>Resources</th>
                 <th>Status</th>
-                <th>Last updated</th>
+                <th>Last Updated</th>
                 {canManage ? <th>Actions</th> : null}
               </tr>
             </thead>
@@ -215,8 +217,9 @@ export function CommunitiesPage() {
                     <Link to={`/communities/${community.id}/groups`}>{community.name}</Link>
                   </td>
                   <td>{formatLocation(community) || 'Not recorded'}</td>
-                  <td>{community.member_count ?? 0}</td>
+                  <td>{community.resident_count?.toLocaleString() ?? 'Not recorded'}</td>
                   <td>{community.group_count ?? 0}</td>
+                  <td>{community.member_count ?? 0}</td>
                   <td>{community.committee_count ?? 0}</td>
                   <td>{community.cooperative_count ?? 0}</td>
                   <td>{community.resource_count ?? 0}</td>
@@ -250,6 +253,11 @@ export function CommunitiesPage() {
               <strong>{community.name}</strong>
               <p>{community.notes || 'Community profile and breakdown details are ready to view.'}</p>
               <div className="community-card__counts">
+                <span>
+                  {community.resident_count == null
+                    ? 'Residents not recorded'
+                    : `${community.resident_count.toLocaleString()} residents`}
+                </span>
                 <span>{community.member_count ?? 0} members</span>
                 <span>{community.group_count ?? 0} groups</span>
                 <span>{community.resource_count ?? 0} resources</span>

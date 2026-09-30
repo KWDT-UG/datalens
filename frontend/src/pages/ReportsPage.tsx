@@ -41,11 +41,12 @@ export function ReportsPage() {
           'community-summary.csv',
           rows.map((community) => ({
             name: community.name,
-            area: community.area_name,
+            subcounty_name: community.subcounty_name,
             district: community.district_name,
             region: community.region_name,
             country: community.country,
             status: community.status,
+            residents: community.resident_count,
             members: community.member_count,
             groups: community.group_count,
             institutions: community.institution_count,
