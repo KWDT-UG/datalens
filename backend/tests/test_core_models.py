@@ -38,7 +38,11 @@ class CoreModelTests(TestCase):
             (
                 "community",
                 Community.objects.create,
-                {"name": "Entebbe"},
+                {
+                    "name": "Entebbe",
+                    "subcounty_name": "Katabi",
+                    "resident_count": 1800,
+                },
             ),
             (
                 "group",
@@ -81,6 +85,9 @@ class CoreModelTests(TestCase):
                 self.assertFalse(instance.is_deleted)
                 if label == "group":
                     self.assertEqual(instance.sub_county, "Mpunge")
+                if label == "community":
+                    self.assertEqual(instance.subcounty_name, "Katabi")
+                    self.assertEqual(instance.resident_count, 1800)
 
     def test_group_unique_constraints_are_community_scoped(self):
         cases = [

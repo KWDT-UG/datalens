@@ -44,13 +44,14 @@ export function CommunityCreateDialog({
     watch
   } = useForm<CommunityCreateInput>({
     defaultValues: {
-      area_name: community?.area_name ?? '',
       country: community?.country ?? 'Uganda',
       district_name: community?.district_name ?? '',
       name: community?.name ?? '',
       notes: community?.notes ?? '',
+      resident_count: community?.resident_count ?? null,
       region_name: community?.region_name ?? '',
-      status: community?.status ?? 'active'
+      status: community?.status ?? 'active',
+      subcounty_name: community?.subcounty_name ?? ''
     }
   });
   const mutationError = createCommunity.error ?? updateCommunity.error;
@@ -119,8 +120,21 @@ export function CommunityCreateDialog({
           </label>
 
           <label className="form-field">
-            <span>Area</span>
-            <input {...register('area_name')} />
+            <span>Subcounty / Location</span>
+            <input {...register('subcounty_name')} />
+          </label>
+
+          <label className="form-field">
+            <span>Number of residents</span>
+            <input
+              type="number"
+              min="0"
+              {...register('resident_count', {
+                min: { value: 0, message: 'Number of residents cannot be negative.' },
+                setValueAs: (value) => value === '' ? null : Number(value)
+              })}
+            />
+            {errors.resident_count ? <small>{errors.resident_count.message}</small> : null}
           </label>
 
           <label className="form-field">

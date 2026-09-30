@@ -2032,13 +2032,13 @@ export function CommunityDetailPage() {
             ) : null}
           </div>
 
-          <div className="address-card">
-            <div>
+          <div className="community-summary-cards">
+            <div className="address-card">
               <h2>Address</h2>
               <dl>
                 <div>
-                  <dt>Area</dt>
-                  <dd>{community.area_name || 'Not recorded'}</dd>
+                  <dt>Subcounty / Location</dt>
+                  <dd>{community.subcounty_name || 'Not recorded'}</dd>
                 </div>
                 <div>
                   <dt>District</dt>
@@ -2051,6 +2051,24 @@ export function CommunityDetailPage() {
                 <div>
                   <dt>Country</dt>
                   <dd>{community.country || 'Not recorded'}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div className="address-card community-statistics-card">
+              <h2>Community summary</h2>
+              <dl>
+                <div>
+                  <dt>Residents</dt>
+                  <dd>{community.resident_count?.toLocaleString() ?? 'Not recorded'}</dd>
+                </div>
+                <div>
+                  <dt>Resources</dt>
+                  <dd>{community.resource_count ?? 0}</dd>
+                </div>
+                <div>
+                  <dt>Groups</dt>
+                  <dd>{community.group_count ?? 0}</dd>
                 </div>
               </dl>
             </div>

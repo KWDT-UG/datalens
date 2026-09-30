@@ -6,6 +6,9 @@ from .models import Community
 
 
 class CommunitySerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer):
+    # Keep queued offline changes and pending approvals from before the field
+    # rename applicable while exposing only the new name in responses.
+    area_name = serializers.CharField(write_only=True, required=False)
     member_count = serializers.IntegerField(read_only=True)
     group_count = serializers.IntegerField(read_only=True)
     committee_count = serializers.IntegerField(read_only=True)
@@ -18,10 +21,12 @@ class CommunitySerializer(ApprovalStateSerializerMixin, serializers.ModelSeriali
         fields = [
             "id",
             "name",
+            "subcounty_name",
             "area_name",
             "district_name",
             "region_name",
             "country",
+            "resident_count",
             "status",
             "notes",
             "member_count",
@@ -52,3 +57,22 @@ class CommunitySerializer(ApprovalStateSerializerMixin, serializers.ModelSeriali
             "sync_version",
             "is_deleted",
         ]
+
+    def validate(self, attrs):
+        legacy_area_name = attrs.pop("area_name", serializers.empty)
+        subcounty_name = attrs.get("subcounty_name", serializers.empty)
+        if legacy_area_name is not serializers.empty:
+            if (
+                subcounty_name is not serializers.empty
+                and subcounty_name != legacy_area_name
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "area_name": (
+                            "Use subcounty_name; the legacy area_name value "
+                            "must match when both are supplied."
+                        )
+                    }
+                )
+            attrs["subcounty_name"] = legacy_area_name
+        return super().validate(attrs)
