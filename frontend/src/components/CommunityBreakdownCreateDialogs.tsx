@@ -151,7 +151,6 @@ export function GroupCreateDialog({
       code: group?.code ?? '',
       community: communityId,
       formed_on: group?.formed_on ?? '',
-      meeting_day: group?.meeting_day ?? '',
       name: group?.name ?? '',
       notes: group?.notes ?? '',
       status: group?.status ?? 'active',
@@ -183,7 +182,7 @@ export function GroupCreateDialog({
               ...values,
               code: values.code.trim(),
               name: values.name.trim(),
-              ...optionalTextFields(values, ['closed_on', 'formed_on', 'meeting_day', 'notes', 'sub_county'])
+              ...optionalTextFields(values, ['closed_on', 'formed_on', 'notes', 'sub_county'])
             };
             if (group) {
               await updateGroup.mutateAsync({
@@ -213,10 +212,6 @@ export function GroupCreateDialog({
             <span>Group code</span>
             <input {...register('code', { required: 'Enter a group code.' })} />
             {errors.code ? <small>{errors.code.message}</small> : null}
-          </label>
-          <label className="form-field">
-            <span>Meeting day</span>
-            <input {...register('meeting_day')} />
           </label>
           <label className="form-field">
             <span>Sub-county</span>

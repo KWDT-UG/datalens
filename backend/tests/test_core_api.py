@@ -53,6 +53,7 @@ class CoreApiTests(TestCase):
             member_number="MEM-1",
             first_name="Grace",
             last_name="Nabirye",
+            gender="Female",
         )
         cls.institution = Institution.objects.create(
             community=cls.community,
@@ -255,6 +256,32 @@ class CoreApiTests(TestCase):
             member_search_response.data["results"][0]["id"],
             self.community.id,
         )
+
+    def test_group_list_includes_member_and_gender_counts(self):
+        Member.objects.create(
+            community=self.community,
+            group=self.group,
+            first_name="Peter",
+            last_name="Okello",
+            gender="male",
+        )
+        Member.objects.create(
+            community=self.community,
+            group=self.group,
+            first_name="Unspecified",
+            last_name="Member",
+        )
+
+        response = self.client.get(
+            reverse("group-list"),
+            {"community": self.community.id},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row = response.data["results"][0]
+        self.assertEqual(row["member_count"], 3)
+        self.assertEqual(row["female_count"], 1)
+        self.assertEqual(row["male_count"], 1)
 
     def test_community_rejects_negative_resident_count(self):
         response = self.client.post(

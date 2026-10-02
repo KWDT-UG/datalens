@@ -5,10 +5,12 @@ import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router
 
 import {
   useCommitteeMembershipsQuery,
+  useCommitteeQuery,
   useCommitteesQuery,
   useCommunityQuery,
   useCooperativesQuery,
   useGroupMembersQuery,
+  useGroupActivitiesQuery,
   useGroupQuery,
   useGroupsQuery,
   useArchiveRecordsMutation,
@@ -23,6 +25,7 @@ import type {
   CommitteeMembership,
   Cooperative,
   Group,
+  GroupActivity,
   ImpactRecord,
   Institution,
   Member,
@@ -41,6 +44,7 @@ import { ActionMenu } from '../components/ActionMenu';
 import { CommunityCreateDialog } from '../components/CommunityCreateDialog';
 import { ListActionError } from '../components/ListActionError';
 import { ResourceCreateDialog } from '../components/ResourceCreateDialog';
+import { GroupActivityDialog } from '../components/GroupActivityDialog';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../auth/AuthContext';
 import { capabilities, hasCapability } from '../auth/permissions';
@@ -76,9 +80,13 @@ type MemberDetailNavigationState = {
     name: string;
   };
 };
-type DemoGroupTraining = {
-  id: string;
+type GroupActivityDisplay = {
+  id: number;
+  source: GroupActivity;
+  category: 'Meeting' | 'Training';
   title: string;
+  startDate: string;
+  endDate: string;
   dateRange: string;
   month: string;
   startDay: number;
@@ -97,6 +105,7 @@ type DemoGroupTraining = {
   focus: string;
   reports: string[];
   reportStatus: string;
+  recordStatus: 'planned' | 'complete' | 'needs_attention' | 'cancelled';
 };
 
 const sectionKeys = sections.map((item) => item.key);
@@ -104,7 +113,7 @@ const groupWorkspaceTabs: Array<{ key: GroupWorkspaceTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'members', label: 'Members' },
   { key: 'resources', label: 'Resources' },
-  { key: 'trainings', label: 'Trainings' },
+  { key: 'trainings', label: 'Trainings & Meetings' },
   { key: 'committees', label: 'Committees' }
 ];
 const groupMemberStatusOptions = [
@@ -114,67 +123,47 @@ const groupMemberStatusOptions = [
   { value: 'deceased', label: 'Deceased' },
   { value: 'exited', label: 'Exited' }
 ];
-const demoGroupTrainingsByCode: Record<string, DemoGroupTraining[]> = {
-  'KWDT-DEMO-GRP': [
-    {
-      id: 'savings-records-2024-06',
-      title: 'Savings Records and Loan Tracking',
-      dateRange: '10 Jun 2024 - 12 Jun 2024',
-      month: 'June 2024',
-      startDay: 10,
-      endDay: 12,
-      facilitator: 'Joan Programme',
-      location: 'KWDT Demo Community Center',
-      attendance: { women: 18, men: 4 },
-      ageBands: [
-        { label: '20-40', men: 1, women: 9 },
-        { label: '40-60', men: 2, women: 5 },
-        { label: '>60', men: 1, women: 4 }
-      ],
-      focus: 'Bookkeeping, loan register updates, arrears follow-up',
-      reports: ['Savings training report', 'Loan register attendance'],
-      reportStatus: 'Report submitted'
+function activityDisplay(activity: GroupActivity): GroupActivityDisplay {
+  const start = new Date(activity.starts_at);
+  const end = new Date(activity.ends_at ?? activity.starts_at);
+  const reports = [activity.minutes, activity.decisions_actions, activity.report_notes]
+    .filter((value): value is string => Boolean(value?.trim()));
+  const reportStatus = activity.record_status === 'complete'
+    ? activity.activity_type === 'meeting' ? 'Minutes recorded' : 'Report complete'
+    : activity.record_status === 'needs_attention'
+      ? 'Needs attention'
+      : activity.record_status === 'cancelled'
+        ? 'Cancelled'
+        : 'Planned';
+  return {
+    id: activity.id,
+    source: activity,
+    category: activity.activity_type === 'meeting' ? 'Meeting' : 'Training',
+    title: activity.title,
+    startDate: activity.starts_at,
+    endDate: activity.ends_at ?? activity.starts_at,
+    dateRange: start.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+      + (activity.ends_at
+        ? ` – ${end.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
+        : ''),
+    month: start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+    startDay: start.getDate(),
+    endDay: end.getDate(),
+    facilitator: activity.facilitator_name || 'Not assigned',
+    location: activity.location_text || 'Location not recorded',
+    attendance: {
+      women: activity.women_attendance_count ?? 0,
+      men: activity.men_attendance_count ?? 0
     },
-    {
-      id: 'enterprise-planning-2024-08',
-      title: 'Enterprise Planning for Group Assets',
-      dateRange: '5 Aug 2024 - 6 Aug 2024',
-      month: 'August 2024',
-      startDay: 5,
-      endDay: 6,
-      facilitator: 'Amina Field',
-      location: 'Central Demo Parish Hall',
-      attendance: { women: 16, men: 5 },
-      ageBands: [
-        { label: '20-40', men: 2, women: 8 },
-        { label: '40-60', men: 1, women: 4 },
-        { label: '>60', men: 2, women: 4 }
-      ],
-      focus: 'Irrigation pump scheduling, produce pricing, member duties',
-      reports: ['Enterprise planning notes'],
-      reportStatus: 'Attendance verified'
-    },
-    {
-      id: 'impact-harvesting-2024-09',
-      title: 'Impact Harvesting Clinic',
-      dateRange: '18 Sep 2024',
-      month: 'September 2024',
-      startDay: 18,
-      endDay: 18,
-      facilitator: 'Benjamin Evaluation',
-      location: 'KWDT Demo Community Center',
-      attendance: { women: 19, men: 3 },
-      ageBands: [
-        { label: '20-40', men: 1, women: 10 },
-        { label: '40-60', men: 1, women: 6 },
-        { label: '>60', men: 1, women: 3 }
-      ],
-      focus: 'Outcome stories, household reach, evidence quality',
-      reports: ['Impact clinic draft notes', 'Outcome story checklist'],
-      reportStatus: 'Draft notes'
-    }
-  ]
-};
+    ageBands: [],
+    focus: activity.activity_type === 'meeting'
+      ? activity.agenda || activity.notes || 'Agenda not recorded'
+      : activity.objectives || activity.training_topic || activity.notes || 'Objectives not recorded',
+    reports,
+    reportStatus,
+    recordStatus: activity.record_status
+  };
+}
 const createLabels: Record<SectionKey, string> = {
   committees: 'Create committee',
   cooperatives: 'Create cooperative',
@@ -309,16 +298,17 @@ const tableConfigs: Record<
       }))
   },
   groups: {
-    columns: ['Group name', 'Code', 'Sub-county', 'Meeting day', 'Formed', 'Status'],
+    columns: ['Group name', 'Code', 'Formed', 'Status', 'Members', 'Female', 'Male'],
     exportRows: (records) =>
       (records as Group[]).map((group) => ({
         code: group.code,
         community: group.community,
         formed_on: group.formed_on,
         id: group.id,
-        meeting_day: group.meeting_day,
+        member_count: group.member_count,
+        female_count: group.female_count,
+        male_count: group.male_count,
         name: group.name,
-        sub_county: group.sub_county,
         status: group.status
       })),
     itemName: 'groups',
@@ -329,10 +319,11 @@ const tableConfigs: Record<
         cells: [
           group.name,
           group.code || 'Not recorded',
-          group.sub_county || 'Not recorded',
-          group.meeting_day || 'Not recorded',
           formatDate(group.formed_on),
-          <StatusBadge status={group.status} />
+          <StatusBadge status={group.status} />,
+          formatCount(group.member_count),
+          formatCount(group.female_count),
+          formatCount(group.male_count)
         ]
       }))
   },
@@ -490,10 +481,14 @@ const tableConfigs: Record<
 type BreakdownRecordDetailPageProps = {
   activeSection: SectionKey;
   canManage: boolean;
+  committeeMemberships: CommitteeMembership[];
+  committeeMembershipsLoading: boolean;
   communityName: string;
   communityId: number;
   groupImpactRecords: ImpactRecord[];
   groupImpactRecordsLoading: boolean;
+  groupActivities: GroupActivity[];
+  groupActivitiesLoading: boolean;
   groupCommitteeMemberships: CommitteeMembership[];
   groupCommittees: Committee[];
   groupCommitteesLoading: boolean;
@@ -509,10 +504,14 @@ type BreakdownRecordDetailPageProps = {
 function BreakdownRecordDetailPage({
   activeSection,
   canManage,
+  committeeMemberships,
+  committeeMembershipsLoading,
   communityId,
   communityName,
   groupImpactRecords,
   groupImpactRecordsLoading,
+  groupActivities,
+  groupActivitiesLoading,
   groupCommitteeMemberships,
   groupCommittees,
   groupCommitteesLoading,
@@ -567,6 +566,8 @@ function BreakdownRecordDetailPage({
             group={record as Group}
             impactRecords={groupImpactRecords}
             impactRecordsLoading={groupImpactRecordsLoading}
+            activities={groupActivities}
+            activitiesLoading={groupActivitiesLoading}
             committeeMemberships={groupCommitteeMemberships}
             committees={groupCommittees}
             committeesLoading={groupCommitteesLoading}
@@ -611,6 +612,12 @@ function BreakdownRecordDetailPage({
             <div className="record-page__content">
               {activeSection === 'members' ? (
                 <MemberDetailContent member={record as Member} />
+              ) : activeSection === 'committees' ? (
+                <CommitteeDetailContent
+                  committee={record as Committee}
+                  memberships={committeeMemberships}
+                  membershipsLoading={committeeMembershipsLoading}
+                />
               ) : (
                 <GenericRecordDetail activeSection={activeSection} record={record} />
               )}
@@ -624,6 +631,8 @@ function BreakdownRecordDetailPage({
 }
 
 function GroupWorkspaceDetailPage({
+  activities,
+  activitiesLoading,
   backTo,
   canManage,
   committeeMemberships,
@@ -639,6 +648,8 @@ function GroupWorkspaceDetailPage({
   resources,
   resourcesLoading
 }: {
+  activities: GroupActivity[];
+  activitiesLoading: boolean;
   backTo: string;
   canManage: boolean;
   committeeMemberships: CommitteeMembership[];
@@ -661,10 +672,9 @@ function GroupWorkspaceDetailPage({
   const groupMeta = [
     group.code ? `Code ${group.code}` : null,
     group.sub_county ? group.sub_county : null,
-    group.meeting_day ? `Meets ${group.meeting_day}` : null,
     group.formed_on ? `Formed ${formatDate(group.formed_on)}` : null
   ].filter(Boolean);
-  const trainings = group.code ? demoGroupTrainingsByCode[group.code] ?? [] : [];
+  const trainings = useMemo(() => activities.map(activityDisplay), [activities]);
 
   return (
     <article className="group-workspace" aria-labelledby="group-workspace-title">
@@ -710,13 +720,13 @@ function GroupWorkspaceDetailPage({
             impactBeneficiaries={impactBeneficiaries}
             impactHouseholds={impactHouseholds}
             impactLoading={impactRecordsLoading}
-            members={members}
             membersLoading={membersLoading}
             committees={committees}
             committeesLoading={committeesLoading}
             resources={resources}
             resourcesLoading={resourcesLoading}
             trainings={trainings}
+            trainingsLoading={activitiesLoading}
           />
         ) : null}
         {activeTab === 'members' ? (
@@ -726,7 +736,13 @@ function GroupWorkspaceDetailPage({
           <GroupResourcesTab group={group} resources={resources} resourcesLoading={resourcesLoading} />
         ) : null}
         {activeTab === 'trainings' ? (
-          <GroupTrainingsTab groupName={group.name} trainings={trainings} />
+          <GroupTrainingsTab
+            canManage={canManage}
+            committees={committees}
+            group={group}
+            trainings={trainings}
+            trainingsLoading={activitiesLoading}
+          />
         ) : null}
         {activeTab === 'committees' ? (
           <GroupCommitteesTab
@@ -749,11 +765,11 @@ function GroupOverviewTab({
   impactBeneficiaries,
   impactHouseholds,
   impactLoading,
-  members,
   membersLoading,
   resources,
   resourcesLoading,
-  trainings
+  trainings,
+  trainingsLoading
 }: {
   activeMembers: number;
   committees: Committee[];
@@ -762,20 +778,27 @@ function GroupOverviewTab({
   impactBeneficiaries: number;
   impactHouseholds: number;
   impactLoading: boolean;
-  members: Member[];
   membersLoading: boolean;
   resources: Resource[];
   resourcesLoading: boolean;
-  trainings: DemoGroupTraining[];
+  trainings: GroupActivityDisplay[];
+  trainingsLoading: boolean;
 }) {
-  const upcomingTrainings = trainings.slice(0, 3);
+  const upcomingTrainings = useMemo(() => {
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const currentAndUpcoming = trainings
+      .filter((training) => new Date(training.startDate) >= monthStart)
+      .sort((left, right) => left.startDate.localeCompare(right.startDate));
+    if (currentAndUpcoming.length > 0) {
+      return currentAndUpcoming.slice(0, 4);
+    }
+    return [...trainings]
+      .sort((left, right) => right.startDate.localeCompare(left.startDate))
+      .slice(0, 4);
+  }, [trainings]);
   const featuredResources = resources.slice(0, 3);
   const featuredCommittees = committees.slice(0, 2);
-  const newestMember = members
-    .filter((member) => member.joined_on)
-    .slice()
-    .sort((left, right) => String(right.joined_on).localeCompare(String(left.joined_on)))[0];
-
   return (
     <>
       <div className="group-workspace__metrics" aria-label="Group summary">
@@ -801,12 +824,13 @@ function GroupOverviewTab({
         <section className="group-overview-panel group-overview-panel--wide" aria-labelledby="group-overview-trainings">
           <header className="group-overview-panel__header">
             <div>
-              <span>Training schedule</span>
-              <h2 id="group-overview-trainings">Upcoming trainings</h2>
+              <span>Schedule and attendance</span>
+              <h2 id="group-overview-trainings">Trainings &amp; meetings</h2>
             </div>
             <strong>{formatCount(upcomingTrainings.length)}</strong>
           </header>
-          {upcomingTrainings.length > 0 ? (
+          {trainingsLoading ? <div className="state-box">Loading activities...</div> : null}
+          {!trainingsLoading && upcomingTrainings.length > 0 ? (
             <div className="group-overview-training-list">
               {upcomingTrainings.map((training) => (
                 <article key={training.id}>
@@ -815,6 +839,7 @@ function GroupOverviewTab({
                     <span>{training.month.split(' ')[0]}</span>
                   </time>
                   <div>
+                    <span className="group-event-category">{training.category}</span>
                     <h3>{training.title}</h3>
                     <p>{training.focus}</p>
                     <span>{training.dateRange} · {training.facilitator}</span>
@@ -822,9 +847,9 @@ function GroupOverviewTab({
                 </article>
               ))}
             </div>
-          ) : (
-            <p className="table-note">No group trainings are scheduled in the current fixture.</p>
-          )}
+          ) : !trainingsLoading ? (
+            <p className="table-note">No training or meeting activity is recorded yet.</p>
+          ) : null}
         </section>
 
         <section className="group-overview-panel" aria-labelledby="group-overview-committees">
@@ -839,11 +864,11 @@ function GroupOverviewTab({
           {!committeesLoading && featuredCommittees.length > 0 ? (
             <div className="group-overview-stack">
               {featuredCommittees.map((committee) => (
-                <article key={committee.id}>
+                <Link key={committee.id} to={`/communities/${committee.community}/committees/${committee.id}`}>
                   <strong>{committee.name}</strong>
                   <span>{formatLabel(committee.committee_type)}</span>
                   <StatusBadge status={committee.status} />
-                </article>
+                </Link>
               ))}
             </div>
           ) : null}
@@ -888,33 +913,6 @@ function GroupOverviewTab({
           ) : null}
         </section>
 
-        <section className="group-overview-panel group-overview-panel--context" aria-labelledby="group-overview-context">
-          <header className="group-overview-panel__header">
-            <div>
-              <span>Context</span>
-              <h2 id="group-overview-context">Group notes</h2>
-            </div>
-          </header>
-          {group.notes ? <p>{group.notes}</p> : <p className="table-note">No notes recorded for this group yet.</p>}
-          <div className="group-overview-context-grid">
-            <span>
-              <strong>{group.meeting_day || 'Not recorded'}</strong>
-              Meeting day
-            </span>
-            <span>
-              <strong>{group.sub_county || 'Not recorded'}</strong>
-              Sub-county
-            </span>
-            <span>
-              <strong>{newestMember ? memberName(newestMember) : 'Not recorded'}</strong>
-              Newest member
-            </span>
-            <span>
-              <strong>{group.formed_on ? formatDate(group.formed_on) : 'Not recorded'}</strong>
-              Formed
-            </span>
-          </div>
-        </section>
       </div>
     </>
   );
@@ -1095,88 +1093,389 @@ function GroupResourcesTab({
   );
 }
 
-function GroupTrainingsTab({ groupName, trainings }: { groupName: string; trainings: DemoGroupTraining[] }) {
-  const [selectedTrainingId, setSelectedTrainingId] = useState(trainings[0]?.id ?? '');
-  const selectedTraining = trainings.find((training) => training.id === selectedTrainingId) ?? trainings[0];
-  const monthGroups = trainings.reduce<Array<{ month: string; trainings: DemoGroupTraining[] }>>(
-    (current, training) => {
-      const existing = current.find((item) => item.month === training.month);
-      if (existing) {
-        existing.trainings.push(training);
-        return current;
-      }
-      return [...current, { month: training.month, trainings: [training] }];
-    },
-    []
+function GroupTrainingsTab({
+  canManage,
+  committees,
+  group,
+  trainings,
+  trainingsLoading
+}: {
+  canManage: boolean;
+  committees: Committee[];
+  group: Group;
+  trainings: GroupActivityDisplay[];
+  trainingsLoading: boolean;
+}) {
+  const today = useMemo(() => {
+    const value = new Date();
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }, []);
+  const [selectedTrainingId, setSelectedTrainingId] = useState<number | null>(null);
+  const [activityDialog, setActivityDialog] = useState<
+    { mode: 'create' } | { mode: 'edit' | 'duplicate'; activity: GroupActivity } | null
+  >(null);
+  const [selectedMonth, setSelectedMonth] = useState(
+    () => new Date(today.getFullYear(), today.getMonth(), 1)
   );
+  const [viewMode, setViewMode] = useState<'agenda' | 'calendar' | 'compact'>('agenda');
+  const [activityType, setActivityType] = useState<'all' | 'Meeting' | 'Training'>('all');
+  const [dateRange, setDateRange] = useState<'all' | 'month' | 'next_30' | 'past_3_months'>('month');
+  const [recordStatus, setRecordStatus] = useState<
+    'all' | 'planned' | 'complete' | 'needs_attention' | 'cancelled'
+  >('all');
+  const [sortOrder, setSortOrder] = useState<'attendance' | 'newest' | 'soonest' | 'title'>('soonest');
+  const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const selectedTraining = trainings.find((training) => training.id === selectedTrainingId);
+  const visibleTrainings = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const nextThirtyDays = new Date(today);
+    nextThirtyDays.setDate(nextThirtyDays.getDate() + 30);
+    const threeMonthsAgo = new Date(today);
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+    return trainings
+      .filter((training) => {
+        const startDate = new Date(training.startDate);
+        const matchesType = activityType === 'all' || training.category === activityType;
+        const matchesStatus = recordStatus === 'all' || training.recordStatus === recordStatus;
+        const matchesSearch = !query || [
+          training.title,
+          training.facilitator,
+          training.location,
+          training.focus
+        ].some((value) => value.toLowerCase().includes(query));
+        const matchesDate = dateRange === 'all'
+          || (dateRange === 'month'
+            && startDate.getFullYear() === selectedMonth.getFullYear()
+            && startDate.getMonth() === selectedMonth.getMonth())
+          || (dateRange === 'next_30' && startDate >= today && startDate <= nextThirtyDays)
+          || (dateRange === 'past_3_months' && startDate >= threeMonthsAgo && startDate <= today);
+        return matchesType && matchesStatus && matchesSearch && matchesDate;
+      })
+      .sort((left, right) => {
+        if (sortOrder === 'newest') {
+          return right.startDate.localeCompare(left.startDate);
+        }
+        if (sortOrder === 'title') {
+          return left.title.localeCompare(right.title);
+        }
+        if (sortOrder === 'attendance') {
+          const leftAttendance = left.attendance.women + left.attendance.men;
+          const rightAttendance = right.attendance.women + right.attendance.men;
+          return rightAttendance - leftAttendance;
+        }
+        return left.startDate.localeCompare(right.startDate);
+      });
+  }, [activityType, dateRange, recordStatus, search, selectedMonth, sortOrder, today, trainings]);
+  const monthLabel = selectedMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const daysInSelectedMonth = new Date(
+    selectedMonth.getFullYear(),
+    selectedMonth.getMonth() + 1,
+    0
+  ).getDate();
+  const firstWeekday = new Date(
+    selectedMonth.getFullYear(),
+    selectedMonth.getMonth(),
+    1
+  ).getDay();
+  const resultsLabel = dateRange === 'month'
+    ? `Activity in ${monthLabel}`
+    : dateRange === 'next_30'
+      ? 'Next 30 days'
+      : dateRange === 'past_3_months'
+        ? 'Past three months'
+        : 'All activity history';
+
+  if (trainingsLoading) {
+    return <div className="state-box">Loading trainings and meetings...</div>;
+  }
 
   if (trainings.length === 0) {
     return (
-      <div className="state-box">
-        Training records are not part of the current MVP backend yet. This tab is reserved for
-        the group training calendar and attendance history once that API is added.
+      <div className="group-activity-empty state-box">
+        <span>No trainings or meetings have been recorded for this group.</span>
+        {canManage ? (
+          <button className="button button--primary" type="button" onClick={() => setActivityDialog({ mode: 'create' })}>
+            <PlusIcon aria-hidden="true" /> Add activity
+          </button>
+        ) : null}
+        {activityDialog ? (
+          <GroupActivityDialog committees={committees} group={group} onClose={() => setActivityDialog(null)} />
+        ) : null}
       </div>
     );
   }
 
   return (
-    <div className="group-training-workspace">
-      <div className="group-training-calendar" aria-label="Training calendar">
-        {monthGroups.map((group) => (
-          <section key={group.month}>
-            <h3>{group.month}</h3>
-            <div className="group-training-calendar__grid">
-              {Array.from({ length: 30 }, (_, index) => {
-                const day = index + 1;
-                const trainingOnDay = group.trainings.find(
-                  (training) => day >= training.startDay && day <= training.endDay
-                );
-                const isStart = trainingOnDay?.startDay === day;
-                const isEnd = trainingOnDay?.endDay === day;
-                return (
-                  <button
-                    aria-label={trainingOnDay ? `${trainingOnDay.title}, day ${day}` : `${group.month} ${day}`}
-                    className={[
-                      trainingOnDay ? 'has-training' : '',
-                      isStart ? 'is-start' : '',
-                      isEnd ? 'is-end' : '',
-                      trainingOnDay?.id === selectedTraining?.id ? 'is-selected' : ''
-                    ].filter(Boolean).join(' ')}
-                    disabled={!trainingOnDay}
-                    key={day}
-                    type="button"
-                    onClick={() => trainingOnDay && setSelectedTrainingId(trainingOnDay.id)}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
-
-      <div className="group-training-list" aria-label="Training sessions">
-        {trainings.map((training) => (
+    <div className="group-activity-browser">
+      <div className="group-activity-period-row">
+        <div className="group-activity-month-nav" aria-label="Visible activity month">
           <button
-            className={training.id === selectedTraining?.id ? 'is-selected' : ''}
-            key={training.id}
+            aria-label="Previous month"
             type="button"
-            onClick={() => setSelectedTrainingId(training.id)}
-          >
-            <span>{training.title}</span>
-            <strong>{training.dateRange}</strong>
-            <small>{training.facilitator}</small>
-          </button>
-        ))}
+            onClick={() => {
+              setSelectedMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));
+              setDateRange('month');
+            }}
+          >‹</button>
+          <strong>{monthLabel}</strong>
+          <button
+            aria-label="Next month"
+            type="button"
+            onClick={() => {
+              setSelectedMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1));
+              setDateRange('month');
+            }}
+          >›</button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+              setDateRange('month');
+            }}
+          >Today</button>
+        </div>
+        <div className="group-activity-view-switch" aria-label="Activity display style">
+          {(['agenda', 'compact', 'calendar'] as const).map((view) => (
+            <button
+              aria-pressed={viewMode === view}
+              key={view}
+              type="button"
+              onClick={() => setViewMode(view)}
+            >{view.charAt(0).toUpperCase() + view.slice(1)}</button>
+          ))}
+          {canManage ? (
+            <button className="button button--primary" type="button" onClick={() => setActivityDialog({ mode: 'create' })}>
+              <PlusIcon aria-hidden="true" /> Add activity
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      {selectedTraining ? <GroupTrainingDetailPanel groupName={groupName} training={selectedTraining} /> : null}
+      <div className="group-activity-toolbar">
+        <label className="search-field">
+          <SearchIcon aria-hidden="true" />
+          <input
+            aria-label="Search trainings and meetings"
+            placeholder="Search title, facilitator, or location"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <div className="group-activity-type-switch" aria-label="Filter by activity type">
+          {(['all', 'Meeting', 'Training'] as const).map((type) => (
+            <button
+              aria-pressed={activityType === type}
+              key={type}
+              type="button"
+              onClick={() => setActivityType(type)}
+            >{type === 'all' ? 'All' : `${type}s`}</button>
+          ))}
+        </div>
+        <button
+          aria-expanded={filtersOpen}
+          className="button button--secondary"
+          type="button"
+          onClick={() => setFiltersOpen((current) => !current)}
+        >Filters</button>
+      </div>
+
+      {filtersOpen ? (
+        <div className="group-activity-filters">
+          <label>
+            <span>Date range</span>
+            <select
+              aria-label="Filter activities by date range"
+              value={dateRange}
+              onChange={(event) => setDateRange(event.target.value as typeof dateRange)}
+            >
+              <option value="month">Selected month</option>
+              <option value="next_30">Next 30 days</option>
+              <option value="past_3_months">Past 3 months</option>
+              <option value="all">All history</option>
+            </select>
+          </label>
+          <label>
+            <span>Record status</span>
+            <select
+              aria-label="Filter activities by record status"
+              value={recordStatus}
+              onChange={(event) => setRecordStatus(event.target.value as typeof recordStatus)}
+            >
+              <option value="all">All records</option>
+              <option value="needs_attention">Needs attention</option>
+              <option value="complete">Complete records</option>
+              <option value="planned">Planned</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label>
+            <span>Sort by</span>
+            <select
+              aria-label="Sort trainings and meetings"
+              value={sortOrder}
+              onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}
+            >
+              <option value="soonest">Soonest first</option>
+              <option value="newest">Newest first</option>
+              <option value="title">Title A-Z</option>
+              <option value="attendance">Attendance</option>
+            </select>
+          </label>
+        </div>
+      ) : null}
+
+      <div className="group-activity-results-heading">
+        <div>
+          <h3>{resultsLabel}</h3>
+          <span>{formatCount(visibleTrainings.length)} {visibleTrainings.length === 1 ? 'activity' : 'activities'}</span>
+        </div>
+        <span>Showing up to 25 results</span>
+      </div>
+
+      {visibleTrainings.length === 0 ? (
+        <div className="state-box">No trainings or meetings match these filters.</div>
+      ) : null}
+
+      {visibleTrainings.length > 0 && viewMode === 'agenda' ? (
+        <div className="group-activity-agenda" aria-label="Training and meeting agenda">
+          {visibleTrainings.slice(0, 25).map((training) => (
+            <button
+              className="group-activity-row"
+              key={training.id}
+              type="button"
+              onClick={() => setSelectedTrainingId(training.id)}
+            >
+              <time dateTime={training.startDate}>
+                <strong>{training.startDay}</strong>
+                <span>{new Date(training.startDate).toLocaleDateString(undefined, { month: 'short' })}</span>
+              </time>
+              <span className="group-activity-row__main">
+                <span className={`group-event-category ${training.category === 'Meeting' ? 'is-meeting' : ''}`}>
+                  {training.category}
+                </span>
+                <strong>{training.title}</strong>
+                <small>{training.location}</small>
+              </span>
+              <span className="group-activity-row__meta">
+                <span>{training.facilitator}</span>
+                <span>
+                  {training.recordStatus === 'planned'
+                    ? `${formatCount(training.source.expected_participant_count ?? 0)} expected`
+                    : `${formatCount(training.attendance.women + training.attendance.men)} attendees`}
+                </span>
+              </span>
+              <span className={`group-activity-record-status ${training.recordStatus === 'complete' ? 'is-complete' : ''}`}>
+                {training.reportStatus}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {visibleTrainings.length > 0 && viewMode === 'compact' ? (
+        <div className="table-wrap">
+          <table className="data-table group-activity-compact-table">
+            <thead>
+              <tr><th>Date</th><th>Activity</th><th>Type</th><th>Facilitator</th><th>Attendance</th><th>Record status</th></tr>
+            </thead>
+            <tbody>
+              {visibleTrainings.slice(0, 25).map((training) => (
+                <tr key={training.id}>
+                  <td>{formatDate(training.startDate)}</td>
+                  <td><button className="table-link" type="button" onClick={() => setSelectedTrainingId(training.id)}>{training.title}</button></td>
+                  <td>{training.category}</td>
+                  <td>{training.facilitator}</td>
+                  <td>
+                    {training.recordStatus === 'planned'
+                      ? `${formatCount(training.source.expected_participant_count ?? 0)} expected`
+                      : formatCount(training.attendance.women + training.attendance.men)}
+                  </td>
+                  <td>{training.reportStatus}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {viewMode === 'calendar' ? (
+        <div className="group-activity-calendar" aria-label={`${monthLabel} activity calendar`}>
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <strong key={day}>{day}</strong>)}
+          {Array.from({ length: firstWeekday }, (_, index) => <span aria-hidden="true" key={`blank-${index}`} />)}
+          {Array.from({ length: daysInSelectedMonth }, (_, index) => {
+            const day = index + 1;
+            const activities = visibleTrainings.filter((training) => {
+              const date = new Date(training.startDate);
+              return date.getFullYear() === selectedMonth.getFullYear()
+                && date.getMonth() === selectedMonth.getMonth()
+                && day >= training.startDay
+                && day <= training.endDay;
+            });
+            return (
+              <div className={activities.length > 0 ? 'has-activity' : ''} key={day}>
+                <span>{day}</span>
+                {activities.map((training) => (
+                  <button key={training.id} type="button" onClick={() => setSelectedTrainingId(training.id)}>
+                    {training.title}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className="group-activity-history-bar">
+        <span>{dateRange === 'all' ? 'Showing the complete available history.' : 'Older activity is kept out of the default view.'}</span>
+        {dateRange !== 'all' ? (
+          <button className="button button--secondary" type="button" onClick={() => {
+            setDateRange('all');
+            setViewMode('compact');
+          }}>Browse all history</button>
+        ) : null}
+      </div>
+
+      {selectedTraining ? (
+        <GroupTrainingDetailPanel
+          canManage={canManage}
+          groupName={group.name}
+          training={selectedTraining}
+          onClose={() => setSelectedTrainingId(null)}
+          onDuplicate={() => setActivityDialog({ mode: 'duplicate', activity: selectedTraining.source })}
+          onEdit={() => setActivityDialog({ mode: 'edit', activity: selectedTraining.source })}
+        />
+      ) : null}
+      {activityDialog ? (
+        <GroupActivityDialog
+          activity={activityDialog.mode === 'edit' ? activityDialog.activity : undefined}
+          committees={committees}
+          group={group}
+          onClose={() => setActivityDialog(null)}
+          template={activityDialog.mode === 'duplicate' ? activityDialog.activity : undefined}
+        />
+      ) : null}
     </div>
   );
 }
 
-function GroupTrainingDetailPanel({ groupName, training }: { groupName: string; training: DemoGroupTraining }) {
+function GroupTrainingDetailPanel({
+  canManage,
+  groupName,
+  onClose,
+  onDuplicate,
+  onEdit,
+  training
+}: {
+  canManage: boolean;
+  groupName: string;
+  onClose: () => void;
+  onDuplicate: () => void;
+  onEdit: () => void;
+  training: GroupActivityDisplay;
+}) {
   const totalAttendance = training.attendance.women + training.attendance.men;
   const maxChartValue = Math.max(
     1,
@@ -1187,10 +1486,23 @@ function GroupTrainingDetailPanel({ groupName, training }: { groupName: string; 
   const yAxisMidpoint = Math.ceil(maxChartValue / 2);
 
   return (
-    <aside className="group-training-detail" aria-label="Selected training details">
+    <aside className="group-training-detail" aria-label="Selected activity details">
       <section>
-        <span className="record-detail__eyebrow">Selected training</span>
-        <h3>{training.title}</h3>
+        <div className="group-training-detail__header">
+          <div>
+            <span className="record-detail__eyebrow">Selected {training.category.toLowerCase()}</span>
+            <h3>{training.title}</h3>
+          </div>
+          <div className="row-actions">
+            {canManage ? (
+              <>
+                <button className="button button--secondary" type="button" onClick={onDuplicate}>Schedule next</button>
+                <button className="button button--primary" type="button" onClick={onEdit}>Edit activity</button>
+              </>
+            ) : null}
+            <button className="button button--secondary" type="button" onClick={onClose}>Close details</button>
+          </div>
+        </div>
         <p>{training.dateRange} · {training.location}</p>
         <dl className="group-training-detail__facts">
           <div>
@@ -1207,13 +1519,21 @@ function GroupTrainingDetailPanel({ groupName, training }: { groupName: string; 
       <section>
         <h4>{groupName} attendees</h4>
         <ul className="group-training-attendee-groups">
-          <li>{formatCount(totalAttendance)} total participants from this group</li>
-          <li>{formatCount(training.attendance.women)} women</li>
-          <li>{formatCount(training.attendance.men)} men</li>
+          <li>
+            {training.recordStatus === 'planned'
+              ? `${formatCount(training.source.expected_participant_count ?? 0)} participants expected`
+              : `${formatCount(totalAttendance)} total participants from this group`}
+          </li>
+          {training.recordStatus !== 'planned' ? (
+            <>
+              <li>{formatCount(training.attendance.women)} women</li>
+              <li>{formatCount(training.attendance.men)} men</li>
+            </>
+          ) : null}
         </ul>
       </section>
 
-      <section>
+      {training.ageBands.length > 0 ? <section>
         <div className="group-training-chart-header">
           <div>
             <h4>Attendance by age band</h4>
@@ -1267,7 +1587,7 @@ function GroupTrainingDetailPanel({ groupName, training }: { groupName: string; 
             </div>
           </div>
         </div>
-      </section>
+      </section> : null}
 
       <section>
         <h4>Reports submitted</h4>
@@ -1320,7 +1640,9 @@ function GroupCommitteesTab({
         return (
           <article className="group-committee-card" key={committee.id}>
             <header>
-              <strong>{committee.name}</strong>
+              <Link to={`/communities/${committee.community}/committees/${committee.id}`}>
+                <strong>{committee.name}</strong>
+              </Link>
               <span>{formatLabel(committee.committee_type)}</span>
               <StatusBadge status={committee.status} />
             </header>
@@ -1421,6 +1743,75 @@ function MemberDetailContent({ member }: { member: Member }) {
             </Link>
           ))}
         </div>
+      </DetailSection>
+    </>
+  );
+}
+
+function CommitteeDetailContent({
+  committee,
+  memberships,
+  membershipsLoading
+}: {
+  committee: Committee;
+  memberships: CommitteeMembership[];
+  membershipsLoading: boolean;
+}) {
+  return (
+    <>
+      <DetailSection title="Committee details">
+        <dl className="record-detail__grid">
+          <DetailItem label="Type" value={formatLabel(committee.committee_type)} />
+          <DetailItem label="Formed" value={formatDate(committee.formed_on)} />
+          <DetailItem label="Closed" value={formatDate(committee.closed_on)} />
+          <DetailItem label="Members" value={membershipsLoading ? 'Loading...' : formatCount(memberships.length)} />
+        </dl>
+        {committee.description ? <p className="record-detail__notes">{committee.description}</p> : null}
+      </DetailSection>
+      <DetailSection title="Committee members">
+        {membershipsLoading ? <div className="state-box">Loading committee members...</div> : null}
+        {!membershipsLoading && memberships.length === 0 ? (
+          <div className="state-box">No members are recorded for this committee yet.</div>
+        ) : null}
+        {!membershipsLoading && memberships.length > 0 ? (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Group</th>
+                  <th>Role</th>
+                  <th>Gender</th>
+                  <th>Joined</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {memberships.map((membership) => (
+                  <tr key={membership.id}>
+                    <td>
+                      <Link to={`/communities/${committee.community}/members/${membership.member}`}>
+                        {membership.member_name || `Member #${membership.member}`}
+                      </Link>
+                      {membership.member_number ? <small className="table-cell-note">{membership.member_number}</small> : null}
+                    </td>
+                    <td>
+                      {membership.member_group_id ? (
+                        <Link to={`/communities/${committee.community}/groups/${membership.member_group_id}`}>
+                          {membership.member_group_name || `Group #${membership.member_group_id}`}
+                        </Link>
+                      ) : 'Not recorded'}
+                    </td>
+                    <td>{membership.role_name || 'Member'}</td>
+                    <td>{formatLabel(membership.member_gender)}</td>
+                    <td>{formatDate(membership.start_date)}</td>
+                    <td><StatusBadge status={membership.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </DetailSection>
     </>
   );
@@ -1533,17 +1924,52 @@ export function CommunityDetailPage() {
     selectedRecordId ?? undefined,
     activeSection === 'members' && Boolean(selectedRecordId)
   );
+  const committeeDetailQuery = useCommitteeQuery(
+    selectedRecordId ?? undefined,
+    activeSection === 'committees' && Boolean(selectedRecordId)
+  );
   const selectedRecord =
     activeSection === 'groups'
       ? groupDetailQuery.data ?? selectedRecordFromPage
       : activeSection === 'members'
         ? memberDetailQuery.data ?? selectedRecordFromPage
-        : selectedRecordFromPage;
+        : activeSection === 'committees'
+          ? committeeDetailQuery.data ?? selectedRecordFromPage
+          : selectedRecordFromPage;
+  const selectedCommitteeMembershipParams = useMemo(
+    () => ({
+      committee: selectedRecordId ?? undefined,
+      page: 1,
+      page_size: 200,
+      ordering: 'start_date'
+    }),
+    [selectedRecordId]
+  );
+  const selectedCommitteeMembershipsQuery = useCommitteeMembershipsQuery(
+    selectedCommitteeMembershipParams,
+    activeSection === 'committees' && Boolean(selectedRecordId)
+  );
+  const selectedCommitteeMemberships = selectedCommitteeMembershipsQuery.data?.results ?? [];
   const selectedGroupMembersQuery = useGroupMembersQuery(
     activeSection === 'groups' ? (selectedRecordId ?? undefined) : undefined,
     activeSection === 'groups' && Boolean(selectedRecordId)
   );
   const selectedGroupMembers = selectedGroupMembersQuery.data ?? [];
+  const selectedGroupActivityParams = useMemo(
+    () => ({
+      community: communityId,
+      group: selectedRecordId ?? undefined,
+      page: 1,
+      page_size: 500,
+      ordering: 'starts_at'
+    }),
+    [communityId, selectedRecordId]
+  );
+  const selectedGroupActivitiesQuery = useGroupActivitiesQuery(
+    selectedGroupActivityParams,
+    activeSection === 'groups' && Boolean(selectedRecordId)
+  );
+  const selectedGroupActivities = selectedGroupActivitiesQuery.data?.results ?? [];
   const selectedGroupResourceParams = useMemo(
     () => ({
       community: communityId,
@@ -1627,7 +2053,9 @@ export function CommunityDetailPage() {
       ? groupDetailQuery.isLoading
       : activeSection === 'members'
         ? memberDetailQuery.isLoading
-        : sectionQuery.isLoading;
+        : activeSection === 'committees'
+          ? committeeDetailQuery.isLoading
+          : sectionQuery.isLoading;
   const pageCount = Math.max(1, Math.ceil((sectionQuery.data?.count ?? 0) / sectionPageSize));
   const archiveConfig = archiveConfigs[activeSection];
   const archiveRecords = useArchiveRecordsMutation(archiveConfig.key, archiveConfig.path);
@@ -1977,12 +2405,16 @@ export function CommunityDetailPage() {
         <BreakdownRecordDetailPage
           activeSection={activeSection}
           canManage={canManage}
+          committeeMemberships={selectedCommitteeMemberships}
+          committeeMembershipsLoading={selectedCommitteeMembershipsQuery.isLoading}
           communityId={community.id}
           communityName={community.name}
           groupImpactRecords={selectedGroupImpactRecords}
           groupImpactRecordsLoading={
             selectedGroupImpactQuery.isLoading || selectedGroupResourcesQuery.isLoading
           }
+          groupActivities={selectedGroupActivities}
+          groupActivitiesLoading={selectedGroupActivitiesQuery.isLoading}
           groupCommitteeMemberships={selectedGroupCommitteeMemberships}
           groupCommittees={selectedGroupCommittees}
           groupCommitteesLoading={
@@ -2037,7 +2469,7 @@ export function CommunityDetailPage() {
               <h2>Address</h2>
               <dl>
                 <div>
-                  <dt>Subcounty / Location</dt>
+                  <dt>Subcounty</dt>
                   <dd>{community.subcounty_name || 'Not recorded'}</dd>
                 </div>
                 <div>

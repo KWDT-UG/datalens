@@ -286,6 +286,7 @@ it('captures sub-county in the group create and edit form', async () => {
     />
   );
 
+  expect(screen.queryByLabelText('Meeting day')).not.toBeInTheDocument();
   await user.type(screen.getByLabelText('Group name'), 'Sub County Group');
   await user.type(screen.getByLabelText('Group code'), 'SUB-1');
   await user.type(screen.getByLabelText('Sub-county'), 'Ntenjeru');
@@ -308,7 +309,7 @@ it('captures subcounty and resident count in the community form', async () => {
   );
 
   await user.type(screen.getByLabelText('Community name'), 'Katosi');
-  await user.type(screen.getByLabelText('Subcounty / Location'), 'Ntenjeru');
+  await user.type(screen.getByLabelText('Subcounty'), 'Ntenjeru');
   await user.type(screen.getByLabelText('Number of residents'), '2450');
   await user.click(screen.getByRole('button', { name: 'Create community' }));
 

@@ -22,7 +22,7 @@ from apps.common.models import (
 )
 from apps.common.permissions import assign_role, ensure_role_groups
 from apps.communities.models import Community
-from apps.groups.models import Group
+from apps.groups.models import Group, GroupActivity
 from apps.impacts.models import ImpactRecord
 from apps.institutions.models import Institution
 from apps.members.models import Member
@@ -497,6 +497,74 @@ def seed_demo_data():
             },
         )
 
+    activity_month = datetime.now(timezone.utc)
+
+    def activity_at(day, hour=10):
+        return activity_month.replace(day=day, hour=hour, minute=0, second=0, microsecond=0)
+
+    activity_specs = [
+        {
+            "title": "Monthly Savings and Loans Meeting",
+            "activity_type": "meeting",
+            "starts_at": activity_at(3),
+            "status": "completed",
+            "location_text": "KWDT Demo Community Center",
+            "facilitator_name": "Group chairperson",
+            "women_attendance_count": 19,
+            "men_attendance_count": 5,
+            "agenda": "Savings updates, loan repayments, and upcoming group activities.",
+        },
+        {
+            "title": "Water Committee Operations",
+            "activity_type": "training",
+            "starts_at": activity_at(8),
+            "status": "completed",
+            "location_text": "Central Demo Parish Hall",
+            "facilitator_name": "Amina Field",
+            "women_attendance_count": 24,
+            "men_attendance_count": 6,
+            "training_topic": "Committee operations",
+            "objectives": "Committee roles, maintenance planning, and reporting.",
+        },
+        {
+            "title": "WASH Committee Review",
+            "activity_type": "meeting",
+            "starts_at": activity_at(14),
+            "status": "completed",
+            "location_text": "Group office",
+            "facilitator_name": "Committee secretary",
+            "women_attendance_count": 6,
+            "men_attendance_count": 2,
+            "agenda": "Review water-point maintenance and committee actions.",
+            "minutes": "The committee reviewed open maintenance actions.",
+            "committee": committees["Demo Oversight Committee"],
+        },
+        {
+            "title": "Record Keeping Refresher",
+            "activity_type": "training",
+            "starts_at": activity_at(22),
+            "status": "planned",
+            "location_text": "KWDT Demo Community Center",
+            "facilitator_name": "Joan Programme",
+            "expected_participant_count": 26,
+            "training_topic": "Group records",
+            "objectives": "Member registers, savings records, and loan tracking.",
+        },
+    ]
+    for activity_spec in activity_specs:
+        upsert(
+            GroupActivity,
+            {
+                "group": groups["KWDT-DEMO-GRP"],
+                "title": activity_spec["title"],
+                "starts_at": activity_spec["starts_at"],
+            },
+            {
+                "community": community,
+                **activity_spec,
+            },
+        )
+
     committee_membership_specs = [
         ("Demo Savings Group Leadership Committee", "001", "Chairperson"),
         ("Demo Savings Group Leadership Committee", "002", "Secretary"),
@@ -915,6 +983,7 @@ def seed_demo_data():
         "updated": updated,
         "community_count": Community.objects.count(),
         "group_count": Group.objects.count(),
+        "group_activity_count": GroupActivity.objects.count(),
         "member_count": Member.objects.count(),
         "institution_count": Institution.objects.count(),
         "committee_count": Committee.objects.count(),

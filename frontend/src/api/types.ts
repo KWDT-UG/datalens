@@ -263,6 +263,9 @@ export interface Group extends SyncMetadata {
   meeting_day?: string;
   sub_county?: string;
   notes?: string;
+  member_count?: number;
+  female_count?: number;
+  male_count?: number;
 }
 
 export interface GroupCreateInput {
@@ -274,6 +277,66 @@ export interface GroupCreateInput {
   closed_on?: string;
   meeting_day?: string;
   sub_county?: string;
+  notes?: string;
+}
+
+export type GroupActivityType = 'meeting' | 'training';
+export type GroupActivityStatus = 'planned' | 'completed' | 'cancelled';
+export type GroupActivityRecordStatus =
+  | 'planned'
+  | 'complete'
+  | 'needs_attention'
+  | 'cancelled';
+
+export interface GroupActivity extends SyncMetadata {
+  id: number;
+  community: number;
+  community_name?: string;
+  group: number;
+  group_name?: string;
+  committee?: number | null;
+  committee_name?: string | null;
+  activity_type: GroupActivityType;
+  title: string;
+  starts_at: string;
+  ends_at?: string | null;
+  status: GroupActivityStatus;
+  location_text?: string;
+  facilitator_name?: string;
+  expected_participant_count?: number | null;
+  women_attendance_count?: number | null;
+  men_attendance_count?: number | null;
+  actual_participant_count?: number | null;
+  agenda?: string;
+  minutes?: string;
+  decisions_actions?: string;
+  training_topic?: string;
+  objectives?: string;
+  report_notes?: string;
+  notes?: string;
+  record_status: GroupActivityRecordStatus;
+}
+
+export interface GroupActivityCreateInput {
+  community: number;
+  group: number;
+  committee?: number | null;
+  activity_type: GroupActivityType;
+  title: string;
+  starts_at: string;
+  ends_at?: string | null;
+  status: GroupActivityStatus;
+  location_text?: string;
+  facilitator_name?: string;
+  expected_participant_count?: number | null;
+  women_attendance_count?: number | null;
+  men_attendance_count?: number | null;
+  agenda?: string;
+  minutes?: string;
+  decisions_actions?: string;
+  training_topic?: string;
+  objectives?: string;
+  report_notes?: string;
   notes?: string;
 }
 
@@ -374,6 +437,11 @@ export interface CommitteeMembership extends SyncMetadata {
   id: number;
   committee: number;
   member: number;
+  member_name?: string;
+  member_number?: string;
+  member_gender?: string;
+  member_group_id?: number;
+  member_group_name?: string;
   role_name?: string;
   status?: RecordStatus;
   start_date?: string | null;

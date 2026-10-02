@@ -150,6 +150,7 @@ def community_id_for_change(*, entity_type, payload, instance=None):
         return payload.get("id")
     if entity_type in {
         "group",
+        "group_activity",
         "member",
         "institution",
         "committee",

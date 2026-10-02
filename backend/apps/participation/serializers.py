@@ -71,6 +71,22 @@ class CommitteeMembershipSerializer(
     ApprovalStateSerializerMixin,
     serializers.ModelSerializer,
 ):
+    member_name = serializers.SerializerMethodField()
+    member_number = serializers.CharField(source="member.member_number", read_only=True)
+    member_gender = serializers.CharField(source="member.gender", read_only=True)
+    member_group_id = serializers.IntegerField(source="member.group_id", read_only=True)
+    member_group_name = serializers.CharField(
+        source="member.group.name",
+        read_only=True,
+    )
+
+    @staticmethod
+    def get_member_name(obj):
+        preferred_or_first = obj.member.preferred_name or obj.member.first_name
+        return " ".join(
+            part for part in [preferred_or_first, obj.member.last_name] if part
+        )
+
     class Meta:
         model = CommitteeMembership
         validators = []
@@ -78,6 +94,11 @@ class CommitteeMembershipSerializer(
             "id",
             "committee",
             "member",
+            "member_name",
+            "member_number",
+            "member_gender",
+            "member_group_id",
+            "member_group_name",
             "role_name",
             "status",
             "start_date",

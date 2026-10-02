@@ -120,7 +120,7 @@ export function CommunityCreateDialog({
           </label>
 
           <label className="form-field">
-            <span>Subcounty / Location</span>
+            <span>Subcounty</span>
             <input {...register('subcounty_name')} />
           </label>
 

@@ -8,6 +8,7 @@ from apps.common.permissions import user_is_mvp_staff_admin
 COMMUNITY_LOOKUPS = {
     "communities.community": "pk",
     "groups.group": "community_id",
+    "groups.groupactivity": "community_id",
     "members.member": "community_id",
     "institutions.institution": "community_id",
     "participation.committee": "community_id",
