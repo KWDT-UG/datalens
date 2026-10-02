@@ -27,6 +27,8 @@ class MemberSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer
             "date_of_birth",
             "phone",
             "email",
+            "group_position",
+            "community_position",
             "address_text",
             "status",
             "joined_on",

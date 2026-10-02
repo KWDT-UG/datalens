@@ -284,6 +284,9 @@ export function useCreateCommunityMutation() {
 
 function invalidateOperationalQueries(queryClient: ReturnType<typeof useQueryClient>, key: string) {
   queryClient.invalidateQueries({ queryKey: [key] });
+  if (key === 'members') {
+    queryClient.invalidateQueries({ queryKey: ['group-members'] });
+  }
   queryClient.invalidateQueries({ queryKey: ['communities'] });
   queryClient.invalidateQueries({ queryKey: ['community'] });
   queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -355,6 +358,9 @@ function useCreateListMutation<T, TPayload>(
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [key] });
+      if (key === 'members') {
+        queryClient.invalidateQueries({ queryKey: ['group-members'] });
+      }
       queryClient.invalidateQueries({ queryKey: ['communities'] });
       queryClient.invalidateQueries({ queryKey: ['community'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });

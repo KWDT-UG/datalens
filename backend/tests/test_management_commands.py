@@ -70,6 +70,13 @@ class ManagementCommandTests(TestCase):
         self.assertEqual(GroupActivity.objects.count(), 4)
         self.assertEqual(Member.objects.filter(member_number="KWDT-DEMO-MEM-001").count(), 1)
         self.assertEqual(Member.objects.count(), 13)
+        demo_chairperson = Member.objects.get(member_number="KWDT-DEMO-MEM-001")
+        self.assertEqual(demo_chairperson.group_position, "Chairperson")
+        district_representative = Member.objects.get(member_number="KWDT-DEMO-MEM-004")
+        self.assertEqual(
+            district_representative.community_position,
+            "District youth councillor",
+        )
         self.assertEqual(Institution.objects.filter(code="KWDT-DEMO-INS").count(), 1)
         self.assertEqual(Institution.objects.count(), 5)
         self.assertEqual(Committee.objects.filter(name="Demo Oversight Committee").count(), 1)

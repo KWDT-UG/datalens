@@ -13,6 +13,7 @@ from apps.common.models import (
 from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
+from apps.impacts.models import ImpactRecord
 from apps.institutions.models import Institution
 from apps.members.models import Member
 from apps.participation.models import Committee, Cooperative
@@ -54,6 +55,8 @@ class CoreApiTests(TestCase):
             first_name="Grace",
             last_name="Nabirye",
             gender="Female",
+            group_position="Treasurer",
+            community_position="District councillor",
         )
         cls.institution = Institution.objects.create(
             community=cls.community,
@@ -118,6 +121,8 @@ class CoreApiTests(TestCase):
                     "member_number": "MEM-2",
                     "first_name": "Sarah",
                     "last_name": "Akello",
+                    "group_position": "Secretary",
+                    "community_position": "Village representative",
                     "status": MemberStatus.ACTIVE,
                 },
                 "patch": {"preferred_name": "Sarry"},
@@ -188,6 +193,102 @@ class CoreApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("group", response.data)
+
+    def test_member_positions_are_structured_searchable_fields(self):
+        detail = self.client.get(
+            reverse("member-detail", kwargs={"pk": self.member.pk})
+        )
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail.data["group_position"], "Treasurer")
+        self.assertEqual(detail.data["community_position"], "District councillor")
+
+        for search_term in ("Treasurer", "District councillor"):
+            with self.subTest(search=search_term):
+                response = self.client.get(
+                    reverse("member-list"),
+                    {"search": search_term},
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(
+                    [row["id"] for row in response.data["results"]],
+                    [self.member.id],
+                )
+
+    def test_breakdown_tables_support_server_side_ordering(self):
+        larger_group = Group.objects.create(
+            community=self.community,
+            code="GRP-SORT",
+            name="Sorting Group",
+            status="inactive",
+        )
+        for index, gender in enumerate(("Female", "Female", "Male"), start=1):
+            Member.objects.create(
+                community=self.community,
+                group=larger_group,
+                first_name=f"Sort {index}",
+                last_name="Member",
+                gender=gender,
+                status="inactive" if index == 1 else "active",
+            )
+        sortable_institution = Institution.objects.create(
+            community=self.community,
+            name="Sorting Institution",
+            contact_name="Zed Contact",
+            status="inactive",
+        )
+        sortable_committee = Committee.objects.create(
+            community=self.community,
+            name="Sorting Committee",
+            status="inactive",
+        )
+        sortable_cooperative = Cooperative.objects.create(
+            community=self.community,
+            name="Sorting Cooperative",
+            status="inactive",
+        )
+        sortable_resource = Resource.objects.create(
+            community=self.community,
+            owner_type=ResourcePartyType.GROUP,
+            owner_id=larger_group.id,
+            name="Sorting Resource",
+            quantity=10,
+            status="active",
+        )
+        sortable_impact = ImpactRecord.objects.create(
+            resource=sortable_resource,
+            beneficiary_count=7,
+            household_count=5,
+            member_count=3,
+        )
+
+        cases = [
+            ("group-list", "-member_count", larger_group.id),
+            ("group-list", "-female_count", larger_group.id),
+            ("group-list", "-male_count", larger_group.id),
+            (
+                "member-list",
+                "-status",
+                larger_group.members.get(status="inactive").id,
+            ),
+            ("institution-list", "-contact_name", sortable_institution.id),
+            ("committee-list", "-status", sortable_committee.id),
+            ("cooperative-list", "-status", sortable_cooperative.id),
+            ("resource-list", "-quantity", sortable_resource.id),
+            ("impact-record-list", "-beneficiary_count", sortable_impact.id),
+        ]
+
+        for route_name, ordering, expected_id in cases:
+            with self.subTest(route=route_name, ordering=ordering):
+                response = self.client.get(
+                    reverse(route_name),
+                    {
+                        "community": self.community.id,
+                        "ordering": ordering,
+                        "page_size": 1,
+                    },
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(response.data["results"][0]["id"], expected_id)
 
     def test_nested_read_endpoints(self):
         cases = [

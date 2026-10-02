@@ -396,6 +396,17 @@ def seed_demo_data():
         ("011", "KWDT-DEMO-ENV", "Keza", "Tumusiime", "Keza", "female", "active"),
         ("012", "KWDT-DEMO-ENV", "Lydia", "Nampiima", "Lydia", "female", "exited"),
     ]
+    group_positions = {
+        "001": "Chairperson",
+        "002": "Secretary",
+        "003": "Treasurer",
+        "004": "Youth representative",
+        "007": "WASH focal person",
+    }
+    community_positions = {
+        "004": "District youth councillor",
+        "009": "Village health team representative",
+    }
     members = {}
     for index, spec in enumerate(member_specs, start=1):
         suffix, group_code, first_name, last_name, preferred, gender, status = spec
@@ -412,6 +423,8 @@ def seed_demo_data():
                 "gender": gender,
                 "phone": f"+256700000{index:03d}",
                 "email": f"{first_name.lower()}.{last_name.lower()}@demo.example.com",
+                "group_position": group_positions.get(suffix, ""),
+                "community_position": community_positions.get(suffix, ""),
                 "address_text": f"{community.subcounty_name}, household {index}",
                 "status": status,
                 "joined_on": joined_on,

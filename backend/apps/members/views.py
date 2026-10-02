@@ -28,5 +28,18 @@ class MemberViewSet(
         "preferred_name",
         "phone",
         "email",
+        "group_position",
+        "community_position",
     )
-    ordering_fields = ("member_number", "first_name", "last_name", "joined_on", "created_at")
+    ordering_fields = (
+        "member_number",
+        "first_name",
+        "last_name",
+        "email",
+        "phone",
+        "group_position",
+        "community_position",
+        "status",
+        "joined_on",
+        "created_at",
+    )

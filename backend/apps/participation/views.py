@@ -34,7 +34,14 @@ class CommitteeViewSet(
     serializer_class = CommitteeSerializer
     filter_fields = ("community", "status", "committee_type")
     search_fields = ("name", "description", "community__name")
-    ordering_fields = ("name", "committee_type", "formed_on", "created_at")
+    ordering_fields = (
+        "name",
+        "committee_type",
+        "formed_on",
+        "closed_on",
+        "status",
+        "created_at",
+    )
 
     @action(detail=True, methods=["get"])
     def memberships(self, request, pk=None):
@@ -91,7 +98,14 @@ class CooperativeViewSet(
     serializer_class = CooperativeSerializer
     filter_fields = ("community", "status", "cooperative_type")
     search_fields = ("name", "description", "community__name")
-    ordering_fields = ("name", "cooperative_type", "formed_on", "created_at")
+    ordering_fields = (
+        "name",
+        "cooperative_type",
+        "formed_on",
+        "closed_on",
+        "status",
+        "created_at",
+    )
 
     @action(detail=True, methods=["get"])
     def memberships(self, request, pk=None):

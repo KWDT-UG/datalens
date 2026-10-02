@@ -1,7 +1,7 @@
 import { PlusIcon, SearchIcon, UploadIcon } from '@patternfly/react-icons';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import {
   useCommitteeMembershipsQuery,
@@ -57,7 +57,7 @@ const groupMemberPageSize = 25;
 
 const sections = [
   { key: 'groups', label: 'Groups', countField: 'group_count', ordering: 'name' },
-  { key: 'members', label: 'Members', countField: 'member_count', ordering: 'last_name' },
+  { key: 'members', label: 'Members', countField: 'member_count', ordering: 'last_name,first_name' },
   { key: 'institutions', label: 'Institutions', countField: 'institution_count', ordering: 'name' },
   { key: 'cooperatives', label: 'Cooperatives', countField: 'cooperative_count', ordering: 'name' },
   { key: 'committees', label: 'Committees', countField: 'committee_count', ordering: 'name' },
@@ -71,6 +71,10 @@ type TableRow = {
   id: number;
   label: string;
   cells: ReactNode[];
+};
+type TableColumn = {
+  label: string;
+  ordering?: string;
 };
 type BreakdownRecord = Member | Group | Institution | Committee | Cooperative | Resource | ImpactRecord;
 type GroupWorkspaceTab = 'overview' | 'resources' | 'trainings' | 'committees' | 'members';
@@ -123,6 +127,12 @@ const groupMemberStatusOptions = [
   { value: 'deceased', label: 'Deceased' },
   { value: 'exited', label: 'Exited' }
 ];
+const groupMemberSortOptions = [
+  { value: 'name', label: 'Name' },
+  { value: 'member_number', label: 'Member number' },
+  { value: 'position', label: 'Position' },
+  { value: 'joined_on', label: 'Joined date' }
+] as const;
 function activityDisplay(activity: GroupActivity): GroupActivityDisplay {
   const start = new Date(activity.starts_at);
   const end = new Date(activity.ends_at ?? activity.starts_at);
@@ -222,6 +232,19 @@ function sumNumbers(values: Array<number | undefined>): number {
   return values.reduce<number>((total, value) => total + (value ?? 0), 0);
 }
 
+function reverseOrdering(ordering: string) {
+  return ordering
+    .split(',')
+    .map((field) => field.startsWith('-') ? field.slice(1) : `-${field}`)
+    .join(',');
+}
+
+function orderingDirection(currentOrdering: string, columnOrdering: string) {
+  if (currentOrdering === columnOrdering) return 'ascending' as const;
+  if (currentOrdering === reverseOrdering(columnOrdering)) return 'descending' as const;
+  return null;
+}
+
 function getParentGroupNavigationState(state: unknown) {
   if (!state || typeof state !== 'object' || !('parentGroup' in state)) {
     return undefined;
@@ -258,7 +281,7 @@ function DetailSection({ children, title }: { children: ReactNode; title: string
 const tableConfigs: Record<
   SectionKey,
   {
-    columns: string[];
+    columns: TableColumn[];
     exportRows: (
       records: Array<Member | Group | Institution | Committee | Cooperative | Resource | ImpactRecord>
     ) => Array<Record<string, boolean | number | string | null | undefined>>;
@@ -267,7 +290,13 @@ const tableConfigs: Record<
   }
 > = {
   members: {
-    columns: ['Member name', 'Member #', 'Email', 'Phone', 'Status', 'Joined'],
+    columns: [
+      { label: 'Member name', ordering: 'last_name,first_name' },
+      { label: 'Member #', ordering: 'member_number' },
+      { label: 'Phone' },
+      { label: 'Status', ordering: 'status' },
+      { label: 'Joined', ordering: 'joined_on' }
+    ],
     exportRows: (records) =>
       (records as Member[]).map((member) => ({
         community: member.community,
@@ -290,7 +319,6 @@ const tableConfigs: Record<
         cells: [
           memberName(member),
           member.member_number || 'Not recorded',
-          member.email ? <a href={`mailto:${member.email}`}>{member.email}</a> : 'Not recorded',
           member.phone || 'Not recorded',
           <StatusBadge status={member.status} />,
           formatDate(member.joined_on)
@@ -298,7 +326,15 @@ const tableConfigs: Record<
       }))
   },
   groups: {
-    columns: ['Group name', 'Code', 'Formed', 'Status', 'Members', 'Female', 'Male'],
+    columns: [
+      { label: 'Group name', ordering: 'name' },
+      { label: 'Code', ordering: 'code' },
+      { label: 'Formed', ordering: 'formed_on' },
+      { label: 'Status', ordering: 'status' },
+      { label: 'Members', ordering: 'member_count' },
+      { label: 'Female', ordering: 'female_count' },
+      { label: 'Male', ordering: 'male_count' }
+    ],
     exportRows: (records) =>
       (records as Group[]).map((group) => ({
         code: group.code,
@@ -328,7 +364,13 @@ const tableConfigs: Record<
       }))
   },
   institutions: {
-    columns: ['Institution name', 'Type', 'Contact', 'Email', 'Status'],
+    columns: [
+      { label: 'Institution name', ordering: 'name' },
+      { label: 'Type', ordering: 'institution_type' },
+      { label: 'Contact', ordering: 'contact_name' },
+      { label: 'Email' },
+      { label: 'Status', ordering: 'status' }
+    ],
     exportRows: (records) =>
       (records as Institution[]).map((institution) => ({
         code: institution.code,
@@ -356,7 +398,13 @@ const tableConfigs: Record<
       }))
   },
   cooperatives: {
-    columns: ['Cooperative name', 'Type', 'Formed', 'Closed', 'Status'],
+    columns: [
+      { label: 'Cooperative name', ordering: 'name' },
+      { label: 'Type', ordering: 'cooperative_type' },
+      { label: 'Formed', ordering: 'formed_on' },
+      { label: 'Closed', ordering: 'closed_on' },
+      { label: 'Status', ordering: 'status' }
+    ],
     exportRows: (records) =>
       (records as Cooperative[]).map((cooperative) => ({
         closed_on: cooperative.closed_on,
@@ -382,7 +430,13 @@ const tableConfigs: Record<
       }))
   },
   committees: {
-    columns: ['Committee name', 'Type', 'Formed', 'Closed', 'Status'],
+    columns: [
+      { label: 'Committee name', ordering: 'name' },
+      { label: 'Type', ordering: 'committee_type' },
+      { label: 'Formed', ordering: 'formed_on' },
+      { label: 'Closed', ordering: 'closed_on' },
+      { label: 'Status', ordering: 'status' }
+    ],
     exportRows: (records) =>
       (records as Committee[]).map((committee) => ({
         closed_on: committee.closed_on,
@@ -408,10 +462,20 @@ const tableConfigs: Record<
       }))
   },
   resources: {
-    columns: ['Resource name', 'Type', 'Owner', 'Quantity', 'Financial position', 'Themes', 'Status'],
+    columns: [
+      { label: 'Resource name', ordering: 'name' },
+      { label: 'Type', ordering: 'resource_type' },
+      { label: 'Owner' },
+      { label: 'Quantity', ordering: 'quantity' },
+      { label: 'Acquired', ordering: 'acquired_on' },
+      { label: 'Financial position' },
+      { label: 'Themes' },
+      { label: 'Status', ordering: 'status' }
+    ],
     exportRows: (records) =>
       (records as Resource[]).map((resource) => ({
         community: resource.community,
+        acquired_on: resource.acquired_on,
         id: resource.id,
         name: resource.name,
         owner_id: resource.owner_id,
@@ -435,6 +499,7 @@ const tableConfigs: Record<
           formatLabel(resource.resource_type),
           resource.owner_display ?? formatLabel(resource.owner_type),
           formatQuantity(resource.quantity, resource.unit),
+          formatDate(resource.acquired_on),
           resource.payment_summary
             ? `${formatMoney(resource.payment_summary.total_paid, resource.payment_summary.currency)} paid · ${formatMoney(resource.payment_summary.remaining_amount, resource.payment_summary.currency)} remaining`
             : formatMoney(resource.value_amount, resource.value_currency),
@@ -444,7 +509,15 @@ const tableConfigs: Record<
       }))
   },
   impact: {
-    columns: ['As of', 'Period', 'Resource', 'Beneficiaries', 'Households', 'Members', 'Method'],
+    columns: [
+      { label: 'As of', ordering: 'as_of_date' },
+      { label: 'Period', ordering: 'period_type' },
+      { label: 'Resource', ordering: 'resource__name' },
+      { label: 'Beneficiaries', ordering: 'beneficiary_count' },
+      { label: 'Households', ordering: 'household_count' },
+      { label: 'Members', ordering: 'member_count' },
+      { label: 'Method', ordering: 'method' }
+    ],
     exportRows: (records) =>
       (records as ImpactRecord[]).map((impact) => ({
         as_of_date: impact.as_of_date,
@@ -497,7 +570,9 @@ type BreakdownRecordDetailPageProps = {
   groupResources: Resource[];
   groupResourcesLoading: boolean;
   isLoading: boolean;
+  onCreateGroupMember: (group: Group) => void;
   onEdit: (record: BreakdownRecord) => void;
+  onEditGroupMember: (member: Member) => void;
   record: BreakdownRecord | null;
 };
 
@@ -520,7 +595,9 @@ function BreakdownRecordDetailPage({
   groupResources,
   groupResourcesLoading,
   isLoading,
+  onCreateGroupMember,
   onEdit,
+  onEditGroupMember,
   record
 }: BreakdownRecordDetailPageProps) {
   const location = useLocation();
@@ -573,7 +650,9 @@ function BreakdownRecordDetailPage({
             committeesLoading={groupCommitteesLoading}
             members={groupMembers}
             membersLoading={groupMembersLoading}
+            onCreateMember={onCreateGroupMember}
             onEdit={onEdit}
+            onEditMember={onEditGroupMember}
             resources={groupResources}
             resourcesLoading={groupResourcesLoading}
           />
@@ -644,7 +723,9 @@ function GroupWorkspaceDetailPage({
   impactRecordsLoading,
   members,
   membersLoading,
+  onCreateMember,
   onEdit,
+  onEditMember,
   resources,
   resourcesLoading
 }: {
@@ -661,7 +742,9 @@ function GroupWorkspaceDetailPage({
   impactRecordsLoading: boolean;
   members: Member[];
   membersLoading: boolean;
+  onCreateMember: (group: Group) => void;
   onEdit: (record: BreakdownRecord) => void;
+  onEditMember: (member: Member) => void;
   resources: Resource[];
   resourcesLoading: boolean;
 }) {
@@ -730,7 +813,14 @@ function GroupWorkspaceDetailPage({
           />
         ) : null}
         {activeTab === 'members' ? (
-          <GroupMembersTab group={group} members={members} membersLoading={membersLoading} />
+          <GroupMembersTab
+            canManage={canManage}
+            group={group}
+            members={members}
+            membersLoading={membersLoading}
+            onCreateMember={() => onCreateMember(group)}
+            onEditMember={onEditMember}
+          />
         ) : null}
         {activeTab === 'resources' ? (
           <GroupResourcesTab group={group} resources={resources} resourcesLoading={resourcesLoading} />
@@ -919,35 +1009,65 @@ function GroupOverviewTab({
 }
 
 function GroupMembersTab({
+  canManage,
   group,
   members,
-  membersLoading
+  membersLoading,
+  onCreateMember,
+  onEditMember
 }: {
+  canManage: boolean;
   group: Group;
   members: Member[];
   membersLoading: boolean;
+  onCreateMember: () => void;
+  onEditMember: (member: Member) => void;
 }) {
   const [memberSearch, setMemberSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortField, setSortField] = useState<(typeof groupMemberSortOptions)[number]['value']>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const filteredMembers = useMemo(() => {
     const searchValue = memberSearch.trim().toLowerCase();
-    return members.filter((member) => {
-      const matchesStatus = statusFilter === 'all' || member.status === statusFilter;
-      if (!matchesStatus) {
-        return false;
+    const sortValue = (member: Member) => {
+      if (sortField === 'member_number') return member.member_number ?? '';
+      if (sortField === 'position') {
+        return member.group_position || member.community_position || '';
       }
-      if (!searchValue) {
-        return true;
-      }
-      return [
-        memberName(member),
-        member.member_number,
-        member.phone,
-        member.email
-      ].some((value) => value?.toLowerCase().includes(searchValue));
-    });
-  }, [memberSearch, members, statusFilter]);
+      if (sortField === 'joined_on') return member.joined_on ?? '';
+      return memberName(member);
+    };
+    return members
+      .filter((member) => {
+        const matchesStatus = statusFilter === 'all' || member.status === statusFilter;
+        if (!matchesStatus) {
+          return false;
+        }
+        if (!searchValue) {
+          return true;
+        }
+        return [
+          memberName(member),
+          member.member_number,
+          member.phone,
+          member.group_position,
+          member.community_position
+        ].some((value) => value?.toLowerCase().includes(searchValue));
+      })
+      .sort((left, right) => {
+        const leftValue = sortValue(left);
+        const rightValue = sortValue(right);
+        if (!leftValue && !rightValue) return 0;
+        if (!leftValue) return 1;
+        if (!rightValue) return -1;
+        const comparison = leftValue.localeCompare(rightValue, undefined, {
+          numeric: true,
+          sensitivity: 'base'
+        });
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+  }, [memberSearch, members, sortDirection, sortField, statusFilter]);
   const pageCount = Math.max(1, Math.ceil(filteredMembers.length / groupMemberPageSize));
   const visibleMembers = filteredMembers.slice(
     (page - 1) * groupMemberPageSize,
@@ -956,13 +1076,23 @@ function GroupMembersTab({
 
   useEffect(() => {
     setPage(1);
-  }, [memberSearch, statusFilter, members.length]);
+  }, [memberSearch, sortDirection, sortField, statusFilter, members.length]);
 
   if (membersLoading) {
     return <div className="state-box">Loading group members...</div>;
   }
   if (members.length === 0) {
-    return <div className="state-box">No members recorded for this group.</div>;
+    return (
+      <div className="state-box group-members-roster__empty">
+        <span>No members recorded for this group.</span>
+        {canManage ? (
+          <button className="button button--primary" type="button" onClick={onCreateMember}>
+            <PlusIcon aria-hidden="true" />
+            Add member
+          </button>
+        ) : null}
+      </div>
+    );
   }
 
   return (
@@ -972,13 +1102,13 @@ function GroupMembersTab({
           <strong>{formatCount(filteredMembers.length)}</strong>
           <span>{filteredMembers.length === members.length ? 'members in this group' : `of ${formatCount(members.length)} members`}</span>
         </div>
-        <label className="compact-filter">
+        <label className="compact-filter compact-filter--search">
           Search
           <input
             aria-label="Search group members"
             value={memberSearch}
             onChange={(event) => setMemberSearch(event.target.value)}
-            placeholder="Name, number, phone, email"
+            placeholder="Name, number, phone, or position"
           />
         </label>
         <label className="compact-filter">
@@ -993,6 +1123,35 @@ function GroupMembersTab({
             ))}
           </select>
         </label>
+        <label className="compact-filter">
+          Sort by
+          <select
+            aria-label="Sort group members by"
+            value={sortField}
+            onChange={(event) => setSortField(event.target.value as typeof sortField)}
+          >
+            {groupMemberSortOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="compact-filter">
+          Order
+          <select
+            aria-label="Sort group members direction"
+            value={sortDirection}
+            onChange={(event) => setSortDirection(event.target.value as typeof sortDirection)}
+          >
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
+        </label>
+        {canManage ? (
+          <button className="button button--primary" type="button" onClick={onCreateMember}>
+            <PlusIcon aria-hidden="true" />
+            Add member
+          </button>
+        ) : null}
       </div>
 
       {filteredMembers.length === 0 ? (
@@ -1005,9 +1164,11 @@ function GroupMembersTab({
                 <tr>
                   <th>Name</th>
                   <th>Member number</th>
-                  <th>Contact</th>
+                  <th>Positions</th>
+                  <th>Phone</th>
                   <th>Joined</th>
                   <th>Status</th>
+                  {canManage ? <th>Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -1023,9 +1184,33 @@ function GroupMembersTab({
                       </Link>
                     </td>
                     <td>{member.member_number || 'Not recorded'}</td>
-                    <td>{member.phone || member.email || 'Not recorded'}</td>
+                    <td>
+                      {member.group_position || member.community_position ? (
+                        <div className="member-position-tags">
+                          {member.group_position ? (
+                            <span><small>Group</small>{member.group_position}</span>
+                          ) : null}
+                          {member.community_position ? (
+                            <span><small>Community</small>{member.community_position}</span>
+                          ) : null}
+                        </div>
+                      ) : 'Member'}
+                    </td>
+                    <td>{member.phone || 'Not recorded'}</td>
                     <td>{formatDate(member.joined_on)}</td>
                     <td><StatusBadge status={member.status} /></td>
+                    {canManage ? (
+                      <td>
+                        <button
+                          aria-label={`Edit ${memberName(member)}`}
+                          className="button button--secondary"
+                          type="button"
+                          onClick={() => onEditMember(member)}
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -1704,6 +1889,11 @@ function MemberDetailContent({ member }: { member: Member }) {
               )
             }
           />
+          <DetailItem label="Group position" value={member.group_position || 'Member'} />
+          <DetailItem
+            label="Community / political position"
+            value={member.community_position || 'Not recorded'}
+          />
           <DetailItem label="Joined" value={formatDate(member.joined_on)} />
           <DetailItem label="Left" value={formatDate(member.left_on)} />
           <DetailItem label="Deceased" value={formatDate(member.deceased_on)} />
@@ -1842,6 +2032,7 @@ function GenericRecordDetail({
 export function CommunityDetailPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { communityId, section = 'groups', recordId } = useParams();
   const activeSection = isSectionKey(section) ? section : 'groups';
   const selectedRecordId = recordId && /^\d+$/.test(recordId) ? Number(recordId) : null;
@@ -1866,10 +2057,18 @@ export function CommunityDetailPage() {
     : sections;
   const sectionConfig = sections.find((item) => item.key === activeSection) ?? sections[0];
   const tableConfig = tableConfigs[activeSection];
+  const requestedOrdering = searchParams.get('ordering');
+  const validOrderings = tableConfig.columns.flatMap((column) =>
+    column.ordering ? [column.ordering, reverseOrdering(column.ordering)] : []
+  );
+  const ordering = requestedOrdering && validOrderings.includes(requestedOrdering)
+    ? requestedOrdering
+    : sectionConfig.ordering;
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [editCommunityOpen, setEditCommunityOpen] = useState(false);
+  const [creatingMemberForGroup, setCreatingMemberForGroup] = useState<Group | null>(null);
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editingInstitution, setEditingInstitution] = useState<Institution | null>(null);
@@ -1886,9 +2085,9 @@ export function CommunityDetailPage() {
       page,
       page_size: sectionPageSize,
       search,
-      ordering: sectionConfig.ordering
+      ordering
     }),
-    [communityId, page, search, sectionConfig.ordering]
+    [communityId, ordering, page, search]
   );
   const enabled = Boolean(communityId);
   const memberQuery = useMembersQuery(listParams, enabled && activeSection === 'members');
@@ -2085,6 +2284,7 @@ export function CommunityDetailPage() {
     setSearch('');
     setCreateOpen(false);
     setEditCommunityOpen(false);
+    setCreatingMemberForGroup(null);
     setEditingGroup(null);
     setEditingMember(null);
     setEditingInstitution(null);
@@ -2161,6 +2361,18 @@ export function CommunityDetailPage() {
     );
   }
 
+  function changeOrdering(columnOrdering: string) {
+    const nextOrdering = ordering === columnOrdering
+      ? reverseOrdering(columnOrdering)
+      : columnOrdering;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('ordering', nextOrdering);
+      return next;
+    }, { replace: true });
+    setPage(1);
+  }
+
   function renderCreateDialog() {
     if (!community || !createOpen || !canManage) {
       return null;
@@ -2207,6 +2419,20 @@ export function CommunityDetailPage() {
           onClose={() => setEditingResource(null)}
           onCreated={() => {
             setEditingResource(null);
+            handleCreated();
+          }}
+        />
+      );
+    }
+
+    if (creatingMemberForGroup) {
+      return (
+        <MemberCreateDialog
+          communityId={community.id}
+          fixedGroup={{ id: creatingMemberForGroup.id, name: creatingMemberForGroup.name }}
+          onClose={() => setCreatingMemberForGroup(null)}
+          onCreated={() => {
+            setCreatingMemberForGroup(null);
             handleCreated();
           }}
         />
@@ -2427,7 +2653,9 @@ export function CommunityDetailPage() {
           groupResources={selectedGroupResources}
           groupResourcesLoading={selectedGroupResourcesQuery.isLoading}
           isLoading={selectedRecordIsLoading}
+          onCreateGroupMember={setCreatingMemberForGroup}
           onEdit={editRecord}
+          onEditGroupMember={setEditingMember}
           record={selectedRecord}
         />
         {renderEditDialog()}
@@ -2578,9 +2806,28 @@ export function CommunityDetailPage() {
                       <thead>
                         <tr>
                           <th aria-label={`Select ${tableConfig.itemName}`} />
-                          {tableConfig.columns.map((column) => (
-                            <th key={column}>{column}</th>
-                          ))}
+                          {tableConfig.columns.map((column) => {
+                            const direction = column.ordering
+                              ? orderingDirection(ordering, column.ordering)
+                              : null;
+                            return (
+                              <th
+                                aria-sort={column.ordering ? direction ?? 'none' : undefined}
+                                key={column.label}
+                              >
+                                {column.ordering ? (
+                                  <button
+                                    aria-label={`Sort by ${column.label}${direction ? `, currently ${direction}` : ''}`}
+                                    className={`sortable-header${direction ? ` is-${direction}` : ''}`}
+                                    type="button"
+                                    onClick={() => changeOrdering(column.ordering!)}
+                                  >
+                                    {column.label}
+                                  </button>
+                                ) : column.label}
+                              </th>
+                            );
+                          })}
                           {canManage ? <th>Actions</th> : null}
                         </tr>
                       </thead>
@@ -2596,7 +2843,7 @@ export function CommunityDetailPage() {
                               /> : null}
                             </td>
                             {row.cells.map((cell, index) => (
-                              <td key={`${row.id}-${tableConfig.columns[index]}`}>
+                              <td key={`${row.id}-${tableConfig.columns[index].label}`}>
                                 {index === 0 ? (
                                   <button
                                     className="table-link"

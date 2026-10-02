@@ -991,6 +991,42 @@ h2 {
   text-transform: uppercase;
 }
 
+.sortable-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.sortable-header::after {
+  color: var(--muted);
+  content: '↕';
+  font-size: 0.9rem;
+  letter-spacing: 0;
+}
+
+.sortable-header.is-ascending::after {
+  color: var(--blue);
+  content: '↑';
+}
+
+.sortable-header.is-descending::after {
+  color: var(--blue);
+  content: '↓';
+}
+
+.sortable-header:hover,
+.sortable-header:focus-visible {
+  color: var(--blue);
+}
+
 .data-table input[type='checkbox'] {
   width: 18px;
   height: 18px;
@@ -2260,6 +2296,14 @@ h2 {
   gap: 14px;
 }
 
+.group-members-roster__empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .group-members-roster__toolbar {
   display: flex;
   align-items: end;
@@ -2493,7 +2537,11 @@ h2 {
 }
 
 .group-members-roster__toolbar .compact-filter {
-  min-width: 220px;
+  min-width: 150px;
+}
+
+.group-members-roster__toolbar .compact-filter--search {
+  min-width: min(280px, 100%);
 }
 
 .group-members-roster__table {
@@ -2506,6 +2554,33 @@ h2 {
 .group-members-roster__table td {
   padding-top: 13px;
   padding-bottom: 13px;
+}
+
+.member-position-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.member-position-tags > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--blue-wash);
+  color: var(--blue-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.member-position-tags small {
+  color: var(--muted);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .group-committee-grid {
