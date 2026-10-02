@@ -1924,6 +1924,24 @@ h2 {
   background: var(--soft);
 }
 
+.table-cell-note {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.group-event-category {
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--blue-wash);
+  color: var(--blue-strong) !important;
+  font-size: 0.7rem !important;
+  font-weight: 850 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .record-detail__stat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2103,16 +2121,6 @@ h2 {
   grid-row: span 2;
 }
 
-.group-overview-panel--context {
-  grid-column: 1 / -1;
-}
-
-.group-overview-panel--context > p {
-  max-width: 76ch;
-  margin: 0;
-  color: var(--muted);
-}
-
 .group-overview-panel__header {
   display: flex;
   align-items: flex-start;
@@ -2236,29 +2244,6 @@ h2 {
 .group-overview-stack em {
   color: var(--muted);
   font-style: normal;
-}
-
-.group-overview-context-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.group-overview-context-grid span {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--subtle-surface);
-  color: var(--muted);
-  font-size: 0.84rem;
-}
-
-.group-overview-context-grid strong {
-  color: var(--text);
-  overflow-wrap: anywhere;
 }
 
 .group-card-grid {
@@ -2565,6 +2550,16 @@ a.group-workspace-card:hover {
   font-size: 1.04rem;
 }
 
+.group-committee-card header a {
+  width: fit-content;
+  color: inherit;
+  text-decoration: none;
+}
+
+.group-committee-card header a:hover {
+  text-decoration: underline;
+}
+
 .group-committee-card header span {
   color: var(--muted);
 }
@@ -2588,113 +2583,279 @@ a.group-workspace-card:hover {
   font-weight: 800;
 }
 
-.group-training-workspace {
+.group-activity-browser {
   display: grid;
-  grid-template-columns: minmax(280px, 0.95fr) minmax(280px, 0.9fr) minmax(320px, 1fr);
-  gap: 22px;
-  align-items: start;
-}
-
-.group-training-calendar,
-.group-training-list,
-.group-training-detail {
+  gap: 14px;
   min-width: 0;
 }
 
-.group-training-calendar {
-  display: grid;
-  gap: 24px;
+.group-activity-period-row,
+.group-activity-toolbar,
+.group-activity-results-heading,
+.group-activity-history-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
-.group-training-calendar section {
-  display: grid;
-  gap: 12px;
+.group-activity-month-nav,
+.group-activity-view-switch,
+.group-activity-type-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-.group-training-calendar h3 {
-  margin: 0;
+.group-activity-month-nav strong {
+  min-width: 150px;
   color: var(--text);
-  font-size: 1rem;
+  text-align: center;
 }
 
-.group-training-calendar__grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(28px, 1fr));
-  gap: 8px;
-}
-
-.group-training-calendar__grid button {
-  position: relative;
-  min-height: 34px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
+.group-activity-month-nav button,
+.group-activity-view-switch button,
+.group-activity-type-switch button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
   color: var(--text);
   cursor: pointer;
-  font-weight: 750;
+  font-weight: 800;
 }
 
-.group-training-calendar__grid button:disabled {
-  color: var(--muted);
-  cursor: default;
+.group-activity-view-switch button[aria-pressed='true'],
+.group-activity-type-switch button[aria-pressed='true'] {
+  border-color: var(--blue);
+  background: var(--blue-wash);
+  color: var(--blue-strong);
 }
 
-.group-training-calendar__grid button.has-training {
+.group-activity-view-switch .button--primary {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+}
+
+.group-activity-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.group-activity-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.group-activity-toolbar .search-field {
+  max-width: none;
+}
+
+.group-activity-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
   background: var(--subtle-surface);
 }
 
-.group-training-calendar__grid button.is-start,
-.group-training-calendar__grid button.is-end {
-  background: var(--blue);
-  color: var(--on-accent);
-}
-
-.group-training-calendar__grid button.is-selected {
-  box-shadow: 0 0 0 2px var(--blue);
-}
-
-.group-training-list {
-  display: grid;
-  gap: 12px;
-}
-
-.group-training-list button {
+.group-activity-filters label {
   display: grid;
   gap: 6px;
-  padding: 16px 18px;
-  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.group-activity-filters select {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+  color: var(--text);
+}
+
+.group-activity-results-heading {
+  align-items: end;
+  margin-top: 4px;
+}
+
+.group-activity-results-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.group-activity-results-heading h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.group-activity-results-heading span,
+.group-activity-history-bar > span {
   color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.group-activity-agenda {
+  display: grid;
+  gap: 8px;
+}
+
+.group-activity-row {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) minmax(140px, 0.45fr) auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
   text-align: left;
   cursor: pointer;
 }
 
-.group-training-list button:hover,
-.group-training-list button.is-selected {
+.group-activity-row:hover,
+.group-activity-row:focus-visible {
   border-color: var(--blue);
 }
 
-.group-training-list button span {
-  color: var(--text);
-  font-weight: 850;
-}
-
-.group-training-list button strong {
+.group-activity-row time {
+  display: grid;
+  justify-items: center;
+  padding-right: 12px;
+  border-right: 1px solid var(--line-soft);
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
 }
 
-.group-training-list button small {
+.group-activity-row time strong {
+  color: var(--text);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.group-activity-row__main,
+.group-activity-row__meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.group-activity-row__main > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-activity-row__main small,
+.group-activity-row__meta {
   color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.group-event-category.is-meeting {
+  background: var(--blue-wash);
+  color: var(--green) !important;
+}
+
+.group-activity-record-status {
+  color: var(--yellow);
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.group-activity-record-status.is-complete {
+  color: var(--green);
+}
+
+.group-activity-compact-table .table-link {
+  text-align: left;
+}
+
+.group-activity-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.group-activity-calendar > strong {
+  padding: 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.group-activity-calendar > div {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 92px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.group-activity-calendar > div.has-activity {
+  background: var(--blue-wash);
+  color: var(--text);
+}
+
+.group-activity-calendar > div button {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--blue-strong);
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.group-activity-history-bar {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
 }
 
 .group-training-detail {
   display: grid;
   gap: 18px;
-  padding-left: 22px;
-  border-left: 1px solid var(--line-soft);
+  margin-top: 4px;
+  padding: 20px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.group-training-detail__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.group-training-detail__header > div {
+  display: grid;
+  gap: 6px;
 }
 
 .group-training-detail section {
@@ -2992,6 +3153,10 @@ a.group-workspace-card:hover {
   gap: 18px;
 }
 
+.form-field--wide {
+  grid-column: 1 / -1;
+}
+
 .form-field {
   display: grid;
   gap: 7px;
@@ -3282,15 +3447,27 @@ a.group-workspace-card:hover {
   }
 
   .group-workspace__metrics,
-  .group-overview-board,
-  .group-overview-context-grid {
+  .group-overview-board {
     grid-template-columns: 1fr;
   }
 
-  .group-overview-panel--wide,
-  .group-overview-panel--context {
+  .group-overview-panel--wide {
     grid-column: auto;
     grid-row: auto;
+  }
+
+  .group-activity-toolbar,
+  .group-activity-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .group-activity-row {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+
+  .group-activity-row__meta,
+  .group-activity-record-status {
+    grid-column: 2;
   }
 
   .programme-lens {
@@ -3439,8 +3616,7 @@ a.group-workspace-card:hover {
   .record-detail__grid,
   .record-detail__stat-grid,
   .group-workspace__metrics,
-  .group-overview-board,
-  .group-overview-context-grid {
+  .group-overview-board {
     grid-template-columns: 1fr;
   }
 
@@ -3454,16 +3630,33 @@ a.group-workspace-card:hover {
   }
 
   .group-card-grid--resources,
-  .group-training-workspace,
   .group-committee-grid,
   .group-training-chart,
   .group-committee-card dl {
     grid-template-columns: 1fr;
   }
 
-  .group-training-detail {
-    padding-left: 0;
-    border-left: 0;
+  .group-activity-period-row,
+  .group-activity-history-bar,
+  .group-training-detail__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .group-activity-month-nav,
+  .group-activity-view-switch,
+  .group-activity-type-switch {
+    width: 100%;
+  }
+
+  .group-activity-view-switch button,
+  .group-activity-type-switch button {
+    flex: 1;
+  }
+
+  .group-activity-calendar {
+    grid-template-columns: repeat(7, minmax(90px, 1fr));
+    overflow-x: auto;
   }
 
   .dashboard-activity-item time {

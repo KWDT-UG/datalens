@@ -188,7 +188,7 @@ export function CommunitiesPage() {
               <tr>
                 <th aria-label="Select community" />
                 <th>Community name</th>
-                <th>Subcounty / Location</th>
+                <th>Subcounty</th>
                 <th>Residents</th>
                 <th>Groups</th>
                 <th>Members</th>
@@ -216,7 +216,7 @@ export function CommunitiesPage() {
                   <td>
                     <Link to={`/communities/${community.id}/groups`}>{community.name}</Link>
                   </td>
-                  <td>{formatLocation(community) || 'Not recorded'}</td>
+                  <td>{community.subcounty_name || 'Not recorded'}</td>
                   <td>{community.resident_count?.toLocaleString() ?? 'Not recorded'}</td>
                   <td>{community.group_count ?? 0}</td>
                   <td>{community.member_count ?? 0}</td>

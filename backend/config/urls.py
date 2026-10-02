@@ -25,7 +25,7 @@ from apps.common.auth import (
 from apps.common.dashboard import DashboardView
 from apps.common.sync import SyncPullView, SyncPushView
 from apps.communities.views import CommunityViewSet
-from apps.groups.views import GroupViewSet
+from apps.groups.views import GroupActivityViewSet, GroupViewSet
 from apps.impacts.views import ImpactRecordViewSet
 from apps.institutions.views import InstitutionViewSet
 from apps.members.views import MemberViewSet
@@ -52,6 +52,7 @@ def health_check(_request):
 router = DefaultRouter()
 router.register("communities", CommunityViewSet, basename="community")
 router.register("groups", GroupViewSet, basename="group")
+router.register("group-activities", GroupActivityViewSet, basename="group-activity")
 router.register("members", MemberViewSet, basename="member")
 router.register("institutions", InstitutionViewSet, basename="institution")
 router.register("committees", CommitteeViewSet, basename="committee")

@@ -40,7 +40,10 @@ class CommitteeViewSet(
     def memberships(self, request, pk=None):
         committee = self.get_object()
         serializer = CommitteeMembershipSerializer(
-            committee.memberships.filter(is_deleted=False),
+            committee.memberships.filter(is_deleted=False).select_related(
+                "member",
+                "member__group",
+            ),
             many=True,
             context=self.get_serializer_context(),
         )
@@ -54,7 +57,11 @@ class CommitteeMembershipViewSet(
     SimpleFilterMixin,
     ModelViewSet,
 ):
-    queryset = CommitteeMembership.objects.select_related("committee", "member").all()
+    queryset = CommitteeMembership.objects.select_related(
+        "committee",
+        "member",
+        "member__group",
+    ).all()
     serializer_class = CommitteeMembershipSerializer
     filter_fields = ("committee", "member", "status")
     search_fields = (

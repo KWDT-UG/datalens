@@ -19,7 +19,7 @@ from apps.common.models import (
 )
 from apps.common.permissions import assign_role
 from apps.communities.models import Community
-from apps.groups.models import Group
+from apps.groups.models import Group, GroupActivity
 from apps.impacts.models import ImpactRecord
 from apps.institutions.models import Institution
 from apps.members.models import Member
@@ -67,6 +67,7 @@ class ManagementCommandTests(TestCase):
         self.assertEqual(Community.objects.count(), 2)
         self.assertEqual(Group.objects.filter(code="KWDT-DEMO-GRP").count(), 1)
         self.assertEqual(Group.objects.count(), 5)
+        self.assertEqual(GroupActivity.objects.count(), 4)
         self.assertEqual(Member.objects.filter(member_number="KWDT-DEMO-MEM-001").count(), 1)
         self.assertEqual(Member.objects.count(), 13)
         self.assertEqual(Institution.objects.filter(code="KWDT-DEMO-INS").count(), 1)

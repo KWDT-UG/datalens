@@ -133,6 +133,7 @@ LEGACY_ROLE_GROUPS = {"program_manager", "admin", "leadership"}
 COMMUNICATIONS_READ_BASENAMES = {
     "community",
     "group",
+    "group-activity",
     "committee",
     "cooperative",
     "resource",

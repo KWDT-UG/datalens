@@ -4,8 +4,8 @@ from rest_framework.exceptions import APIException, ValidationError
 from apps.common.models import ApprovalActionType
 from apps.communities.models import Community
 from apps.communities.serializers import CommunitySerializer
-from apps.groups.models import Group
-from apps.groups.serializers import GroupSerializer
+from apps.groups.models import Group, GroupActivity
+from apps.groups.serializers import GroupActivitySerializer, GroupSerializer
 from apps.impacts.models import ImpactRecord
 from apps.impacts.serializers import ImpactRecordSerializer
 from apps.institutions.models import Institution
@@ -46,6 +46,7 @@ from apps.resources.serializers import (
 APPROVAL_ENTITY_REGISTRY = {
     "community": (Community, CommunitySerializer),
     "group": (Group, GroupSerializer),
+    "group_activity": (GroupActivity, GroupActivitySerializer),
     "member": (Member, MemberSerializer),
     "institution": (Institution, InstitutionSerializer),
     "committee": (Committee, CommitteeSerializer),

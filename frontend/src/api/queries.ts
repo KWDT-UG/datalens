@@ -23,6 +23,8 @@ import type {
   DashboardData,
   DataEnvelope,
   Group,
+  GroupActivity,
+  GroupActivityCreateInput,
   GroupCreateInput,
   HealthResponse,
   ImpactByCommunityRow,
@@ -363,6 +365,7 @@ function useCreateListMutation<T, TPayload>(
 const entityTypeByKey: Record<string, string> = {
   communities: 'community',
   groups: 'group',
+  'group-activities': 'group_activity',
   members: 'member',
   institutions: 'institution',
   committees: 'committee',
@@ -489,6 +492,31 @@ export function useUpdateGroupMutation() {
   );
 }
 
+export function useGroupActivitiesQuery(params: ListParams, enabled = true) {
+  return useListQuery<GroupActivity>(
+    'group-activities',
+    '/api/v1/group-activities/',
+    params,
+    enabled
+  );
+}
+
+export function useCreateGroupActivityMutation() {
+  return useCreateListMutation<GroupActivity, GroupActivityCreateInput>(
+    'group-activities',
+    '/api/v1/group-activities/',
+    'group_activity'
+  );
+}
+
+export function useUpdateGroupActivityMutation() {
+  return useUpdateListMutation<GroupActivity, GroupActivityCreateInput>(
+    'group-activities',
+    '/api/v1/group-activities/',
+    'group_activity'
+  );
+}
+
 export function useInstitutionsQuery(params: ListParams, enabled = true) {
   return useListQuery<Institution>('institutions', '/api/v1/institutions/', params, enabled);
 }
@@ -511,6 +539,14 @@ export function useUpdateInstitutionMutation() {
 
 export function useCommitteesQuery(params: ListParams, enabled = true) {
   return useListQuery<Committee>('committees', '/api/v1/committees/', params, enabled);
+}
+
+export function useCommitteeQuery(committeeId?: string | number, enabled = true) {
+  return useQuery({
+    queryKey: ['committee', committeeId],
+    queryFn: () => apiGet<Committee>(`/api/v1/committees/${committeeId}/`),
+    enabled: Boolean(committeeId) && enabled
+  });
 }
 
 export function useCommitteeMembershipsQuery(params: ListParams, enabled = true) {

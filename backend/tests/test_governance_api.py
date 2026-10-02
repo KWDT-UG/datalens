@@ -225,7 +225,10 @@ class GovernanceApiTests(TestCase):
         cases = [
             {
                 "label": "committee memberships",
-                "url": reverse("committee-memberships", kwargs={"pk": self.committee.pk}),
+                "url": reverse(
+                    "committee-memberships",
+                    kwargs={"pk": self.committee.pk},
+                ),
             },
             {
                 "label": "cooperative memberships",
@@ -240,6 +243,14 @@ class GovernanceApiTests(TestCase):
             with self.subTest(endpoint=case["label"]):
                 response = self.client.get(case["url"])
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        committee_response = self.client.get(
+            reverse("committee-memberships", kwargs={"pk": self.committee.pk})
+        )
+        membership = committee_response.data[0]
+        self.assertEqual(membership["member_name"], "Lina Member")
+        self.assertEqual(membership["member_group_id"], self.group.id)
+        self.assertEqual(membership["member_group_name"], self.group.name)
 
     def test_governance_lists_filter_by_community_for_detail_tabs(self):
         cases = [
@@ -267,7 +278,10 @@ class GovernanceApiTests(TestCase):
 
         for case in cases:
             with self.subTest(endpoint=case["label"]):
-                response = self.client.get(case["url"], {"community": self.community.id})
+                response = self.client.get(
+                    case["url"],
+                    {"community": self.community.id},
+                )
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
                 self.assertEqual(response.data["count"], 1)
                 self.assertEqual(response.data["results"][0]["id"], case["expected_id"])
