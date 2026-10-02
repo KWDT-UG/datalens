@@ -25,7 +25,18 @@ class ImpactRecordViewSet(
     serializer_class = ImpactRecordSerializer
     filter_fields = ("resource", "beneficiary_type", "period_type", "method")
     search_fields = ("resource__name", "notes", "period_type")
-    ordering_fields = ("as_of_date", "period_start", "period_end", "created_at")
+    ordering_fields = (
+        "as_of_date",
+        "period_type",
+        "period_start",
+        "period_end",
+        "resource__name",
+        "beneficiary_count",
+        "household_count",
+        "member_count",
+        "method",
+        "created_at",
+    )
 
     def get_queryset(self):
         queryset = super().get_queryset()

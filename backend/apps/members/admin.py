@@ -11,6 +11,8 @@ class MemberAdmin(admin.ModelAdmin):
         "last_name",
         "community",
         "group",
+        "group_position",
+        "community_position",
         "status",
     )
     list_filter = ("status", "community", "group")
@@ -21,4 +23,6 @@ class MemberAdmin(admin.ModelAdmin):
         "preferred_name",
         "phone",
         "email",
+        "group_position",
+        "community_position",
     )

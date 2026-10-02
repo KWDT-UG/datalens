@@ -22,4 +22,12 @@ class InstitutionViewSet(
     serializer_class = InstitutionSerializer
     filter_fields = ("community", "status", "institution_type")
     search_fields = ("code", "name", "contact_name", "phone", "email")
-    ordering_fields = ("code", "name", "institution_type", "created_at")
+    ordering_fields = (
+        "code",
+        "name",
+        "institution_type",
+        "contact_name",
+        "email",
+        "status",
+        "created_at",
+    )

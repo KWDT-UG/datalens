@@ -350,6 +350,8 @@ export interface Member extends SyncMetadata {
   last_name: string;
   email?: string;
   phone?: string;
+  group_position?: string;
+  community_position?: string;
   status?: RecordStatus;
   member_number?: string;
   middle_name?: string;
@@ -375,6 +377,8 @@ export interface MemberCreateInput {
   date_of_birth?: string;
   phone?: string;
   email?: string;
+  group_position?: string;
+  community_position?: string;
   address_text?: string;
   status?: RecordStatus;
   joined_on?: string;

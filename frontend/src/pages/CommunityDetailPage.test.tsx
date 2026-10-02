@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -91,6 +91,8 @@ function installGroupWorkspaceFetchMock() {
       last_name: 'Kato',
       member_number: 'MEM-10',
       phone: '0700000000',
+      email: 'amina@example.test',
+      group_position: 'Chairperson',
       status: 'active',
       joined_on: '2024-02-01'
     },
@@ -101,6 +103,7 @@ function installGroupWorkspaceFetchMock() {
       first_name: 'Beatrice',
       last_name: 'Naki',
       member_number: 'MEM-11',
+      community_position: 'District councillor',
       status: 'active',
       joined_on: '2024-02-15'
     },
@@ -274,9 +277,7 @@ function installGroupWorkspaceFetchMock() {
     }
   ];
 
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: RequestInfo | URL) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), window.location.origin);
 
       if (url.pathname === '/api/v1/communities/1/') {
@@ -290,6 +291,9 @@ function installGroupWorkspaceFetchMock() {
       }
       if (url.pathname === '/api/v1/groups/2/members/') {
         return jsonResponse(members);
+      }
+      if (url.pathname === '/api/v1/members/') {
+        return jsonResponse(paginated(members));
       }
       if (url.pathname === '/api/v1/groups/') {
         return jsonResponse(paginated([group]));
@@ -314,8 +318,9 @@ function installGroupWorkspaceFetchMock() {
       }
 
       return jsonResponse(paginated([]));
-    })
-  );
+    });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
 }
 
 function renderGroupWorkspace() {
@@ -358,7 +363,8 @@ function renderCommunityDetail() {
 
 describe('CommunityDetailPage community summary', () => {
   it('shows subcounty, residents, resources, and groups', async () => {
-    installGroupWorkspaceFetchMock();
+    const fetchMock = installGroupWorkspaceFetchMock();
+    const user = userEvent.setup();
     renderCommunityDetail();
 
     expect(await screen.findByRole('heading', { name: 'Katosi Community' })).toBeInTheDocument();
@@ -386,6 +392,47 @@ describe('CommunityDetailPage community summary', () => {
     expect(within(groupsTable).getByText('27')).toBeInTheDocument();
     expect(within(groupsTable).getByText('22')).toBeInTheDocument();
     expect(within(groupsTable).getByText('5')).toBeInTheDocument();
+
+    fetchMock.mockClear();
+    const membersSort = within(groupsTable).getByRole('button', { name: 'Sort by Members' });
+    await user.click(membersSort);
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input]) => {
+        const url = new URL(String(input), window.location.origin);
+        return url.pathname === '/api/v1/groups/' && url.searchParams.get('ordering') === 'member_count';
+      })).toBe(true);
+    });
+    const sortedGroupsTable = screen.getByRole('table');
+    const ascendingMembersSort = within(sortedGroupsTable).getByRole('button', {
+      name: 'Sort by Members, currently ascending'
+    });
+    expect(ascendingMembersSort.closest('th')).toHaveAttribute('aria-sort', 'ascending');
+
+    await user.click(ascendingMembersSort);
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input]) => {
+        const url = new URL(String(input), window.location.origin);
+        return url.pathname === '/api/v1/groups/' && url.searchParams.get('ordering') === '-member_count';
+      })).toBe(true);
+    });
+    const descendingMembersSort = within(screen.getByRole('table')).getByRole('button', {
+      name: 'Sort by Members, currently descending'
+    });
+    expect(descendingMembersSort.closest('th')).toHaveAttribute('aria-sort', 'descending');
+
+    await user.click(screen.getByRole('link', { name: /^Members/ }));
+    await screen.findByRole('searchbox', { name: 'Search members' });
+    const membersTable = screen.getByRole('table');
+    expect(within(membersTable).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      '',
+      'Member name',
+      'Member #',
+      'Phone',
+      'Status',
+      'Joined',
+      'Actions'
+    ]);
+    expect(screen.queryByText('amina@example.test')).not.toBeInTheDocument();
   });
 });
 
@@ -422,6 +469,33 @@ describe('CommunityDetailPage group workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Members' }));
     expect(screen.getByText('Amina Kato')).toBeInTheDocument();
     expect(screen.getByText('Beatrice Naki')).toBeInTheDocument();
+    expect(screen.getByText('Chairperson')).toBeInTheDocument();
+    expect(screen.getByText('District councillor')).toBeInTheDocument();
+    expect(screen.queryByText('amina@example.test')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add member' }));
+    const createMemberDialog = screen.getByRole('dialog', { name: 'Create member' });
+    expect(within(createMemberDialog).getByLabelText('Group')).toHaveValue('Demo Savings Group');
+    expect(within(createMemberDialog).getByLabelText('Group')).toHaveAttribute('readonly');
+    await user.click(within(createMemberDialog).getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Edit Amina Kato' }));
+    const editMemberDialog = screen.getByRole('dialog', { name: 'Edit member' });
+    expect(within(editMemberDialog).getByLabelText('Group')).toHaveValue('2');
+    expect(within(editMemberDialog).getByLabelText('Group position')).toHaveValue('Chairperson');
+    await user.click(within(editMemberDialog).getByRole('button', { name: 'Cancel' }));
+    const rosterTable = screen.getByRole('table');
+    expect(within(rosterTable).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'Name',
+      'Member number',
+      'Positions',
+      'Phone',
+      'Joined',
+      'Status',
+      'Actions'
+    ]);
+    await user.selectOptions(screen.getByLabelText('Sort group members direction'), 'desc');
+    expect(within(rosterTable).getAllByRole('row')[1]).toHaveTextContent('Member 36');
+    await user.selectOptions(screen.getByLabelText('Sort group members direction'), 'asc');
+    expect(within(rosterTable).getAllByRole('row')[1]).toHaveTextContent('Amina Kato');
     expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled();
     expect(screen.queryByRole('link', { name: 'Member 36' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Next page' }));
@@ -429,6 +503,10 @@ describe('CommunityDetailPage group workspace', () => {
     await user.selectOptions(screen.getByLabelText('Filter group members by status'), 'inactive');
     expect(await screen.findByRole('link', { name: 'Member 36' })).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Filter group members by status'), 'all');
+    await user.type(screen.getByLabelText('Search group members'), 'Chairperson');
+    expect(screen.getByRole('link', { name: 'Amina Kato' })).toBeInTheDocument();
+    expect(screen.queryByText('Beatrice Naki')).not.toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Search group members'));
     await user.type(screen.getByLabelText('Search group members'), 'Amina');
     expect(screen.getByRole('link', { name: 'Amina Kato' })).toBeInTheDocument();
     expect(screen.queryByText('Beatrice Naki')).not.toBeInTheDocument();

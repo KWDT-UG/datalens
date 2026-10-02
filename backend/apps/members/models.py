@@ -26,6 +26,8 @@ class Member(CoreModel):
     date_of_birth = models.DateField(null=True, blank=True)
     phone = models.CharField(max_length=64, blank=True)
     email = models.EmailField(blank=True)
+    group_position = models.CharField(max_length=150, blank=True)
+    community_position = models.CharField(max_length=150, blank=True)
     address_text = models.TextField(blank=True)
     status = models.CharField(
         max_length=32,

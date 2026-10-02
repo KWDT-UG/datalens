@@ -58,6 +58,10 @@ class GroupViewSet(
         "sub_county",
         "formed_on",
         "closed_on",
+        "status",
+        "member_count",
+        "female_count",
+        "male_count",
         "created_at",
     )
 

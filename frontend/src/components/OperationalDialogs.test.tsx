@@ -47,6 +47,8 @@ const member: Member = {
   community: community.id,
   group: group.id,
   first_name: 'Grace',
+  group_position: 'Treasurer',
+  community_position: 'District councillor',
   last_name: 'Member',
   status: 'active'
 };
@@ -275,7 +277,7 @@ describe.each(cases)('$path dialog', (dialogCase) => {
   });
 });
 
-it('captures sub-county in the group create and edit form', async () => {
+it('captures subcounty in the group create and edit form', async () => {
   const fetchMock = installCrudFetchMock({ groups: [group], resources: [resource] });
   const user = userEvent.setup();
 
@@ -287,9 +289,9 @@ it('captures sub-county in the group create and edit form', async () => {
   );
 
   expect(screen.queryByLabelText('Meeting day')).not.toBeInTheDocument();
-  await user.type(screen.getByLabelText('Group name'), 'Sub County Group');
+  await user.type(screen.getByLabelText('Group name'), 'Subcounty Group');
   await user.type(screen.getByLabelText('Group code'), 'SUB-1');
-  await user.type(screen.getByLabelText('Sub-county'), 'Ntenjeru');
+  await user.type(screen.getByLabelText('Subcounty'), 'Ntenjeru');
   await user.click(screen.getByRole('button', { name: 'Create group' }));
 
   await waitFor(() => {
@@ -297,6 +299,61 @@ it('captures sub-county in the group create and edit form', async () => {
     expect(call.method).toBe('POST');
     expect(call.path).toBe('/api/v1/groups/');
     expect(call.body.sub_county).toBe('Ntenjeru');
+  });
+});
+
+it('captures group and community positions in the member form', async () => {
+  const fetchMock = installCrudFetchMock({ groups: [group], resources: [resource] });
+  const user = userEvent.setup();
+
+  renderWithProviders(
+    <MemberCreateDialog
+      communityId={community.id}
+      {...commonCallbacks}
+    />
+  );
+
+  await user.type(screen.getByLabelText('First name'), 'Sarah');
+  await user.type(screen.getByLabelText('Last name'), 'Member');
+  await screen.findByRole('option', { name: group.name });
+  await user.selectOptions(screen.getByLabelText('Group'), String(group.id));
+  await user.type(screen.getByLabelText('Group position'), 'Secretary');
+  await user.type(
+    screen.getByLabelText('Community / political position'),
+    'Village representative'
+  );
+  await user.click(screen.getByRole('button', { name: 'Create member' }));
+
+  await waitFor(() => {
+    const call = mutationCall(fetchMock);
+    expect(call.body.group_position).toBe('Secretary');
+    expect(call.body.community_position).toBe('Village representative');
+  });
+});
+
+it('fixes the group when creating a member from a group workspace', async () => {
+  const fetchMock = installCrudFetchMock({ groups: [group], resources: [resource] });
+  const user = userEvent.setup();
+
+  renderWithProviders(
+    <MemberCreateDialog
+      communityId={community.id}
+      fixedGroup={{ id: group.id, name: group.name }}
+      {...commonCallbacks}
+    />
+  );
+
+  expect(screen.getByLabelText('Group')).toHaveValue(group.name);
+  expect(screen.getByLabelText('Group')).toHaveAttribute('readonly');
+  await user.type(screen.getByLabelText('First name'), 'Sarah');
+  await user.type(screen.getByLabelText('Last name'), 'Member');
+  await user.click(screen.getByRole('button', { name: 'Create member' }));
+
+  await waitFor(() => {
+    const call = mutationCall(fetchMock);
+    expect(call.method).toBe('POST');
+    expect(call.path).toBe('/api/v1/members/');
+    expect(call.body.group).toBe(group.id);
   });
 });
 
@@ -321,7 +378,7 @@ it('captures subcounty and resident count in the community form', async () => {
   });
 });
 
-it('prefills and updates group sub-county', async () => {
+it('prefills and updates group subcounty', async () => {
   const fetchMock = installCrudFetchMock({ groups: [group], resources: [resource] });
   const user = userEvent.setup();
 
@@ -333,7 +390,7 @@ it('prefills and updates group sub-county', async () => {
     />
   );
 
-  const subCountyField = screen.getByLabelText('Sub-county');
+  const subCountyField = screen.getByLabelText('Subcounty');
   expect(subCountyField).toHaveValue('Mpunge');
   await user.clear(subCountyField);
   await user.type(subCountyField, 'Nakisunga');

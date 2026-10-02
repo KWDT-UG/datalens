@@ -44,7 +44,10 @@ type CommunityScopedDialogProps = {
 };
 
 type GroupDialogProps = CommunityScopedDialogProps & { group?: Group };
-type MemberDialogProps = CommunityScopedDialogProps & { member?: Member };
+type MemberDialogProps = CommunityScopedDialogProps & {
+  fixedGroup?: Pick<Group, 'id' | 'name'>;
+  member?: Member;
+};
 type InstitutionDialogProps = CommunityScopedDialogProps & {
   institution?: Institution;
 };
@@ -214,7 +217,7 @@ export function GroupCreateDialog({
             {errors.code ? <small>{errors.code.message}</small> : null}
           </label>
           <label className="form-field">
-            <span>Sub-county</span>
+            <span>Subcounty</span>
             <input {...register('sub_county')} />
           </label>
           <label className="form-field">
@@ -252,6 +255,7 @@ export function GroupCreateDialog({
 
 export function MemberCreateDialog({
   communityId,
+  fixedGroup,
   member,
   onClose,
   onCreated
@@ -260,7 +264,10 @@ export function MemberCreateDialog({
   const userId = useOptionalAuth()?.user?.id;
   const updateMember = useUpdateMemberMutation();
   const isEditing = Boolean(member);
-  const groupsQuery = useGroupsQuery({ community: communityId, page: 1, page_size: 100, ordering: 'name' });
+  const groupsQuery = useGroupsQuery(
+    { community: communityId, page: 1, page_size: 100, ordering: 'name' },
+    !fixedGroup
+  );
   const {
     formState: { errors },
     handleSubmit,
@@ -271,13 +278,15 @@ export function MemberCreateDialog({
   } = useForm<Omit<MemberCreateInput, 'group'> & { group: string }>({
     defaultValues: {
       address_text: member?.address_text ?? '',
+      community_position: member?.community_position ?? '',
       community: communityId,
       date_of_birth: member?.date_of_birth ?? '',
       deceased_on: member?.deceased_on ?? '',
       email: member?.email ?? '',
       first_name: member?.first_name ?? '',
       gender: member?.gender ?? '',
-      group: member ? String(member.group) : '',
+      group: member ? String(member.group) : fixedGroup ? String(fixedGroup.id) : '',
+      group_position: member?.group_position ?? '',
       joined_on: member?.joined_on ?? '',
       last_name: member?.last_name ?? '',
       left_on: member?.left_on ?? '',
@@ -317,7 +326,9 @@ export function MemberCreateDialog({
       description={
         isEditing
           ? 'Update this member’s details and current group.'
-          : 'Add a member to one group in this community.'
+          : fixedGroup
+            ? `Add a member to ${fixedGroup.name}.`
+            : 'Add a member to one group in this community.'
       }
       onClose={onClose}
     >
@@ -328,14 +339,16 @@ export function MemberCreateDialog({
             const payload = {
               ...values,
               first_name: values.first_name.trim(),
-              group: Number(values.group),
+              group: fixedGroup?.id ?? Number(values.group),
               last_name: values.last_name.trim(),
               ...optionalTextFields(values, [
                 'address_text',
+                'community_position',
                 'date_of_birth',
                 'deceased_on',
                 'email',
                 'gender',
+                'group_position',
                 'joined_on',
                 'left_on',
                 'member_number',
@@ -380,20 +393,27 @@ export function MemberCreateDialog({
           </label>
           <label className="form-field">
             <span>Group</span>
-            <select {...register('group', { required: 'Select a group.' })}>
-              <option value="">{groupsQuery.isLoading ? 'Loading groups...' : 'Select group'}</option>
-              {member &&
-              !(groupsQuery.data?.results ?? []).some(
-                (availableGroup) => availableGroup.id === member.group
-              ) ? (
-                <option value={member.group}>{member.group_name ?? 'Current group'}</option>
-              ) : null}
-              {(groupsQuery.data?.results ?? []).map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
+            {fixedGroup ? (
+              <>
+                <input aria-label="Group" readOnly value={fixedGroup.name} />
+                <input type="hidden" {...register('group', { required: 'Select a group.' })} />
+              </>
+            ) : (
+              <select {...register('group', { required: 'Select a group.' })}>
+                <option value="">{groupsQuery.isLoading ? 'Loading groups...' : 'Select group'}</option>
+                {member &&
+                !(groupsQuery.data?.results ?? []).some(
+                  (availableGroup) => availableGroup.id === member.group
+                ) ? (
+                  <option value={member.group}>{member.group_name ?? 'Current group'}</option>
+                ) : null}
+                {(groupsQuery.data?.results ?? []).map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            )}
             {errors.group ? <small>{errors.group.message}</small> : null}
           </label>
           <label className="form-field">
@@ -403,6 +423,14 @@ export function MemberCreateDialog({
           <label className="form-field">
             <span>Preferred name</span>
             <input {...register('preferred_name')} />
+          </label>
+          <label className="form-field">
+            <span>Group position</span>
+            <input placeholder="e.g. Chairperson or Treasurer" {...register('group_position')} />
+          </label>
+          <label className="form-field">
+            <span>Community / political position</span>
+            <input placeholder="e.g. District councillor" {...register('community_position')} />
           </label>
           <label className="form-field">
             <span>Status</span>
