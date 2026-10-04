@@ -1062,3 +1062,19 @@ Local verification on 2026-10-03:
   production build, PWA/offline-shell verification, rebuilt local services,
   backend health endpoint, and frontend `/reference-data` application route
   also pass.
+## 2026-10-04 Operational Domain Boundary Review
+
+- Added `operational-domain-boundaries.md` as the working architecture and
+  stakeholder walkthrough document for Resource inventory, Resource
+  repayments, maintenance, performance/production, microcredit Loans, and the
+  QuickBooks accounting boundary.
+- The document distinguishes implemented behavior from recommendations,
+  records open product questions and decision gates for each boundary, and
+  defines staged review and delivery checkpoints. It does not authorize new
+  models or implementation by itself.
+- Linked the existing Resource lifecycle and finance design to the new boundary
+  guide so detailed current behavior and future cross-domain decisions remain
+  separate but discoverable.
+- Recorded the separation of Loans from Resource inventory as a working
+  architectural direction. It is explicitly provisional until reviewed and
+  approved by KWDT leadership stakeholders.
