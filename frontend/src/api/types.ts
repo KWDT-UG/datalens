@@ -584,6 +584,52 @@ export interface ThematicArea {
   status?: RecordStatus;
 }
 
+export type ThematicAreaInput = Pick<
+  ThematicArea,
+  'code' | 'name' | 'description' | 'status'
+>;
+
+export interface Program extends SyncMetadata {
+  id: number;
+  thematic_area: number;
+  thematic_area_name?: string;
+  code: string;
+  name: string;
+  description?: string;
+  status?: RecordStatus;
+  display_order?: number;
+}
+
+export type ProgramInput = Pick<
+  Program,
+  'thematic_area' | 'code' | 'name' | 'description' | 'status' | 'display_order'
+>;
+
+export interface ResourceCategory extends SyncMetadata {
+  id: number;
+  program: number;
+  program_name?: string;
+  thematic_area?: number;
+  thematic_area_name?: string;
+  code: string;
+  name: string;
+  description?: string;
+  status?: RecordStatus;
+  default_resource_type?: string;
+  display_order?: number;
+}
+
+export type ResourceCategoryInput = Pick<
+  ResourceCategory,
+  | 'program'
+  | 'code'
+  | 'name'
+  | 'description'
+  | 'status'
+  | 'default_resource_type'
+  | 'display_order'
+>;
+
 export interface Resource extends SyncMetadata {
   id: number;
   community: number;
@@ -595,6 +641,12 @@ export interface Resource extends SyncMetadata {
   owner_type?: string;
   owner_id?: number;
   owner_display?: string | null;
+  program?: number | null;
+  program_name?: string | null;
+  thematic_area_id?: number | null;
+  thematic_area_name?: string | null;
+  resource_category?: number | null;
+  resource_category_name?: string | null;
   quantity?: string;
   unit?: string;
   value_amount?: string;
@@ -631,6 +683,8 @@ export interface ResourceCreateInput {
   community: number;
   owner_type: string;
   owner_id: number;
+  program?: number;
+  resource_category?: number;
   resource_type: string;
   name: string;
   description?: string;

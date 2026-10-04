@@ -9,7 +9,7 @@ from apps.common.permissions import assign_role
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.members.models import Member
-from apps.resources.models import Resource, ResourceThematicArea, ThematicArea
+from apps.resources.models import Program, Resource, ResourceThematicArea, ThematicArea
 
 
 class PermissionsPrivacyTests(TestCase):
@@ -128,6 +128,29 @@ class PermissionsPrivacyTests(TestCase):
             [item["id"] for item in themes.data["results"]],
             [self.theme_a.pk],
         )
+
+        allowed_program = self.client.post(
+            reverse("program-list"),
+            {
+                "thematic_area": self.theme_a.pk,
+                "code": "ASSIGNED",
+                "name": "Assigned Program",
+            },
+            format="json",
+        )
+        denied_program = self.client.post(
+            reverse("program-list"),
+            {
+                "thematic_area": self.theme_b.pk,
+                "code": "PRIVATE",
+                "name": "Private Program",
+            },
+            format="json",
+        )
+        self.assertEqual(allowed_program.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(denied_program.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Program.objects.filter(code="ASSIGNED").exists())
+        self.assertFalse(Program.objects.filter(code="PRIVATE").exists())
 
     def test_pii_and_financial_fields_are_masked_by_capability(self):
         finance, _profile = self.make_user(

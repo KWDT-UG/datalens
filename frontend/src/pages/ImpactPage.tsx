@@ -15,6 +15,7 @@ import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
 import { ImpactRecordCreateDialog } from '../components/CommunityBreakdownCreateDialogs';
 import { ListActionError } from '../components/ListActionError';
+import { reverseOrdering, SortableTableHeader } from '../components/SortableTableHeader';
 import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/listActions';
 import { PaginationLabel } from './CommunitiesPage';
 
@@ -61,6 +62,7 @@ export function ImpactPage() {
   const [community, setCommunity] = useState('');
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
+  const [ordering, setOrdering] = useState('-as_of_date');
   const [editingImpactRecord, setEditingImpactRecord] = useState<ImpactRecord | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const reportParams = {
@@ -73,7 +75,7 @@ export function ImpactPage() {
     page,
     page_size: pageSize,
     search,
-    ordering: '-as_of_date'
+    ordering
   };
   const communitiesQuery = useCommunitiesQuery({ page: 1, page_size: 100, ordering: 'name' });
   const summaryQuery = useImpactSummaryQuery(reportParams);
@@ -129,6 +131,11 @@ export function ImpactPage() {
     setSelectedIds((current) =>
       current.includes(id) ? current.filter((selectedId) => selectedId !== id) : [...current, id]
     );
+  }
+
+  function changeOrdering(columnOrdering: string) {
+    setOrdering((current) => current === columnOrdering ? reverseOrdering(columnOrdering) : columnOrdering);
+    setPage(1);
   }
 
   return (
@@ -262,15 +269,15 @@ export function ImpactPage() {
             <thead>
               <tr>
                 <th aria-label="Select impact record" />
-                <th>As of</th>
-                <th>Period</th>
-                <th>Resource</th>
-                <th>People reached</th>
-                <th>Households</th>
-                <th>Members</th>
-                <th>Institutions</th>
-                <th>Method</th>
-                <th>Updated</th>
+                <SortableTableHeader currentOrdering={ordering} label="As of" onChange={changeOrdering} ordering="as_of_date" />
+                <SortableTableHeader currentOrdering={ordering} label="Period" onChange={changeOrdering} ordering="period_type" />
+                <SortableTableHeader currentOrdering={ordering} label="Resource" onChange={changeOrdering} ordering="resource__name" />
+                <SortableTableHeader currentOrdering={ordering} label="People reached" onChange={changeOrdering} ordering="beneficiary_count" />
+                <SortableTableHeader currentOrdering={ordering} label="Households" onChange={changeOrdering} ordering="household_count" />
+                <SortableTableHeader currentOrdering={ordering} label="Members" onChange={changeOrdering} ordering="member_count" />
+                <SortableTableHeader currentOrdering={ordering} label="Institutions" onChange={changeOrdering} ordering="institution_count" />
+                <SortableTableHeader currentOrdering={ordering} label="Method" onChange={changeOrdering} ordering="method" />
+                <SortableTableHeader currentOrdering={ordering} label="Updated" onChange={changeOrdering} ordering="updated_at" />
                 <th>Actions</th>
               </tr>
             </thead>

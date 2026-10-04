@@ -30,8 +30,10 @@ from apps.participation.models import (
     CooperativeMembership,
 )
 from apps.resources.models import (
+    Program,
     Resource,
     ResourceBeneficiary,
+    ResourceCategory,
     ResourceStatusEvent,
     ResourceThematicArea,
     ThematicArea,
@@ -50,6 +52,14 @@ class ManagementCommandTests(TestCase):
         self.assertSetEqual(
             set(ThematicArea.objects.values_list("code", flat=True)),
             {"WASH", "EDU", "ENV", "ECON"},
+        )
+        self.assertEqual(Program.objects.count(), 11)
+        self.assertGreaterEqual(ResourceCategory.objects.count(), 30)
+        self.assertTrue(
+            ResourceCategory.objects.filter(
+                program__code="WATER",
+                code="BOREHOLE",
+            ).exists()
         )
 
     def test_seed_demo_data_is_idempotent(self):
@@ -95,6 +105,8 @@ class ManagementCommandTests(TestCase):
         self.assertEqual(ResourceStatusEvent.objects.count(), 11)
         self.assertEqual(ImpactRecord.objects.count(), 7)
         school_tank = Resource.objects.get(name="School Water Storage Tank")
+        self.assertEqual(school_tank.program.code, "WATER")
+        self.assertEqual(school_tank.resource_category.code, "RAINWATER_TANK")
         self.assertEqual(school_tank.owner_type, ResourcePartyType.INSTITUTION)
         self.assertFalse(
             ResourceBeneficiary.objects.filter(

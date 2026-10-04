@@ -157,8 +157,20 @@ export function ResourceDetailPage() {
                 <Detail label="Asset identifier" value={resource.serial_or_tag_number} />
               ) : null}
               <Detail label="Acquired" value={formatDate(resource.acquired_on)} />
-              <Detail label="Location" value={resource.location_text || 'Not recorded'} />
-              <Detail label="Thematic areas" value={resource.thematic_areas?.map((area) => area.name).join(', ') || 'Not recorded'} />
+              <Detail label="Site / location details" value={resource.location_text || 'Not recorded'} />
+              <Detail
+                label="Thematic area"
+                value={
+                  resource.thematic_area_name
+                  ?? resource.thematic_areas?.map((area) => area.name).join(', ')
+                  ?? 'Not recorded'
+                }
+              />
+              <Detail label="Program" value={resource.program_name || 'Not recorded'} />
+              <Detail
+                label="Resource category"
+                value={resource.resource_category_name || 'Not recorded'}
+              />
             </dl>
             {resource.description ? <p className="record-detail__notes">{resource.description}</p> : null}
           </section>

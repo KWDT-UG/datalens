@@ -1,6 +1,6 @@
 from datetime import date
 
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, Max, Q, Sum
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -12,13 +12,13 @@ from apps.common.permissions import (
     AuthenticatedAccess,
     user_has_capability,
 )
+from apps.common.scoping import scope_queryset_for_user
 from apps.communities.models import Community
 from apps.groups.models import Group
 from apps.impacts.models import ImpactRecord
 from apps.institutions.models import Institution
 from apps.members.models import Member
 from apps.resources.models import Resource, ThematicArea
-from apps.common.scoping import scope_queryset_for_user
 
 
 def visible_approval_requests(user):
@@ -177,8 +177,12 @@ class DashboardView(APIView):
         base_resource_queryset = resource_queryset
         if thematic_area_code:
             resource_queryset = resource_queryset.filter(
-                thematic_links__thematic_area__code=thematic_area_code,
-            )
+                Q(program__thematic_area__code=thematic_area_code)
+                | Q(
+                    thematic_links__thematic_area__code=thematic_area_code,
+                    thematic_links__is_deleted=False,
+                )
+            ).distinct()
             impact_queryset = impact_queryset.filter(resource__in=resource_queryset)
 
         impact_queryset = filter_impact_period(impact_queryset, period)
@@ -194,7 +198,13 @@ class DashboardView(APIView):
         )
         programme_lenses = []
         for area in ThematicArea.objects.filter(is_deleted=False).order_by("name"):
-            area_resources = base_resource_queryset.filter(thematic_links__thematic_area=area)
+            area_resources = base_resource_queryset.filter(
+                Q(program__thematic_area=area)
+                | Q(
+                    thematic_links__thematic_area=area,
+                    thematic_links__is_deleted=False,
+                )
+            ).distinct()
             area_impacts = impact_queryset.filter(resource__in=area_resources)
             programme_lenses.append(
                 {

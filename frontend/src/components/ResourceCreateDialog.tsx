@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { Link } from 'react-router-dom';
 
 import {
   useCommunitiesQuery,
+  useCommunityQuery,
   useCooperativesQuery,
   useCreateResourceMutation,
   useGroupsQuery,
   useInstitutionsQuery,
   useMembersQuery,
+  useProgramsQuery,
+  useResourceCategoriesQuery,
+  useThematicAreasQuery,
   useUpdateResourceMutation
 } from '../api/queries';
 import { useOptionalAuth } from '../auth/AuthContext';
@@ -29,6 +34,11 @@ import { clearOfflineDraft, useOfflineDraft } from '../offline/drafts';
 
 type ResourceCreateDialogProps = {
   communityId?: number;
+  fixedOwner?: {
+    id: number;
+    label: string;
+    type: ResourceFormValues['owner_type'];
+  };
   onClose: () => void;
   onCreated: (resource: Resource) => void;
   resource?: Resource;
@@ -42,11 +52,14 @@ type ResourceFormValues = {
   name: string;
   owner_id: string;
   owner_type: 'community' | 'group' | 'cooperative' | 'member' | 'institution';
+  program: string;
   quantity: string;
+  resource_category: string;
   resource_type: string;
   serial_or_tag_number: string;
   source_notes: string;
   status: string;
+  thematic_area: string;
   unit: string;
   value_amount: string;
   value_currency: string;
@@ -95,7 +108,11 @@ function ownerTypeValue(value?: string): ResourceFormValues['owner_type'] {
     : 'community';
 }
 
-function defaultValuesFor(resource?: Resource, communityId?: number): ResourceFormValues {
+function defaultValuesFor(
+  resource?: Resource,
+  communityId?: number,
+  fixedOwner?: ResourceCreateDialogProps['fixedOwner']
+): ResourceFormValues {
   const community = resource?.community ?? communityId;
 
   return {
@@ -104,13 +121,18 @@ function defaultValuesFor(resource?: Resource, communityId?: number): ResourceFo
     description: resource?.description ?? '',
     location_text: resource?.location_text ?? '',
     name: resource?.name ?? '',
-    owner_id: resource?.owner_type === 'community' ? '' : String(resource?.owner_id ?? ''),
-    owner_type: ownerTypeValue(resource?.owner_type),
+    owner_id: resource?.owner_type === 'community'
+      ? ''
+      : String(resource?.owner_id ?? fixedOwner?.id ?? ''),
+    owner_type: ownerTypeValue(resource?.owner_type ?? fixedOwner?.type),
+    program: resource?.program ? String(resource.program) : '',
     quantity: resource?.quantity ?? '',
+    resource_category: resource?.resource_category ? String(resource.resource_category) : '',
     resource_type: resource?.resource_type ?? 'other',
     serial_or_tag_number: resource?.serial_or_tag_number ?? '',
     source_notes: resource?.source_notes ?? '',
     status: resource?.status ?? 'planned',
+    thematic_area: resource?.thematic_area_id ? String(resource.thematic_area_id) : '',
     unit: resource?.unit ?? '',
     value_amount: resource?.value_amount ?? '',
     value_currency: resource?.value_currency ?? 'UGX'
@@ -145,7 +167,13 @@ function ownerOptionsFor(
   return [];
 }
 
-export function ResourceCreateDialog({ communityId, onClose, onCreated, resource }: ResourceCreateDialogProps) {
+export function ResourceCreateDialog({
+  communityId,
+  fixedOwner,
+  onClose,
+  onCreated,
+  resource
+}: ResourceCreateDialogProps) {
   const auth = useOptionalAuth();
   const userId = auth?.user?.id;
   const canManageFinancials = auth
@@ -165,16 +193,30 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
     setValue,
     watch
   } = useForm<ResourceFormValues>({
-    defaultValues: defaultValuesFor(resource, communityId)
+    defaultValues: defaultValuesFor(resource, communityId, fixedOwner)
   });
   const selectedCommunity = watch('community');
   const selectedOwnerType = watch('owner_type');
+  const selectedThematicArea = watch('thematic_area');
+  const selectedProgram = watch('program');
   const listParams = {
     community: selectedCommunity || undefined,
     page: 1,
     page_size: 100
   };
   const communitiesQuery = useCommunitiesQuery({ page: 1, page_size: 100, ordering: 'name' });
+  const selectedCommunityQuery = useCommunityQuery(selectedCommunity || undefined);
+  const selectedCommunityRecord = selectedCommunityQuery.data?.id
+    ? selectedCommunityQuery.data
+    : (communitiesQuery.data?.results ?? []).find(
+        (community: Community) => community.id === Number(selectedCommunity)
+      );
+  const thematicAreasQuery = useThematicAreasQuery();
+  const programsQuery = useProgramsQuery(selectedThematicArea, Boolean(selectedThematicArea));
+  const resourceCategoriesQuery = useResourceCategoriesQuery(
+    selectedProgram,
+    Boolean(selectedProgram)
+  );
   const groupsQuery = useGroupsQuery(
     { ...listParams, ordering: 'name' },
     Boolean(selectedCommunity && selectedOwnerType === 'group')
@@ -199,6 +241,24 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
     }
     setValue('owner_id', '');
   }, [selectedCommunity, selectedOwnerType, setValue]);
+
+  const previousThematicArea = useRef(selectedThematicArea);
+  const previousProgram = useRef(selectedProgram);
+
+  useEffect(() => {
+    if (previousThematicArea.current !== selectedThematicArea) {
+      setValue('program', '');
+      setValue('resource_category', '');
+      previousThematicArea.current = selectedThematicArea;
+    }
+  }, [selectedThematicArea, setValue]);
+
+  useEffect(() => {
+    if (previousProgram.current !== selectedProgram) {
+      setValue('resource_category', '');
+      previousProgram.current = selectedProgram;
+    }
+  }, [selectedProgram, setValue]);
 
   const ownerOptions = ownerOptionsFor(selectedOwnerType, {
     cooperatives: cooperativesQuery.data?.results ?? [],
@@ -226,8 +286,10 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
   return (
     <FormDialog
       open
-      title={isEditing ? 'Edit resource' : 'Create resource'}
-      description="Save a resource under a community and select its current owner."
+      title={isEditing ? 'Edit resource' : fixedOwner ? 'Add group-owned resource' : 'Create resource'}
+      description={fixedOwner
+        ? `Create a resource owned by ${fixedOwner.label}.`
+        : 'Save a resource under a community and select its current owner.'}
       onClose={onClose}
     >
       <form
@@ -242,7 +304,11 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
             name: values.name.trim(),
             owner_id: values.owner_type === 'community' ? communityId : Number(values.owner_id),
             owner_type: values.owner_type,
+            program: Number(values.program),
             quantity: omitBlank(values.quantity),
+            resource_category: values.resource_category
+              ? Number(values.resource_category)
+              : undefined,
             resource_type: values.resource_type,
             serial_or_tag_number: omitBlank(values.serial_or_tag_number),
             source_notes: omitBlank(values.source_notes),
@@ -320,6 +386,21 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
             {errors.community ? <small>{errors.community.message}</small> : null}
           </label>
 
+          <div className="form-field form-field--readout">
+            <span>Administrative location</span>
+            <strong>
+              {selectedCommunityRecord
+                ? [
+                    selectedCommunityRecord.subcounty_name,
+                    selectedCommunityRecord.district_name,
+                    selectedCommunityRecord.region_name,
+                    selectedCommunityRecord.country
+                  ].filter(Boolean).join(', ') || 'Not recorded for this community'
+                : 'Select a community first'}
+            </strong>
+            <small>Inherited from the selected community.</small>
+          </div>
+
           <label className="form-field">
             <span>Resource name</span>
             <input
@@ -329,6 +410,69 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
               })}
             />
             {errors.name ? <small>{errors.name.message}</small> : null}
+          </label>
+
+          <label className="form-field">
+            <span>Thematic area</span>
+            <select
+              {...register('thematic_area', {
+                required: 'Select a thematic area.'
+              })}
+            >
+              <option value="">Select thematic area</option>
+              {(thematicAreasQuery.data?.results ?? []).map((area) => (
+                <option key={area.id} value={area.id}>
+                  {area.name}
+                </option>
+              ))}
+            </select>
+            {errors.thematic_area ? <small>{errors.thematic_area.message}</small> : null}
+          </label>
+
+          <label className="form-field">
+            <span>Program</span>
+            <select
+              aria-label="Program"
+              disabled={!selectedThematicArea || programsQuery.isLoading}
+              {...register('program', {
+                required: 'Select a program.'
+              })}
+            >
+              <option value="">
+                {programsQuery.isLoading ? 'Loading programs...' : 'Select program'}
+              </option>
+              {(programsQuery.data?.results ?? []).map((program) => (
+                <option key={program.id} value={program.id}>
+                  {program.name}
+                </option>
+              ))}
+            </select>
+            {errors.program ? <small>{errors.program.message}</small> : null}
+            {auth && hasCapability(auth.user, capabilities.manageReferenceData) ? (
+              <small className="form-field__help">Program not listed? <Link to="/reference-data">Manage Resource Classification</Link>.</small>
+            ) : (
+              <small className="form-field__help">Program not listed? Ask a Programme Manager or system administrator to add it.</small>
+            )}
+          </label>
+
+          <label className="form-field">
+            <span>Resource category (optional)</span>
+            <select
+              disabled={!selectedProgram || resourceCategoriesQuery.isLoading}
+              {...register('resource_category')}
+            >
+              <option value="">
+                {resourceCategoriesQuery.isLoading
+                  ? 'Loading categories...'
+                  : 'Not yet categorized'}
+              </option>
+              {(resourceCategoriesQuery.data?.results ?? []).map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+            <small>Categories can be completed as KWDT finalizes the working matrix.</small>
           </label>
 
           <label className="form-field">
@@ -353,18 +497,32 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
             </select>
           </label>
 
-          <label className="form-field">
-            <span>Owner type</span>
-            <select {...register('owner_type')}>
-              {ownerTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {fixedOwner ? (
+            <div className="form-field form-field--readout">
+              <span>Owner type</span>
+              <input type="hidden" {...register('owner_type')} />
+              <strong>{ownerTypeOptions.find((option) => option.value === fixedOwner.type)?.label}</strong>
+            </div>
+          ) : (
+            <label className="form-field">
+              <span>Owner type</span>
+              <select {...register('owner_type')}>
+                {ownerTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
-          {selectedOwnerType === 'community' ? (
+          {fixedOwner ? (
+            <div className="form-field form-field--readout">
+              <span>Owner</span>
+              <input type="hidden" {...register('owner_id')} />
+              <strong>{fixedOwner.label}</strong>
+            </div>
+          ) : selectedOwnerType === 'community' ? (
             <div className="form-field form-field--readout">
               <span>Owner</span>
               <strong>{selectedCommunity ? 'Selected community' : 'Select a community first'}</strong>
@@ -433,8 +591,11 @@ export function ResourceCreateDialog({ communityId, onClose, onCreated, resource
         </label>
 
         <label className="form-field">
-          <span>Location</span>
-          <textarea rows={2} {...register('location_text')} />
+          <span>Site / location details</span>
+          <textarea aria-label="Site / location details" rows={2} {...register('location_text')} />
+          <small className="form-field__help">
+            Record the village, school, landing site, facility, or landmark within the community.
+          </small>
         </label>
 
         <label className="form-field">

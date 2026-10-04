@@ -33,8 +33,10 @@ from apps.participation.models import (
     CooperativeMembership,
 )
 from apps.resources.models import (
+    Program,
     Resource,
     ResourceBeneficiary,
+    ResourceCategory,
     ResourceStatusEvent,
     ResourceThematicArea,
     ThematicArea,
@@ -48,7 +50,7 @@ REFERENCE_THEMATIC_AREAS = [
     },
     {
         "code": "EDU",
-        "name": "Education",
+        "name": "Formal & Non Formal Education",
         "description": "Education access, school support, and learning outcomes.",
     },
     {
@@ -62,6 +64,85 @@ REFERENCE_THEMATIC_AREAS = [
         "description": "Livelihoods, savings groups, enterprise, and productive assets.",
     },
 ]
+
+REFERENCE_PROGRAMS = [
+    ("ECON", "FISHERIES", "Fisheries"),
+    ("ECON", "AGROECOLOGY", "Agroecology"),
+    ("ECON", "MICRO_LOANS", "Micro Loans"),
+    ("WASH", "WATER", "Water"),
+    ("WASH", "HEALTH", "Health"),
+    ("WASH", "SANITATION", "Sanitation"),
+    ("EDU", "FORMAL_EDUCATION", "Formal Education"),
+    ("EDU", "NON_FORMAL_EDUCATION", "Non Formal Education"),
+    ("ENV", "RENEWABLE_ENERGY", "Renewable Energy & Light"),
+    ("ENV", "REAFFORESTATION", "Reafforestation"),
+    ("ENV", "MEDICINAL_PLANTS", "Medicinal Plants"),
+]
+
+REFERENCE_RESOURCE_CATEGORIES = {
+    "FISHERIES": [
+        ("BOAT", "Boat", ResourceType.MACHINERY),
+        ("ENGINE", "Engine", ResourceType.MACHINERY),
+        ("COOLER", "Cooler", ResourceType.TOOL),
+        ("FLOATER", "Floater", ResourceType.TOOL),
+        ("LIFE_JACKET", "Life Jacket", ResourceType.TOOL),
+        ("FISHING_NET", "Fishing Net", ResourceType.TOOL),
+        ("COOLING_BOX", "Cooling Box", ResourceType.TOOL),
+    ],
+    "AGROECOLOGY": [
+        ("HOE", "Hoe", ResourceType.TOOL),
+        ("PANGA", "Panga", ResourceType.TOOL),
+        ("COW", "Cow", ResourceType.LIVESTOCK),
+        ("GOAT", "Goat", ResourceType.LIVESTOCK),
+        ("PIG", "Pig", ResourceType.LIVESTOCK),
+        ("CHICKEN", "Chicken", ResourceType.LIVESTOCK),
+        ("VEGETABLE", "Vegetable", ResourceType.OTHER),
+        ("MILK_CAN", "Milk Can", ResourceType.TOOL),
+        ("IRRIGATION_EQUIPMENT", "Irrigation Equipment", ResourceType.MACHINERY),
+    ],
+    "MICRO_LOANS": [
+        ("BUSINESS_LOAN", "Business Loan", ResourceType.CASH_ASSET),
+        ("EDUCATION_LOAN", "Education Loan", ResourceType.CASH_ASSET),
+        ("ENTERPRISE_GRANT", "Enterprise Grant", ResourceType.GRANT),
+    ],
+    "WATER": [
+        ("BOREHOLE", "Borehole", ResourceType.OTHER),
+        ("RAINWATER_TANK", "Rainwater Harvesting Tank", ResourceType.OTHER),
+        ("WELL", "Well", ResourceType.OTHER),
+        ("SKY_HYDRANT", "Sky Hydrant Water Filtration System", ResourceType.MACHINERY),
+        ("MOTORISED_FILTER", "Motorised Spring Water Filtration System", ResourceType.MACHINERY),
+    ],
+    "HEALTH": [
+        ("WASH_TRAINING", "Training on WASH", ResourceType.OTHER),
+        ("OM_TRAINING", "Training on Operations & Maintenance", ResourceType.OTHER),
+    ],
+    "SANITATION": [
+        ("TOILET", "Toilet", ResourceType.OTHER),
+        ("BATHROOM", "Bathroom", ResourceType.OTHER),
+        ("INCINERATOR", "Incinerator", ResourceType.MACHINERY),
+        ("MENSTRUAL_HYGIENE_BUCKET", "Menstrual Hygiene Bucket", ResourceType.TOOL),
+    ],
+    "FORMAL_EDUCATION": [
+        ("CLASSROOM_BLOCK", "Classroom Block", ResourceType.OTHER),
+        ("SCHOOL_TOILET", "School Toilet", ResourceType.OTHER),
+        ("SCHOOL_WATER_SOURCE", "School Water Source", ResourceType.OTHER),
+        ("BUILDING_MATERIALS", "Building Materials", ResourceType.BUILDING_MATERIAL),
+    ],
+    "NON_FORMAL_EDUCATION": [
+        ("OCA_TRAINING", "Training on OCA", ResourceType.OTHER),
+        ("FINANCIAL_LITERACY_TRAINING", "Financial Literacy Training", ResourceType.OTHER),
+        ("HAND_PUMP_MECHANICS_TRAINING", "Hand Pump Mechanics Training", ResourceType.OTHER),
+        ("FISH_PROCESSING_TRAINING", "Fish Processing Training", ResourceType.OTHER),
+    ],
+    "RENEWABLE_ENERGY": [
+        ("SOLAR_LIGHT", "Solar Light", ResourceType.OTHER),
+        ("SOLAR_LIGHTING_SYSTEM", "Solar Lighting System", ResourceType.OTHER),
+    ],
+    "REAFFORESTATION": [
+        ("FRUIT_TREE", "Fruit Tree", ResourceType.OTHER),
+    ],
+    "MEDICINAL_PLANTS": [],
+}
 
 DEMO_USER_SPECS = [
     (
@@ -208,10 +289,52 @@ def seed_reference_data():
         else:
             updated += 1
 
+    areas = {area.code: area for area in ThematicArea.objects.all()}
+    programs = {}
+    for display_order, (area_code, code, name) in enumerate(
+        REFERENCE_PROGRAMS,
+        start=1,
+    ):
+        program, was_created = Program.objects.update_or_create(
+            thematic_area=areas[area_code],
+            code=code,
+            defaults={
+                "name": name,
+                "status": "active",
+                "display_order": display_order,
+            },
+        )
+        programs[code] = program
+        if was_created:
+            created += 1
+        else:
+            updated += 1
+
+    category_order = 0
+    for program_code, categories in REFERENCE_RESOURCE_CATEGORIES.items():
+        for code, name, default_resource_type in categories:
+            category_order += 1
+            _category, was_created = ResourceCategory.objects.update_or_create(
+                program=programs[program_code],
+                code=code,
+                defaults={
+                    "name": name,
+                    "status": "active",
+                    "default_resource_type": default_resource_type,
+                    "display_order": category_order,
+                },
+            )
+            if was_created:
+                created += 1
+            else:
+                updated += 1
+
     return {
         "created": created,
         "updated": updated,
         "total": ThematicArea.objects.count(),
+        "total_programs": Program.objects.count(),
+        "total_resource_categories": ResourceCategory.objects.count(),
     }
 
 
@@ -646,6 +769,15 @@ def seed_demo_data():
         )
 
     areas = {area.code: area for area in ThematicArea.objects.all()}
+    programs = {program.code: program for program in Program.objects.all()}
+    categories = {category.code: category for category in ResourceCategory.objects.all()}
+    resource_classification = {
+        "Demo Irrigation Pump": ("AGROECOLOGY", "IRRIGATION_EQUIPMENT"),
+        "School Water Storage Tank": ("WATER", "RAINWATER_TANK"),
+        "Goat Rearing Starter Kit": ("AGROECOLOGY", "GOAT"),
+        "Cooperative Seed Grant": ("MICRO_LOANS", "ENTERPRISE_GRANT"),
+        "Community Center Roofing Materials": ("FORMAL_EDUCATION", "BUILDING_MATERIALS"),
+    }
     resource_specs = [
         (
             "Demo Irrigation Pump",
@@ -724,12 +856,15 @@ def seed_demo_data():
     for index, spec in enumerate(resource_specs, start=1):
         name, owner_type, owner, resource_type, status = spec[:5]
         quantity, unit, value_amount, acquired_on, thematic_links = spec[5:]
+        classification = resource_classification.get(name)
         resource = upsert(
             Resource,
             {"community": community, "name": name},
             {
                 "owner_type": owner_type,
                 "owner_id": owner.id,
+                "program": programs[classification[0]] if classification else None,
+                "resource_category": categories[classification[1]] if classification else None,
                 "resource_type": resource_type,
                 "description": f"{name} seeded for MVP workflow testing.",
                 "quantity": quantity,
@@ -757,6 +892,8 @@ def seed_demo_data():
         {
             "owner_type": ResourcePartyType.INSTITUTION,
             "owner_id": north_institution.id,
+            "program": programs["RENEWABLE_ENERGY"],
+            "resource_category": categories["SOLAR_LIGHTING_SYSTEM"],
             "resource_type": ResourceType.OTHER,
             "description": "Small solar kit for clinic lighting.",
             "quantity": 1,

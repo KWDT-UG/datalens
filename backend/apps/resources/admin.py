@@ -1,12 +1,14 @@
 from django.contrib import admin
 
 from .models import (
+    Program,
     Resource,
     ResourceBeneficiary,
-    ResourceStatusEvent,
-    ResourceThematicArea,
+    ResourceCategory,
     ResourcePaymentObligation,
     ResourcePaymentTransaction,
+    ResourceStatusEvent,
+    ResourceThematicArea,
     ThematicArea,
 )
 
@@ -18,10 +20,47 @@ class ThematicAreaAdmin(admin.ModelAdmin):
     search_fields = ("code", "name", "description")
 
 
+@admin.register(Program)
+class ProgramAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "thematic_area", "status", "display_order")
+    list_filter = ("status", "thematic_area")
+    search_fields = ("code", "name", "description", "thematic_area__name")
+
+
+@admin.register(ResourceCategory)
+class ResourceCategoryAdmin(admin.ModelAdmin):
+    list_display = (
+        "code",
+        "name",
+        "program",
+        "status",
+        "default_resource_type",
+        "display_order",
+    )
+    list_filter = ("status", "program__thematic_area", "program")
+    search_fields = ("code", "name", "description", "program__name")
+
+
 @admin.register(Resource)
 class ResourceAdmin(admin.ModelAdmin):
-    list_display = ("name", "community", "resource_type", "status", "owner_type")
-    list_filter = ("community", "resource_type", "status", "owner_type")
+    list_display = (
+        "name",
+        "community",
+        "program",
+        "resource_category",
+        "resource_type",
+        "status",
+        "owner_type",
+    )
+    list_filter = (
+        "community",
+        "program__thematic_area",
+        "program",
+        "resource_category",
+        "resource_type",
+        "status",
+        "owner_type",
+    )
     search_fields = ("name", "description", "serial_or_tag_number", "location_text")
 
 

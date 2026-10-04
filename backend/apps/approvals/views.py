@@ -60,7 +60,15 @@ class ApprovalRequestViewSet(
         "submission_source",
     )
     search_fields = ("entity_type", "review_notes", "policy_reason")
-    ordering_fields = ("submitted_at", "reviewed_at", "created_at")
+    ordering_fields = (
+        "entity_type",
+        "action_type",
+        "community__name",
+        "status",
+        "submitted_at",
+        "reviewed_at",
+        "created_at",
+    )
     permission_classes_by_action = {
         "approve": [ApprovalReviewAccess],
         "reject": [ApprovalReviewAccess],

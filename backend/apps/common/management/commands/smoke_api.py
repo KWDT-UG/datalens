@@ -18,8 +18,10 @@ from apps.participation.models import (
     CooperativeMembership,
 )
 from apps.resources.models import (
+    Program,
     Resource,
     ResourceBeneficiary,
+    ResourceCategory,
     ResourceStatusEvent,
     ResourceThematicArea,
     ThematicArea,
@@ -160,6 +162,12 @@ class Command(BaseCommand):
                 self._expect_count(CooperativeMembership),
             ),
             ("thematic-areas", "/api/v1/thematic-areas/", self._expect_count(ThematicArea)),
+            ("programs", "/api/v1/programs/", self._expect_count(Program)),
+            (
+                "resource-categories",
+                "/api/v1/resource-categories/",
+                self._expect_count(ResourceCategory),
+            ),
             ("resources", "/api/v1/resources/", self._expect_count(Resource)),
             (
                 "resource-detail",
@@ -221,7 +229,10 @@ class Command(BaseCommand):
     def _expect_count(self, model):
         def validate(payload):
             count = payload.get("count")
-            expected_min = model.objects.count()
+            queryset = model.objects.all()
+            if any(field.name == "is_deleted" for field in model._meta.fields):
+                queryset = queryset.filter(is_deleted=False)
+            expected_min = queryset.count()
             if count is None:
                 raise AssertionError("missing paginated count")
             if expected_min and count < expected_min:
@@ -248,6 +259,9 @@ class Command(BaseCommand):
 
         if not resource:
             raise AssertionError("missing resource object")
+        for key in ("program", "program_name", "thematic_area_id", "thematic_area_name"):
+            if not resource.get(key):
+                raise AssertionError(f"missing resource classification key: {key}")
         for key, value in (
             ("beneficiaries", beneficiaries),
             ("status_events", status_events),

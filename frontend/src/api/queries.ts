@@ -40,15 +40,20 @@ import type {
   PaginatedResponse,
   PasswordResetConfirmInput,
   PasswordResetRequestInput,
+  Program,
+  ProgramInput,
   ProfileUpdateInput,
   Resource,
+  ResourceCategory,
+  ResourceCategoryInput,
   ResourceCreateInput,
   ResourceDetail,
   ResourcePaymentObligation,
   ResourcePaymentObligationInput,
   ResourcePaymentTransaction,
   ResourcePaymentTransactionInput,
-  ThematicArea
+  ThematicArea,
+  ThematicAreaInput
 } from './types';
 
 export function useUpdateProfileMutation() {
@@ -89,6 +94,92 @@ export function useThematicAreasQuery() {
         ordering: 'name'
       })
   });
+}
+
+export function useProgramsQuery(
+  thematicArea?: string | number,
+  enabled = true,
+  status: string | null = 'active'
+) {
+  return useListQuery<Program>(
+    'programs',
+    '/api/v1/programs/',
+    {
+      page: 1,
+      page_size: 200,
+      ordering: 'display_order,name',
+      thematic_area: thematicArea,
+      status: status ?? undefined
+    },
+    enabled
+  );
+}
+
+export function useResourceCategoriesQuery(
+  program?: string | number,
+  enabled = true,
+  status: string | null = 'active'
+) {
+  return useListQuery<ResourceCategory>(
+    'resource-categories',
+    '/api/v1/resource-categories/',
+    {
+      page: 1,
+      page_size: 300,
+      ordering: 'display_order,name',
+      program,
+      status: status ?? undefined
+    },
+    enabled
+  );
+}
+
+export function useCreateThematicAreaMutation() {
+  return useCreateListMutation<ThematicArea, ThematicAreaInput>(
+    'thematic-areas',
+    '/api/v1/thematic-areas/',
+    'thematic_area'
+  );
+}
+
+export function useUpdateThematicAreaMutation() {
+  return useUpdateListMutation<ThematicArea, ThematicAreaInput>(
+    'thematic-areas',
+    '/api/v1/thematic-areas/',
+    'thematic_area'
+  );
+}
+
+export function useCreateProgramMutation() {
+  return useCreateListMutation<Program, ProgramInput>(
+    'programs',
+    '/api/v1/programs/',
+    'program'
+  );
+}
+
+export function useUpdateProgramMutation() {
+  return useUpdateListMutation<Program, ProgramInput>(
+    'programs',
+    '/api/v1/programs/',
+    'program'
+  );
+}
+
+export function useCreateResourceCategoryMutation() {
+  return useCreateListMutation<ResourceCategory, ResourceCategoryInput>(
+    'resource-categories',
+    '/api/v1/resource-categories/',
+    'resource_category'
+  );
+}
+
+export function useUpdateResourceCategoryMutation() {
+  return useUpdateListMutation<ResourceCategory, ResourceCategoryInput>(
+    'resource-categories',
+    '/api/v1/resource-categories/',
+    'resource_category'
+  );
 }
 
 export function useCreateAdminUserMutation() {

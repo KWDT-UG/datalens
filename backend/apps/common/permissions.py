@@ -34,6 +34,7 @@ MANAGE_RESOURCE_FINANCIALS = "manage_resource_financials"
 MANAGE_USERS = "manage_users"
 MANAGE_ROLES = "manage_roles"
 MANAGE_SETTINGS = "manage_settings"
+MANAGE_REFERENCE_DATA = "manage_reference_data"
 
 ROLE_CAPABILITIES = {
     UserRole.FIELD_OFFICER: {
@@ -59,6 +60,7 @@ ROLE_CAPABILITIES = {
         REVIEW_APPROVALS,
         EXPORT,
         VIEW_PERSONAL_DATA,
+        MANAGE_REFERENCE_DATA,
     },
     UserRole.EXECUTIVE_LEADERSHIP: {
         READ,
@@ -110,6 +112,7 @@ ROLE_CAPABILITIES = {
         MANAGE_USERS,
         MANAGE_ROLES,
         MANAGE_SETTINGS,
+        MANAGE_REFERENCE_DATA,
     },
 }
 
@@ -119,13 +122,16 @@ ALL_CAPABILITIES = set().union(*ROLE_CAPABILITIES.values())
 ROLE_CAPABILITIES[UserRole.MVP_FULL_ACCESS] = set(ALL_CAPABILITIES)
 
 RESOURCE_BASENAMES = {
+    "program",
     "resource",
     "resource-beneficiary",
+    "resource-category",
     "resource-thematic-area",
     "thematic-area",
     "resource-payment-obligation",
     "resource-payment-transaction",
 }
+REFERENCE_DATA_BASENAMES = {"thematic-area", "program", "resource-category"}
 IMPACT_BASENAMES = {"impact-record"}
 APPROVAL_BASENAMES = {"approval-request"}
 
@@ -137,6 +143,8 @@ COMMUNICATIONS_READ_BASENAMES = {
     "committee",
     "cooperative",
     "resource",
+    "program",
+    "resource-category",
     "thematic-area",
     "impact-record",
 }
@@ -209,6 +217,8 @@ def user_has_any_role(user, allowed_roles):
 def required_write_capability(view):
     basename = getattr(view, "basename", "")
     action = getattr(view, "action", "")
+    if basename in REFERENCE_DATA_BASENAMES:
+        return MANAGE_REFERENCE_DATA
     if basename in APPROVAL_BASENAMES:
         return SUBMIT_FOR_APPROVAL
     if basename in IMPACT_BASENAMES or action == "impact_records":

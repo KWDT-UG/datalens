@@ -129,6 +129,9 @@ function installGroupWorkspaceFetchMock() {
       owner_id: group.id,
       name: 'Irrigation Pump',
       resource_type: 'equipment',
+      thematic_area_name: 'WASH',
+      program_name: 'Water',
+      resource_category_name: 'Irrigation pump',
       quantity: '1',
       unit: 'unit',
       value_amount: '1200000',
@@ -282,6 +285,9 @@ function installGroupWorkspaceFetchMock() {
 
       if (url.pathname === '/api/v1/communities/1/') {
         return jsonResponse(community);
+      }
+      if (url.pathname === '/api/v1/communities/') {
+        return jsonResponse(paginated([community]));
       }
       if (url.pathname === '/api/v1/groups/2/') {
         return jsonResponse(group);
@@ -518,6 +524,33 @@ describe('CommunityDetailPage group workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Resources' }));
     expect(screen.getByText('Irrigation Pump')).toBeInTheDocument();
     expect(screen.getByText('UGX 1,200,000')).toBeInTheDocument();
+    const resourcesTable = screen.getByRole('table');
+    expect(within(resourcesTable).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'Resource',
+      'Thematic area',
+      'Program',
+      'Category',
+      'Type',
+      'Quantity',
+      'Relationship',
+      'Financial position',
+      'Status'
+    ]);
+    expect(within(resourcesTable).getByText('WASH')).toBeInTheDocument();
+    expect(within(resourcesTable).getByText('Water')).toBeInTheDocument();
+    expect(within(resourcesTable).getByText('Irrigation pump')).toBeInTheDocument();
+    expect(within(resourcesTable).getByText('Owned by this group')).toBeInTheDocument();
+    expect(within(resourcesTable).getByRole('button', {
+      name: 'Sort by Resource, currently ascending'
+    }).closest('th')).toHaveAttribute('aria-sort', 'ascending');
+    await user.click(screen.getByRole('button', { name: 'Add group-owned resource' }));
+    const resourceDialog = screen.getByRole('dialog', { name: 'Add group-owned resource' });
+    expect(within(resourceDialog).getByText('Demo Savings Group')).toBeInTheDocument();
+    expect(await within(resourceDialog).findByText('Mpunge, Mukono, Central, Uganda')).toBeInTheDocument();
+    await user.click(within(resourceDialog).getByRole('button', { name: 'Cancel' }));
+    await user.type(screen.getByLabelText('Search group resources'), 'does not exist');
+    expect(screen.getByText('No group resources match this search.')).toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Search group resources'));
 
     await user.click(screen.getByRole('button', { name: 'Trainings & Meetings' }));
     expect(screen.getByRole('heading', { name: /Activity in/ })).toBeInTheDocument();

@@ -16,8 +16,9 @@ Implemented in this foundation pass:
 - `Community`, `Group`, `Member`, and `Institution` models
 - `Committee`, `CommitteeMembership`, `Cooperative`, and `CooperativeMembership`
   models
-- `ThematicArea`, `Resource`, `ResourceBeneficiary`, `ResourceThematicArea`, and
-  `ResourceStatusEvent` models
+- `ThematicArea`, `Program`, `ResourceCategory`, `Resource`,
+  `ResourceBeneficiary`, `ResourceThematicArea`, and `ResourceStatusEvent`
+  models
 - `ImpactRecord` and `ApprovalRequest` models
 - governance code consolidated under `backend/apps/participation/`
 - resource and thematic-area code consolidated under `backend/apps/resources/`

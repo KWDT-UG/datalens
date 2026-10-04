@@ -4,21 +4,23 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
-from apps.common.serializers import ApprovalStateSerializerMixin
 from apps.common.models import PaymentEntryType, ResourcePartyType
 from apps.common.permissions import (
     VIEW_PERSONAL_DATA,
     VIEW_RESOURCE_FINANCIALS,
     user_has_capability,
 )
+from apps.common.serializers import ApprovalStateSerializerMixin
 
 from .models import (
+    Program,
     Resource,
     ResourceBeneficiary,
-    ResourceStatusEvent,
-    ResourceThematicArea,
+    ResourceCategory,
     ResourcePaymentObligation,
     ResourcePaymentTransaction,
+    ResourceStatusEvent,
+    ResourceThematicArea,
     ThematicArea,
     resolve_resource_party,
 )
@@ -69,6 +71,125 @@ class ThematicAreaSerializer(ApprovalStateSerializerMixin, serializers.ModelSeri
             "sync_version",
             "is_deleted",
         ]
+
+
+class ProgramSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer):
+    thematic_area_name = serializers.CharField(
+        source="thematic_area.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = Program
+        fields = [
+            "id",
+            "thematic_area",
+            "thematic_area_name",
+            "code",
+            "name",
+            "description",
+            "status",
+            "display_order",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
+            "created_at",
+            "updated_at",
+            "created_by_user_id",
+            "updated_by_user_id",
+            "client_created_at",
+            "client_updated_at",
+            "client_mutation_id",
+            "sync_version",
+            "is_deleted",
+        ]
+        read_only_fields = [
+            "id",
+            "thematic_area_name",
+            "created_at",
+            "updated_at",
+            "created_by_user_id",
+            "updated_by_user_id",
+            "sync_version",
+            "is_deleted",
+        ]
+
+    def validate_thematic_area(self, thematic_area):
+        if (
+            self.instance is not None
+            and thematic_area.pk != self.instance.thematic_area_id
+            and self.instance.resources.filter(is_deleted=False).exists()
+        ):
+            raise serializers.ValidationError(
+                "A program with resources cannot be moved to another thematic area."
+            )
+        return thematic_area
+
+
+class ResourceCategorySerializer(
+    ApprovalStateSerializerMixin,
+    serializers.ModelSerializer,
+):
+    program_name = serializers.CharField(source="program.name", read_only=True)
+    thematic_area = serializers.IntegerField(
+        source="program.thematic_area_id",
+        read_only=True,
+    )
+    thematic_area_name = serializers.CharField(
+        source="program.thematic_area.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = ResourceCategory
+        fields = [
+            "id",
+            "program",
+            "program_name",
+            "thematic_area",
+            "thematic_area_name",
+            "code",
+            "name",
+            "description",
+            "status",
+            "default_resource_type",
+            "display_order",
+            "approval_status",
+            "pending_approval_request_id",
+            "approval_history_count",
+            "created_at",
+            "updated_at",
+            "created_by_user_id",
+            "updated_by_user_id",
+            "client_created_at",
+            "client_updated_at",
+            "client_mutation_id",
+            "sync_version",
+            "is_deleted",
+        ]
+        read_only_fields = [
+            "id",
+            "program_name",
+            "thematic_area",
+            "thematic_area_name",
+            "created_at",
+            "updated_at",
+            "created_by_user_id",
+            "updated_by_user_id",
+            "sync_version",
+            "is_deleted",
+        ]
+
+    def validate_program(self, program):
+        if (
+            self.instance is not None
+            and program.pk != self.instance.program_id
+            and self.instance.resources.filter(is_deleted=False).exists()
+        ):
+            raise serializers.ValidationError(
+                "A category in use cannot be moved to another program."
+            )
+        return program
 
 
 class ResourceThematicAreaReadSerializer(serializers.ModelSerializer):
@@ -171,6 +292,19 @@ class ResourceThematicAreaSerializer(
 
 class ResourceSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializer):
     community_name = serializers.CharField(source="community.name", read_only=True)
+    program_name = serializers.CharField(source="program.name", read_only=True)
+    thematic_area_id = serializers.IntegerField(
+        source="program.thematic_area_id",
+        read_only=True,
+    )
+    thematic_area_name = serializers.CharField(
+        source="program.thematic_area.name",
+        read_only=True,
+    )
+    resource_category_name = serializers.CharField(
+        source="resource_category.name",
+        read_only=True,
+    )
     owner_display = serializers.SerializerMethodField()
     beneficiary_summary = serializers.SerializerMethodField()
     payment_summary = serializers.SerializerMethodField()
@@ -201,6 +335,12 @@ class ResourceSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializ
             "owner_type",
             "owner_id",
             "owner_display",
+            "program",
+            "program_name",
+            "thematic_area_id",
+            "thematic_area_name",
+            "resource_category",
+            "resource_category_name",
             "resource_type",
             "name",
             "description",
@@ -235,6 +375,10 @@ class ResourceSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializ
         read_only_fields = [
             "id",
             "owner_display",
+            "program_name",
+            "thematic_area_id",
+            "thematic_area_name",
+            "resource_category_name",
             "beneficiary_summary",
             "payment_summary",
             "created_at",
@@ -393,6 +537,7 @@ class ResourceSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializ
         instance = super().create(validated_data)
         if thematic_areas is not None or primary_area is not None:
             self._sync_thematic_areas(instance, thematic_areas, primary_area)
+        self._sync_program_thematic_area(instance)
         return instance
 
     @transaction.atomic
@@ -403,7 +548,18 @@ class ResourceSerializer(ApprovalStateSerializerMixin, serializers.ModelSerializ
         if thematic_areas is not None or primary_area is not serializers.empty:
             actual_primary = None if primary_area is serializers.empty else primary_area
             self._sync_thematic_areas(instance, thematic_areas, actual_primary)
+        self._sync_program_thematic_area(instance)
         return instance
+
+    def _sync_program_thematic_area(self, instance):
+        if instance.program_id is None:
+            return
+        instance.thematic_links.update(is_primary=False)
+        ResourceThematicArea.objects.update_or_create(
+            resource=instance,
+            thematic_area=instance.program.thematic_area,
+            defaults={"is_primary": True, "is_deleted": False},
+        )
 
     def _sync_thematic_areas(self, instance, thematic_areas, primary_area):
         if thematic_areas is None:

@@ -23,12 +23,13 @@ from apps.institutions.models import Institution
 from apps.members.models import Member
 from apps.participation.models import Cooperative
 from apps.resources.models import (
+    Program,
     Resource,
     ResourceBeneficiary,
+    ResourceCategory,
+    ResourcePaymentTransaction,
     ResourceStatusEvent,
     ResourceThematicArea,
-    ResourcePaymentObligation,
-    ResourcePaymentTransaction,
     ThematicArea,
 )
 
@@ -46,6 +47,11 @@ class ResourceApiTests(TestCase):
             email="resource.admin@example.com",
             password="test-password",
         )
+        cls.programme_manager = get_user_model().objects.create_user(
+            username="resource.programme.manager",
+            password="test-password",
+        )
+        assign_role(cls.programme_manager, UserRole.PROGRAMME_MANAGER)
         cls.community = Community.objects.create(name="Resources")
         cls.other_community = Community.objects.create(name="Other")
         cls.group = Group.objects.create(
@@ -84,10 +90,33 @@ class ResourceApiTests(TestCase):
             code="ENV",
             name="Environment",
         )
+        cls.program = Program.objects.create(
+            thematic_area=cls.thematic_area,
+            code="WATER",
+            name="Water",
+        )
+        cls.other_program = Program.objects.create(
+            thematic_area=cls.other_thematic_area,
+            code="RESTORATION",
+            name="Restoration",
+        )
+        cls.resource_category = ResourceCategory.objects.create(
+            program=cls.program,
+            code="IRRIGATION_PUMP",
+            name="Irrigation Pump",
+            default_resource_type=ResourceType.MACHINERY,
+        )
+        cls.other_resource_category = ResourceCategory.objects.create(
+            program=cls.other_program,
+            code="TREE",
+            name="Tree",
+        )
         cls.resource = Resource.objects.create(
             community=cls.community,
             owner_type=ResourcePartyType.GROUP,
             owner_id=cls.group.id,
+            program=cls.program,
+            resource_category=cls.resource_category,
             resource_type=ResourceType.TOOL,
             name="Irrigation Pump",
             status=ResourceStatus.ACTIVE,
@@ -119,6 +148,7 @@ class ResourceApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("results", response.data)
 
+        self.client.force_authenticate(self.programme_manager)
         create_response = self.client.post(
             reverse("thematic-area-list"),
             {
@@ -140,6 +170,92 @@ class ResourceApiTests(TestCase):
             format="json",
         )
         self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+
+    def test_program_and_resource_category_crud_and_filters(self):
+        cases = [
+            (
+                "program",
+                reverse("program-list"),
+                {"thematic_area": self.thematic_area.id},
+                self.program.id,
+            ),
+            (
+                "resource category",
+                reverse("resource-category-list"),
+                {"program": self.program.id},
+                self.resource_category.id,
+            ),
+        ]
+        for label, url, params, expected_id in cases:
+            with self.subTest(case=label):
+                response = self.client.get(url, params)
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(
+                    [item["id"] for item in response.data["results"]],
+                    [expected_id],
+                )
+
+        self.client.force_authenticate(self.programme_manager)
+        create_response = self.client.post(
+            reverse("resource-category-list"),
+            {
+                "program": self.program.id,
+                "code": "WELL",
+                "name": "Well",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(create_response.data["thematic_area"], self.thematic_area.id)
+
+    def test_reference_data_mutations_require_reference_data_capability(self):
+        denied = self.client.post(
+            reverse("program-list"),
+            {
+                "thematic_area": self.thematic_area.id,
+                "code": "DENIED",
+                "name": "Denied program",
+            },
+            format="json",
+        )
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.programme_manager)
+        allowed = self.client.post(
+            reverse("program-list"),
+            {
+                "thematic_area": self.thematic_area.id,
+                "code": "ALLOWED",
+                "name": "Allowed program",
+            },
+            format="json",
+        )
+        self.assertEqual(allowed.status_code, status.HTTP_201_CREATED)
+
+    def test_resource_list_orders_by_classification_hierarchy(self):
+        other_resource = Resource.objects.create(
+            community=self.community,
+            owner_type=ResourcePartyType.GROUP,
+            owner_id=self.group.id,
+            program=self.other_program,
+            resource_category=self.other_resource_category,
+            resource_type=ResourceType.OTHER,
+            name="Forest Kit",
+        )
+        cases = [
+            ("program__thematic_area__name", other_resource.id),
+            ("-program__name", self.resource.id),
+            ("resource_category__name", self.resource.id),
+        ]
+
+        for ordering, expected_id in cases:
+            with self.subTest(ordering=ordering):
+                response = self.client.get(
+                    reverse("resource-list"),
+                    {"ordering": ordering, "page_size": 1},
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(response.data["results"][0]["id"], expected_id)
 
     def test_resource_crud_endpoints(self):
         self.client.force_authenticate(self.admin_user)
@@ -171,6 +287,8 @@ class ResourceApiTests(TestCase):
                 "owner_id": self.cooperative.id,
                 "resource_type": ResourceType.MACHINERY,
                 "name": "Rice Mill",
+                "program": self.program.id,
+                "resource_category": self.resource_category.id,
                 "status": ResourceStatus.ACTIVE,
                 "thematic_area_ids": [self.thematic_area.id, self.other_thematic_area.id],
                 "primary_thematic_area_id": self.thematic_area.id,
@@ -179,6 +297,19 @@ class ResourceApiTests(TestCase):
         )
         self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(create_response.data["thematic_areas"]), 2)
+        self.assertEqual(create_response.data["program_name"], "Water")
+        self.assertEqual(create_response.data["thematic_area_name"], "WASH")
+        self.assertEqual(
+            create_response.data["resource_category_name"],
+            "Irrigation Pump",
+        )
+        self.assertTrue(
+            ResourceThematicArea.objects.filter(
+                resource_id=create_response.data["id"],
+                thematic_area=self.thematic_area,
+                is_primary=True,
+            ).exists()
+        )
 
         patch_response = self.client.patch(
             reverse("resource-detail", kwargs={"pk": self.resource.pk}),
@@ -191,6 +322,30 @@ class ResourceApiTests(TestCase):
         )
         self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
         self.assertEqual(patch_response.data["location_text"], "Main storage building")
+
+        filter_response = self.client.get(
+            reverse("resource-list"),
+            {"program": self.program.id, "resource_category": self.resource_category.id},
+        )
+        self.assertEqual(filter_response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(filter_response.data["count"], 1)
+
+    def test_resource_category_must_match_program(self):
+        response = self.client.post(
+            reverse("resource-list"),
+            {
+                "community": self.community.id,
+                "owner_type": ResourcePartyType.GROUP,
+                "owner_id": self.group.id,
+                "resource_type": ResourceType.TOOL,
+                "name": "Invalid Classification",
+                "program": self.program.id,
+                "resource_category": self.other_resource_category.id,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("resource_category", response.data)
 
     def test_invalid_resource_owner_is_rejected(self):
         response = self.client.post(

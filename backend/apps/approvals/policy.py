@@ -40,15 +40,22 @@ def required_capability_for_entity(entity_type):
     from apps.common.permissions import (
         MANAGE_IMPACT,
         MANAGE_OPERATIONS,
-        MANAGE_RESOURCES,
+        MANAGE_REFERENCE_DATA,
         MANAGE_RESOURCE_FINANCIALS,
+        MANAGE_RESOURCES,
     )
 
     if entity_type == "impact_record":
         return MANAGE_IMPACT
     if entity_type in FINANCIAL_RESOURCE_ENTITIES:
         return MANAGE_RESOURCE_FINANCIALS
-    if entity_type in RESOURCE_APPROVAL_ENTITIES | {"thematic_area"}:
+    if entity_type in {
+        "thematic_area",
+        "program",
+        "resource_category",
+    }:
+        return MANAGE_REFERENCE_DATA
+    if entity_type in RESOURCE_APPROVAL_ENTITIES:
         return MANAGE_RESOURCES
     return MANAGE_OPERATIONS
 

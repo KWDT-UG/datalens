@@ -11,13 +11,26 @@ export function jsonResponse(body: JsonValue, status = 200) {
 }
 
 export function installCrudFetchMock(options?: {
+  communities?: object[];
   groups?: object[];
+  programs?: object[];
+  resourceCategories?: object[];
   resources?: object[];
+  thematicAreas?: object[];
 }) {
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = new URL(String(input), window.location.origin);
       const method = init?.method ?? 'GET';
+
+      if (method === 'GET' && url.pathname === '/api/v1/communities/') {
+        return jsonResponse({
+          count: options?.communities?.length ?? 0,
+          next: null,
+          previous: null,
+          results: options?.communities ?? []
+        });
+      }
 
       if (method === 'GET' && url.pathname === '/api/v1/groups/') {
         return jsonResponse({
@@ -34,6 +47,33 @@ export function installCrudFetchMock(options?: {
           next: null,
           previous: null,
           results: options?.resources ?? []
+        });
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/thematic-areas/') {
+        return jsonResponse({
+          count: options?.thematicAreas?.length ?? 0,
+          next: null,
+          previous: null,
+          results: options?.thematicAreas ?? []
+        });
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/programs/') {
+        return jsonResponse({
+          count: options?.programs?.length ?? 0,
+          next: null,
+          previous: null,
+          results: options?.programs ?? []
+        });
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/resource-categories/') {
+        return jsonResponse({
+          count: options?.resourceCategories?.length ?? 0,
+          next: null,
+          previous: null,
+          results: options?.resourceCategories ?? []
         });
       }
 

@@ -2291,6 +2291,112 @@ h2 {
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
 
+.group-resources-list {
+  display: grid;
+  gap: 14px;
+}
+
+.group-resources-list__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.group-resources-list__header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.group-resources-list__header > div > span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.group-resources-table td:nth-child(2),
+.group-resources-table td:nth-child(3),
+.group-resources-table td:nth-child(4) {
+  color: var(--blue-strong);
+  font-weight: 700;
+}
+
+.reference-data-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.reference-data-panel {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.reference-data-panel > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reference-data-panel > header span,
+.reference-data-panel > p,
+.reference-data-list small {
+  color: var(--muted);
+}
+
+.reference-data-panel h2,
+.reference-data-panel p {
+  margin: 0;
+}
+
+.reference-data-panel > header span {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.reference-data-list {
+  display: grid;
+  gap: 10px;
+}
+
+.reference-data-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--subtle-surface);
+}
+
+.reference-data-list article > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.reference-data-list article code {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+}
+
+.reference-data-list article .text-action {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
 .group-members-roster {
   display: grid;
   gap: 14px;
@@ -3272,6 +3378,11 @@ a.group-workspace-card:hover {
   color: var(--red);
 }
 
+.form-field small.form-field__help,
+.form-field--readout small {
+  color: var(--muted);
+}
+
 .form-field--readout {
   align-content: start;
 }
@@ -3707,7 +3818,8 @@ a.group-workspace-card:hover {
   .group-card-grid--resources,
   .group-committee-grid,
   .group-training-chart,
-  .group-committee-card dl {
+  .group-committee-card dl,
+  .reference-data-columns {
     grid-template-columns: 1fr;
   }
 

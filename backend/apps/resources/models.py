@@ -1,7 +1,7 @@
-from django.core.exceptions import ValidationError
 from datetime import date
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 
@@ -78,6 +78,83 @@ class ThematicArea(CoreModel):
         return f"{self.name} ({self.code})"
 
 
+class Program(CoreModel):
+    thematic_area = models.ForeignKey(
+        ThematicArea,
+        on_delete=models.PROTECT,
+        related_name="programs",
+    )
+    code = models.CharField(max_length=64)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=32,
+        choices=RecordStatus.choices,
+        default=RecordStatus.ACTIVE,
+    )
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["thematic_area__name", "display_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["thematic_area", "code"],
+                name="unique_program_code_per_thematic_area",
+            ),
+            models.UniqueConstraint(
+                fields=["thematic_area", "name"],
+                name="unique_program_name_per_thematic_area",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.thematic_area.name} / {self.name}"
+
+
+class ResourceCategory(CoreModel):
+    program = models.ForeignKey(
+        Program,
+        on_delete=models.PROTECT,
+        related_name="resource_categories",
+    )
+    code = models.CharField(max_length=64)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=32,
+        choices=RecordStatus.choices,
+        default=RecordStatus.ACTIVE,
+    )
+    default_resource_type = models.CharField(
+        max_length=64,
+        choices=ResourceType.choices,
+        blank=True,
+    )
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = [
+            "program__thematic_area__name",
+            "program__display_order",
+            "program__name",
+            "display_order",
+            "name",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["program", "code"],
+                name="unique_resource_category_code_per_program",
+            ),
+            models.UniqueConstraint(
+                fields=["program", "name"],
+                name="unique_resource_category_name_per_program",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.program} / {self.name}"
+
+
 class Resource(CoreModel):
     community = models.ForeignKey(
         Community,
@@ -86,6 +163,20 @@ class Resource(CoreModel):
     )
     owner_type = models.CharField(max_length=32, choices=ResourcePartyType.choices)
     owner_id = models.PositiveBigIntegerField()
+    program = models.ForeignKey(
+        Program,
+        on_delete=models.PROTECT,
+        related_name="resources",
+        null=True,
+        blank=True,
+    )
+    resource_category = models.ForeignKey(
+        ResourceCategory,
+        on_delete=models.PROTECT,
+        related_name="resources",
+        null=True,
+        blank=True,
+    )
     resource_type = models.CharField(
         max_length=64,
         choices=ResourceType.choices,
@@ -123,6 +214,16 @@ class Resource(CoreModel):
     def clean(self) -> None:
         super().clean()
         errors = {}
+        if self.resource_category_id and not self.program_id:
+            errors["program"] = "Select a program for the resource category."
+        elif (
+            self.resource_category_id
+            and self.program_id
+            and self.resource_category.program_id != self.program_id
+        ):
+            errors["resource_category"] = (
+                "Resource category must belong to the selected program."
+            )
         owner = resolve_resource_party(self.owner_type, self.owner_id)
         if owner is None:
             errors["owner_id"] = "Owner could not be found for the selected owner type."

@@ -36,10 +36,12 @@ from apps.participation.views import (
     CooperativeViewSet,
 )
 from apps.resources.views import (
+    ProgramViewSet,
     ResourceBeneficiaryViewSet,
-    ResourceThematicAreaViewSet,
+    ResourceCategoryViewSet,
     ResourcePaymentObligationViewSet,
     ResourcePaymentTransactionViewSet,
+    ResourceThematicAreaViewSet,
     ResourceViewSet,
     ThematicAreaViewSet,
 )
@@ -78,6 +80,12 @@ router.register(
     basename="cooperative-membership",
 )
 router.register("thematic-areas", ThematicAreaViewSet, basename="thematic-area")
+router.register("programs", ProgramViewSet, basename="program")
+router.register(
+    "resource-categories",
+    ResourceCategoryViewSet,
+    basename="resource-category",
+)
 router.register("resources", ResourceViewSet, basename="resource")
 router.register(
     "resource-beneficiaries",

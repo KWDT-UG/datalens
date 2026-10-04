@@ -15,6 +15,7 @@ import { LoginPage } from './pages/LoginPage';
 import { PasswordResetPage } from './pages/PasswordResetPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ReportsPage } from './pages/ReportsPage';
+import { ReferenceDataPage } from './pages/ReferenceDataPage';
 import { ResourcesPage } from './pages/ResourcesPage';
 import { ResourceDetailPage } from './pages/ResourceDetailPage';
 import { SearchPage } from './pages/SearchPage';
@@ -60,6 +61,10 @@ export const router = createBrowserRouter([
             children: [{ path: 'approvals', element: <ApprovalsPage /> }]
           },
           { path: 'reports', element: <ReportsPage /> },
+          {
+            element: <CapabilityRoute anyOf={[capabilities.manageReferenceData]} />,
+            children: [{ path: 'reference-data', element: <ReferenceDataPage /> }]
+          },
           { path: 'profile', element: <ProfilePage /> },
           {
             element: <CapabilityRoute anyOf={[capabilities.manageUsers]} />,
