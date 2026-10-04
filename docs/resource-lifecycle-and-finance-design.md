@@ -1,5 +1,11 @@
 # Resource Lifecycle and Finance Design
 
+The broader working boundaries for Resources, repayments, maintenance,
+performance, microcredit, and QuickBooks are maintained in
+[`operational-domain-boundaries.md`](operational-domain-boundaries.md). That
+document is the staged stakeholder decision guide; this document retains the
+detailed Resource lifecycle and finance design.
+
 ## Evidence and product shape
 
 The sample resource CSV is a catalogue of related workflows, not a single flat
