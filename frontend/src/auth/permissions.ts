@@ -21,7 +21,8 @@ export const capabilities = {
   manageResourceFinancials: 'manage_resource_financials',
   manageUsers: 'manage_users',
   manageRoles: 'manage_roles',
-  manageSettings: 'manage_settings'
+  manageSettings: 'manage_settings',
+  manageReferenceData: 'manage_reference_data'
 } as const;
 
 export function hasCapability(user: AuthUser | null, capability: string) {

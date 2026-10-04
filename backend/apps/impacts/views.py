@@ -34,8 +34,10 @@ class ImpactRecordViewSet(
         "beneficiary_count",
         "household_count",
         "member_count",
+        "institution_count",
         "method",
         "created_at",
+        "updated_at",
     )
 
     def get_queryset(self):

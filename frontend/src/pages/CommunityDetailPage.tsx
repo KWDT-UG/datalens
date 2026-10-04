@@ -46,6 +46,7 @@ import { ListActionError } from '../components/ListActionError';
 import { ResourceCreateDialog } from '../components/ResourceCreateDialog';
 import { GroupActivityDialog } from '../components/GroupActivityDialog';
 import { StatusBadge } from '../components/StatusBadge';
+import { SortableTableHeader } from '../components/SortableTableHeader';
 import { useAuth } from '../auth/AuthContext';
 import { capabilities, hasCapability } from '../auth/permissions';
 import { downloadCsv, toggleVisibleSelection } from '../utils/listActions';
@@ -823,7 +824,12 @@ function GroupWorkspaceDetailPage({
           />
         ) : null}
         {activeTab === 'resources' ? (
-          <GroupResourcesTab group={group} resources={resources} resourcesLoading={resourcesLoading} />
+          <GroupResourcesTab
+            canManage={canManage}
+            group={group}
+            resources={resources}
+            resourcesLoading={resourcesLoading}
+          />
         ) : null}
         {activeTab === 'trainings' ? (
           <GroupTrainingsTab
@@ -1233,47 +1239,145 @@ function GroupMembersTab({
 }
 
 function GroupResourcesTab({
+  canManage,
   group,
   resources,
   resourcesLoading
 }: {
+  canManage: boolean;
   group: Group;
   resources: Resource[];
   resourcesLoading: boolean;
 }) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [ordering, setOrdering] = useState('name');
+  const visibleResources = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const descending = ordering.startsWith('-');
+    const key = descending ? ordering.slice(1) : ordering;
+    const valueFor = (resource: Resource) => {
+      if (key === 'program__thematic_area__name') return resource.thematic_area_name ?? '';
+      if (key === 'program__name') return resource.program_name ?? '';
+      if (key === 'resource_category__name') return resource.resource_category_name ?? '';
+      if (key === 'resource_type') return resource.resource_type ?? '';
+      if (key === 'quantity') return Number(resource.quantity ?? 0);
+      if (key === 'status') return resource.status ?? '';
+      return resource.name;
+    };
+
+    return resources
+      .filter((resource) => !query || [
+        resource.name,
+        resource.thematic_area_name,
+        resource.program_name,
+        resource.resource_category_name,
+        resource.resource_type,
+        resource.owner_display
+      ].some((value) => value?.toLowerCase().includes(query)))
+      .sort((left, right) => {
+        const leftValue = valueFor(left);
+        const rightValue = valueFor(right);
+        const comparison = typeof leftValue === 'number' && typeof rightValue === 'number'
+          ? leftValue - rightValue
+          : String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true });
+        return descending ? -comparison : comparison;
+      });
+  }, [ordering, resources, search]);
+
+  function changeOrdering(columnOrdering: string) {
+    setOrdering((current) => current === columnOrdering ? reverseOrdering(columnOrdering) : columnOrdering);
+  }
+
   if (resourcesLoading) {
     return <div className="state-box">Loading group resources...</div>;
   }
-  if (resources.length === 0) {
-    return <div className="state-box">No resources owned by or linked to this group are recorded yet.</div>;
-  }
-
   return (
-    <div className="group-card-grid group-card-grid--resources">
-      {resources.map((resource) => (
-        <Link
-          className="group-workspace-card"
-          key={resource.id}
-          state={{ resourceOrigin: {
-            label: group.name,
-            path: `/communities/${group.community}/groups/${group.id}`
-          } }}
-          to={`/resources/${resource.id}`}
-        >
-          <span className="group-workspace-card__title">{resource.name}</span>
-          <span>{formatLabel(resource.resource_type)}</span>
-          <span>{formatResourceQuantity(resource)}</span>
-          {resource.thematic_areas?.length ? (
-            <span>{resource.thematic_areas.map((area) => area.code).join(', ')}</span>
-          ) : null}
-          <span className="group-workspace-card__footer">
-            {resource.payment_summary
-              ? `${formatMoney(resource.payment_summary.total_paid, resource.payment_summary.currency)} paid · ${formatMoney(resource.payment_summary.remaining_amount, resource.payment_summary.currency)} remaining`
-              : formatMoney(resource.value_amount, resource.value_currency)}
-            <StatusBadge status={resource.status} />
-          </span>
-        </Link>
-      ))}
+    <div className="group-resources-list">
+      <div className="group-resources-list__header">
+        <div>
+          <strong>{resources.length} group-linked {resources.length === 1 ? 'resource' : 'resources'}</strong>
+          <span>Classification and ownership context for this group.</span>
+        </div>
+        <label className="search-field">
+          <SearchIcon aria-hidden="true" />
+          <input
+            aria-label="Search group resources"
+            placeholder="Search resources"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        {canManage ? (
+          <button className="button button--primary" type="button" onClick={() => setCreateOpen(true)}>
+            Add group-owned resource
+          </button>
+        ) : null}
+      </div>
+      {resources.length === 0 ? (
+        <div className="state-box">
+          No resources owned by or linked to this group are recorded yet.
+        </div>
+      ) : visibleResources.length === 0 ? (
+        <div className="state-box">No group resources match this search.</div>
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table group-resources-table">
+            <thead>
+              <tr>
+                <SortableTableHeader currentOrdering={ordering} label="Resource" onChange={changeOrdering} ordering="name" />
+                <SortableTableHeader currentOrdering={ordering} label="Thematic area" onChange={changeOrdering} ordering="program__thematic_area__name" />
+                <SortableTableHeader currentOrdering={ordering} label="Program" onChange={changeOrdering} ordering="program__name" />
+                <SortableTableHeader currentOrdering={ordering} label="Category" onChange={changeOrdering} ordering="resource_category__name" />
+                <SortableTableHeader currentOrdering={ordering} label="Type" onChange={changeOrdering} ordering="resource_type" />
+                <SortableTableHeader currentOrdering={ordering} label="Quantity" onChange={changeOrdering} ordering="quantity" />
+                <th>Relationship</th>
+                <th>Financial position</th>
+                <SortableTableHeader currentOrdering={ordering} label="Status" onChange={changeOrdering} ordering="status" />
+              </tr>
+            </thead>
+            <tbody>
+              {visibleResources.map((resource) => (
+                <tr key={resource.id}>
+                  <td>
+                    <Link
+                      className="table-link"
+                      state={{ resourceOrigin: {
+                        label: group.name,
+                        path: `/communities/${group.community}/groups/${group.id}`
+                      } }}
+                      to={`/resources/${resource.id}`}
+                    >
+                      {resource.name}
+                    </Link>
+                  </td>
+                  <td>{resource.thematic_area_name ?? resource.thematic_areas?.map((area) => area.code).join(', ') ?? 'Not recorded'}</td>
+                  <td>{resource.program_name ?? 'Not recorded'}</td>
+                  <td>{resource.resource_category_name ?? 'Not recorded'}</td>
+                  <td>{formatLabel(resource.resource_type)}</td>
+                  <td>{formatResourceQuantity(resource)}</td>
+                  <td>{resource.owner_type === 'group' && resource.owner_id === group.id
+                    ? 'Owned by this group'
+                    : `Linked · ${resource.owner_display ?? formatLabel(resource.owner_type)}`}</td>
+                  <td>{resource.payment_summary
+                    ? `${formatMoney(resource.payment_summary.total_paid, resource.payment_summary.currency)} paid · ${formatMoney(resource.payment_summary.remaining_amount, resource.payment_summary.currency)} remaining`
+                    : formatMoney(resource.value_amount, resource.value_currency)}</td>
+                  <td><StatusBadge status={resource.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {createOpen ? (
+        <ResourceCreateDialog
+          communityId={group.community}
+          fixedOwner={{ id: group.id, label: group.name, type: 'group' }}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => setCreateOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

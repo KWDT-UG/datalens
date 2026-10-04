@@ -69,6 +69,9 @@ class CommunityViewSet(
     search_fields = ("name", "subcounty_name", "district_name", "region_name")
     ordering_fields = (
         "name",
+        "subcounty_name",
+        "district_name",
+        "region_name",
         "country",
         "resident_count",
         "member_count",
@@ -76,6 +79,7 @@ class CommunityViewSet(
         "committee_count",
         "cooperative_count",
         "resource_count",
+        "status",
         "created_at",
         "updated_at",
     )

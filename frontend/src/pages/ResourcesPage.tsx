@@ -2,13 +2,20 @@ import { SearchIcon, UploadIcon } from '@patternfly/react-icons';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { useArchiveRecordsMutation, useResourcesQuery } from '../api/queries';
+import {
+  useArchiveRecordsMutation,
+  useProgramsQuery,
+  useResourceCategoriesQuery,
+  useResourcesQuery,
+  useThematicAreasQuery
+} from '../api/queries';
 import type { Resource } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
 import { ListActionError } from '../components/ListActionError';
 import { ResourceCreateDialog } from '../components/ResourceCreateDialog';
+import { reverseOrdering, SortableTableHeader } from '../components/SortableTableHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/listActions';
 import { formatQuantity } from '../utils/formatQuantity';
@@ -32,7 +39,9 @@ function formatMoney(resource: Resource) {
 }
 
 function formatThemes(resource: Resource) {
-  return resource.thematic_areas?.map((area) => area.code).join(', ') || 'Not recorded';
+  return resource.thematic_area_name
+    ?? resource.thematic_areas?.map((area) => area.code).join(', ')
+    ?? 'Not recorded';
 }
 
 function formatFinancialPosition(resource: Resource) {
@@ -52,6 +61,10 @@ export function ResourcesPage() {
   const canExport = hasCapability(user, capabilities.export);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [thematicArea, setThematicArea] = useState('');
+  const [program, setProgram] = useState('');
+  const [resourceCategory, setResourceCategory] = useState('');
+  const [ordering, setOrdering] = useState('name');
   const [createOpen, setCreateOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -59,8 +72,14 @@ export function ResourcesPage() {
     page,
     page_size: pageSize,
     search,
-    ordering: 'name'
+    ordering,
+    thematic_area: thematicArea || undefined,
+    program: program || undefined,
+    resource_category: resourceCategory || undefined
   });
+  const thematicAreasQuery = useThematicAreasQuery();
+  const programsQuery = useProgramsQuery(thematicArea, Boolean(thematicArea));
+  const resourceCategoriesQuery = useResourceCategoriesQuery(program, Boolean(program));
   const archiveResources = useArchiveRecordsMutation('resources', '/api/v1/resources/');
   const resources = query.data?.results ?? [];
   const visibleIds = resources.map((resource) => resource.id);
@@ -97,8 +116,10 @@ export function ResourcesPage() {
         owner_type: resource.owner_type,
         quantity: resource.quantity,
         resource_type: resource.resource_type,
+        resource_category: resource.resource_category_name,
         status: resource.status,
-        thematic_areas: resource.thematic_areas?.map((area) => area.code).join('; '),
+        thematic_area: resource.thematic_area_name ?? formatThemes(resource),
+        program: resource.program_name,
         unit: resource.unit,
         updated_at: resource.updated_at,
         value_amount: resource.value_amount,
@@ -124,6 +145,11 @@ export function ResourcesPage() {
     setSelectedIds((current) =>
       current.includes(id) ? current.filter((selectedId) => selectedId !== id) : [...current, id]
     );
+  }
+
+  function changeOrdering(columnOrdering: string) {
+    setOrdering((current) => current === columnOrdering ? reverseOrdering(columnOrdering) : columnOrdering);
+    setPage(1);
   }
 
   return (
@@ -156,6 +182,59 @@ export function ResourcesPage() {
               setPage(1);
             }}
           />
+        </label>
+        <label className="compact-filter">
+          <span>Thematic area</span>
+          <select
+            aria-label="Filter by thematic area"
+            value={thematicArea}
+            onChange={(event) => {
+              setThematicArea(event.target.value);
+              setProgram('');
+              setResourceCategory('');
+              setPage(1);
+            }}
+          >
+            <option value="">All thematic areas</option>
+            {(thematicAreasQuery.data?.results ?? []).map((area) => (
+              <option key={area.id} value={area.id}>{area.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="compact-filter">
+          <span>Program</span>
+          <select
+            aria-label="Filter by program"
+            disabled={!thematicArea}
+            value={program}
+            onChange={(event) => {
+              setProgram(event.target.value);
+              setResourceCategory('');
+              setPage(1);
+            }}
+          >
+            <option value="">All programs</option>
+            {(programsQuery.data?.results ?? []).map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="compact-filter">
+          <span>Resource category</span>
+          <select
+            aria-label="Filter by resource category"
+            disabled={!program}
+            value={resourceCategory}
+            onChange={(event) => {
+              setResourceCategory(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All resource categories</option>
+            {(resourceCategoriesQuery.data?.results ?? []).map((category) => (
+              <option key={category.id} value={category.id}>{category.name}</option>
+            ))}
+          </select>
         </label>
       </div>
 
@@ -196,15 +275,17 @@ export function ResourcesPage() {
             <thead>
               <tr>
                 <th aria-label="Select resource" />
-                <th>Resource name</th>
-                <th>Community</th>
-                <th>Type</th>
+                <SortableTableHeader currentOrdering={ordering} label="Resource name" onChange={changeOrdering} ordering="name" />
+                <SortableTableHeader currentOrdering={ordering} label="Community" onChange={changeOrdering} ordering="community__name" />
+                <SortableTableHeader currentOrdering={ordering} label="Thematic area" onChange={changeOrdering} ordering="program__thematic_area__name" />
+                <SortableTableHeader currentOrdering={ordering} label="Program" onChange={changeOrdering} ordering="program__name" />
+                <SortableTableHeader currentOrdering={ordering} label="Category" onChange={changeOrdering} ordering="resource_category__name" />
+                <SortableTableHeader currentOrdering={ordering} label="Type" onChange={changeOrdering} ordering="resource_type" />
                 <th>Owner</th>
-                <th>Quantity</th>
+                <SortableTableHeader currentOrdering={ordering} label="Quantity" onChange={changeOrdering} ordering="quantity" />
                 <th>Financial position</th>
-                <th>Themes</th>
-                <th>Status</th>
-                <th>Acquired</th>
+                <SortableTableHeader currentOrdering={ordering} label="Status" onChange={changeOrdering} ordering="status" />
+                <SortableTableHeader currentOrdering={ordering} label="Acquired" onChange={changeOrdering} ordering="acquired_on" />
                 <th>Actions</th>
               </tr>
             </thead>
@@ -221,11 +302,13 @@ export function ResourcesPage() {
                   </td>
                   <td><Link className="table-link" to={`/resources/${resource.id}`}>{resource.name}</Link></td>
                   <td>{resource.community_name ?? 'Not recorded'}</td>
+                  <td>{formatThemes(resource)}</td>
+                  <td>{resource.program_name ?? 'Not recorded'}</td>
+                  <td>{resource.resource_category_name ?? 'Not recorded'}</td>
                   <td>{formatLabel(resource.resource_type)}</td>
                   <td>{resource.owner_display ?? formatLabel(resource.owner_type)}</td>
                   <td>{formatQuantity(resource.quantity, resource.unit)}</td>
                   <td>{formatFinancialPosition(resource)}</td>
-                  <td>{formatThemes(resource)}</td>
                   <td>
                     <StatusBadge status={resource.status} />
                   </td>

@@ -19,12 +19,14 @@ from apps.institutions.models import Institution
 from apps.members.models import Member
 from apps.participation.models import Cooperative
 from apps.resources.models import (
+    Program,
     Resource,
     ResourceBeneficiary,
-    ResourceStatusEvent,
-    ResourceThematicArea,
+    ResourceCategory,
     ResourcePaymentObligation,
     ResourcePaymentTransaction,
+    ResourceStatusEvent,
+    ResourceThematicArea,
     ThematicArea,
 )
 
@@ -79,6 +81,26 @@ class ResourceModelTests(TestCase):
             code="EDU",
             name="Education",
         )
+        cls.program = Program.objects.create(
+            thematic_area=cls.thematic_area,
+            code="WATER",
+            name="Water",
+        )
+        cls.other_program = Program.objects.create(
+            thematic_area=cls.other_thematic_area,
+            code="FORMAL_EDUCATION",
+            name="Formal Education",
+        )
+        cls.resource_category = ResourceCategory.objects.create(
+            program=cls.program,
+            code="BOREHOLE",
+            name="Borehole",
+        )
+        cls.other_resource_category = ResourceCategory.objects.create(
+            program=cls.other_program,
+            code="CLASSROOM",
+            name="Classroom Block",
+        )
 
     def _resource_payload(self, owner_type, owner_id):
         return {
@@ -124,6 +146,47 @@ class ResourceModelTests(TestCase):
                 with self.assertRaises(ValidationError) as error:
                     resource.full_clean()
                 self.assertIn("owner_id", error.exception.message_dict)
+
+    def test_resource_classification_validation(self):
+        valid = Resource(
+            **self._resource_payload(ResourcePartyType.GROUP, self.group.id),
+            program=self.program,
+            resource_category=self.resource_category,
+        )
+        valid.full_clean()
+
+        invalid = Resource(
+            **self._resource_payload(ResourcePartyType.GROUP, self.group.id),
+            program=self.program,
+            resource_category=self.other_resource_category,
+        )
+        with self.assertRaises(ValidationError) as error:
+            invalid.full_clean()
+        self.assertIn("resource_category", error.exception.message_dict)
+
+    def test_program_and_category_uniqueness(self):
+        cases = [
+            (
+                "program code",
+                lambda: Program.objects.create(
+                    thematic_area=self.thematic_area,
+                    code=self.program.code,
+                    name="Different name",
+                ),
+            ),
+            (
+                "category name",
+                lambda: ResourceCategory.objects.create(
+                    program=self.program,
+                    code="DIFFERENT_CODE",
+                    name=self.resource_category.name,
+                ),
+            ),
+        ]
+        for label, create_duplicate in cases:
+            with self.subTest(case=label):
+                with self.assertRaises(IntegrityError), transaction.atomic():
+                    create_duplicate()
 
     def test_resource_beneficiary_validation_matrix(self):
         resource = Resource.objects.create(

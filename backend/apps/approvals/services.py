@@ -25,21 +25,25 @@ from apps.participation.serializers import (
     CooperativeSerializer,
 )
 from apps.resources.models import (
+    Program,
     Resource,
     ResourceBeneficiary,
-    ResourceStatusEvent,
-    ResourceThematicArea,
+    ResourceCategory,
     ResourcePaymentObligation,
     ResourcePaymentTransaction,
+    ResourceStatusEvent,
+    ResourceThematicArea,
     ThematicArea,
 )
 from apps.resources.serializers import (
+    ProgramSerializer,
     ResourceBeneficiarySerializer,
+    ResourceCategorySerializer,
+    ResourcePaymentObligationSerializer,
+    ResourcePaymentTransactionSerializer,
     ResourceSerializer,
     ResourceStatusEventSerializer,
     ResourceThematicAreaSerializer,
-    ResourcePaymentObligationSerializer,
-    ResourcePaymentTransactionSerializer,
     ThematicAreaSerializer,
 )
 
@@ -54,6 +58,8 @@ APPROVAL_ENTITY_REGISTRY = {
     "cooperative": (Cooperative, CooperativeSerializer),
     "cooperative_membership": (CooperativeMembership, CooperativeMembershipSerializer),
     "thematic_area": (ThematicArea, ThematicAreaSerializer),
+    "program": (Program, ProgramSerializer),
+    "resource_category": (ResourceCategory, ResourceCategorySerializer),
     "resource": (Resource, ResourceSerializer),
     "resource_beneficiary": (ResourceBeneficiary, ResourceBeneficiarySerializer),
     "resource_thematic_area": (ResourceThematicArea, ResourceThematicAreaSerializer),

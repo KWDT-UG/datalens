@@ -1,16 +1,14 @@
-from rest_framework import status
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from django.db.models import Q
-from rest_framework import mixins
+from rest_framework import mixins, status
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
-from apps.common.models import ApprovalActionType
-from apps.common.models import PaymentEntryType
+from apps.common.models import ApprovalActionType, PaymentEntryType
 from apps.common.permissions import (
-    ResourceFinancialAccess,
     VIEW_RESOURCE_FINANCIALS,
+    ResourceFinancialAccess,
     user_has_capability,
 )
 from apps.common.viewsets import (
@@ -22,21 +20,24 @@ from apps.common.viewsets import (
 from apps.impacts.serializers import ImpactRecordSerializer
 
 from .models import (
+    Program,
     Resource,
     ResourceBeneficiary,
-    ResourceStatusEvent,
-    ResourceThematicArea,
+    ResourceCategory,
     ResourcePaymentObligation,
     ResourcePaymentTransaction,
+    ResourceThematicArea,
     ThematicArea,
 )
 from .serializers import (
+    ProgramSerializer,
     ResourceBeneficiarySerializer,
+    ResourceCategorySerializer,
+    ResourcePaymentObligationSerializer,
+    ResourcePaymentTransactionSerializer,
     ResourceSerializer,
     ResourceStatusEventSerializer,
     ResourceThematicAreaSerializer,
-    ResourcePaymentObligationSerializer,
-    ResourcePaymentTransactionSerializer,
     ThematicAreaSerializer,
 )
 
@@ -55,6 +56,44 @@ class ThematicAreaViewSet(
     ordering_fields = ("code", "name", "created_at")
 
 
+class ProgramViewSet(
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SoftDeleteMixin,
+    SimpleFilterMixin,
+    ModelViewSet,
+):
+    queryset = Program.objects.select_related("thematic_area").all()
+    serializer_class = ProgramSerializer
+    filter_fields = ("thematic_area", "status")
+    search_fields = ("code", "name", "description", "thematic_area__name")
+    ordering_fields = ("code", "name", "display_order", "created_at")
+
+
+class ResourceCategoryViewSet(
+    ApprovalPolicyMixin,
+    AuditFieldsMixin,
+    SoftDeleteMixin,
+    SimpleFilterMixin,
+    ModelViewSet,
+):
+    queryset = ResourceCategory.objects.select_related(
+        "program",
+        "program__thematic_area",
+    ).all()
+    serializer_class = ResourceCategorySerializer
+    filter_fields = ("program", "status", "default_resource_type")
+    search_fields = ("code", "name", "description", "program__name")
+    ordering_fields = ("code", "name", "display_order", "created_at")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        thematic_area = self.request.query_params.get("thematic_area")
+        if thematic_area:
+            queryset = queryset.filter(program__thematic_area_id=thematic_area)
+        return queryset
+
+
 class ResourceViewSet(
     ApprovalPolicyMixin,
     AuditFieldsMixin,
@@ -62,22 +101,40 @@ class ResourceViewSet(
     SimpleFilterMixin,
     ModelViewSet,
 ):
-    queryset = Resource.objects.select_related("community").prefetch_related(
+    queryset = Resource.objects.select_related(
+        "community",
+        "program__thematic_area",
+        "resource_category",
+    ).prefetch_related(
         "beneficiaries",
         "status_events",
         "thematic_links__thematic_area",
         "payment_obligations__transactions",
     )
     serializer_class = ResourceSerializer
-    filter_fields = ("community", "status", "resource_type", "owner_type")
+    filter_fields = (
+        "community",
+        "status",
+        "resource_type",
+        "owner_type",
+        "program",
+        "resource_category",
+    )
     search_fields = ("name", "description", "serial_or_tag_number", "location_text")
     ordering_fields = (
         "name",
+        "community__name",
+        "program__thematic_area__name",
+        "program__name",
+        "resource_category__name",
         "resource_type",
+        "owner_type",
         "quantity",
+        "value_amount",
         "acquired_on",
         "status",
         "created_at",
+        "updated_at",
     )
 
     @action(detail=True, methods=["get", "post"])
@@ -239,8 +296,11 @@ class ResourceViewSet(
         thematic_area = self.request.query_params.get("thematic_area")
         if thematic_area:
             queryset = queryset.filter(
-                thematic_links__thematic_area_id=thematic_area,
-                thematic_links__is_deleted=False,
+                Q(program__thematic_area_id=thematic_area)
+                | Q(
+                    thematic_links__thematic_area_id=thematic_area,
+                    thematic_links__is_deleted=False,
+                )
             ).distinct()
         linked_group = self.request.query_params.get("linked_group")
         if linked_group:

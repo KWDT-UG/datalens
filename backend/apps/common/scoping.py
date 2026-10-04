@@ -4,7 +4,6 @@ from rest_framework.exceptions import PermissionDenied
 from apps.common.models import UserRole
 from apps.common.permissions import user_is_mvp_staff_admin
 
-
 COMMUNITY_LOOKUPS = {
     "communities.community": "pk",
     "groups.group": "community_id",
@@ -69,11 +68,19 @@ def accessible_community_ids(user):
         query |= Q(district_name__in=districts)
     if UserRole.PROGRAMME_MANAGER in _scoped_roles(user):
         query |= Q(
-            resources__thematic_links__thematic_area__in=(
-                profile.assigned_thematic_areas.all()
-            ),
-            resources__is_deleted=False,
-            resources__thematic_links__is_deleted=False,
+            Q(
+                resources__program__thematic_area__in=(
+                    profile.assigned_thematic_areas.all()
+                ),
+                resources__is_deleted=False,
+            )
+            | Q(
+                resources__thematic_links__thematic_area__in=(
+                    profile.assigned_thematic_areas.all()
+                ),
+                resources__is_deleted=False,
+                resources__thematic_links__is_deleted=False,
+            )
         )
     return Community.objects.filter(query).values_list("pk", flat=True).distinct()
 
@@ -83,14 +90,23 @@ def scope_queryset_for_user(queryset, user):
         return queryset.none()
 
     label = queryset.model._meta.label_lower
-    if label == "resources.thematicarea":
+    if label in {
+        "resources.thematicarea",
+        "resources.program",
+        "resources.resourcecategory",
+    }:
         profile = _profile(user)
         if (
             assignment_scope_is_active(user)
             and UserRole.PROGRAMME_MANAGER in _scoped_roles(user)
             and profile.assigned_thematic_areas.exists()
         ):
-            return queryset.filter(pk__in=profile.assigned_thematic_areas.values("pk"))
+            assigned_areas = profile.assigned_thematic_areas.all()
+            if label == "resources.thematicarea":
+                return queryset.filter(pk__in=assigned_areas.values("pk"))
+            if label == "resources.program":
+                return queryset.filter(thematic_area__in=assigned_areas)
+            return queryset.filter(program__thematic_area__in=assigned_areas)
         return queryset
 
     lookup = COMMUNITY_LOOKUPS.get(label)
@@ -112,6 +128,39 @@ def enforce_change_scope(*, user, entity_type, payload, instance=None):
 
     if not assignment_scope_is_active(user):
         return
+    if entity_type in {"thematic_area", "program", "resource_category"}:
+        from apps.resources.models import Program, ResourceCategory
+
+        profile = _profile(user)
+        if not profile.assigned_thematic_areas.exists():
+            return
+        thematic_id = None
+        if entity_type == "thematic_area":
+            thematic_id = instance.pk if instance is not None else payload.get("id")
+        elif entity_type == "program":
+            thematic_id = (
+                instance.thematic_area_id
+                if instance is not None
+                else payload.get("thematic_area")
+            )
+        elif instance is not None:
+            thematic_id = instance.program.thematic_area_id
+        elif payload.get("program"):
+            thematic_id = Program.objects.filter(
+                pk=payload["program"]
+            ).values_list("thematic_area_id", flat=True).first()
+        elif payload.get("id"):
+            thematic_id = ResourceCategory.objects.filter(
+                pk=payload["id"]
+            ).values_list("program__thematic_area_id", flat=True).first()
+
+        if not thematic_id or not profile.assigned_thematic_areas.filter(
+            pk=thematic_id
+        ).exists():
+            raise PermissionDenied(
+                "The proposed change is outside your thematic assignment."
+            )
+        return
     community_id = community_id_for_change(
         entity_type=entity_type,
         payload=payload,
@@ -119,15 +168,3 @@ def enforce_change_scope(*, user, entity_type, payload, instance=None):
     )
     if not user_can_access_community(user, community_id):
         raise PermissionDenied("The proposed change is outside your assigned scope.")
-
-    if entity_type == "thematic_area":
-        thematic_id = instance.pk if instance is not None else payload.get("id")
-        profile = _profile(user)
-        if (
-            thematic_id
-            and profile.assigned_thematic_areas.exists()
-            and not profile.assigned_thematic_areas.filter(pk=thematic_id).exists()
-        ):
-            raise PermissionDenied(
-                "The proposed change is outside your thematic assignment."
-            )

@@ -14,7 +14,10 @@ class Command(BaseCommand):
                     "Reference data seeded: "
                     f"created={result['created']}, "
                     f"updated={result['updated']}, "
-                    f"total_thematic_areas={result['total']}"
+                    f"total_thematic_areas={result['total']}, "
+                    f"total_programs={result['total_programs']}, "
+                    "total_resource_categories="
+                    f"{result['total_resource_categories']}"
                 )
             )
         )

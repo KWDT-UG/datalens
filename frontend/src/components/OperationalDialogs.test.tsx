@@ -11,7 +11,10 @@ import type {
   ImpactRecord,
   Institution,
   Member,
-  Resource
+  Program,
+  Resource,
+  ResourceCategory,
+  ThematicArea
 } from '../api/types';
 import { installCrudFetchMock, jsonResponse, mutationCall } from '../test/mockApi';
 import { renderWithProviders } from '../test/render';
@@ -71,12 +74,38 @@ const cooperative: Cooperative = {
   name: 'Core Cooperative',
   status: 'active'
 };
+const thematicArea: ThematicArea = {
+  id: 9,
+  code: 'WASH',
+  name: 'WASH',
+  status: 'active'
+};
+const program: Program = {
+  id: 10,
+  thematic_area: thematicArea.id,
+  code: 'WATER',
+  name: 'Water',
+  status: 'active'
+};
+const resourceCategory: ResourceCategory = {
+  id: 11,
+  program: program.id,
+  code: 'BOREHOLE',
+  name: 'Borehole',
+  status: 'active'
+};
 const resource: Resource = {
   id: 7,
   community: community.id,
   name: 'Core Resource',
   owner_id: community.id,
   owner_type: 'community',
+  program: program.id,
+  program_name: program.name,
+  thematic_area_id: thematicArea.id,
+  thematic_area_name: thematicArea.name,
+  resource_category: resourceCategory.id,
+  resource_category_name: resourceCategory.name,
   resource_type: 'other',
   status: 'active'
 };
@@ -90,6 +119,17 @@ const impactRecord: ImpactRecord = {
   method: 'observed'
 };
 
+async function selectResourceClassification(user: ReturnType<typeof userEvent.setup>) {
+  await user.selectOptions(screen.getByLabelText('Thematic area'), String(thematicArea.id));
+  await screen.findByRole('option', { name: program.name });
+  await user.selectOptions(screen.getByLabelText('Program'), String(program.id));
+  await screen.findByRole('option', { name: resourceCategory.name });
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: /Resource category/ }),
+    String(resourceCategory.id)
+  );
+}
+
 type DialogCase = {
   createButton: string;
   editButton: string;
@@ -99,6 +139,7 @@ type DialogCase = {
   render: (editing: boolean) => ReactElement;
   updatedValue: string;
   prepareCreate?: (user: ReturnType<typeof userEvent.setup>) => Promise<void>;
+  prepareEdit?: (user: ReturnType<typeof userEvent.setup>) => Promise<void>;
 };
 
 const commonCallbacks = {
@@ -217,7 +258,9 @@ const cases: DialogCase[] = [
         {...commonCallbacks}
       />
     ),
-    updatedValue: 'Updated Resource'
+    updatedValue: 'Updated Resource',
+    prepareCreate: selectResourceClassification,
+    prepareEdit: selectResourceClassification
   },
   {
     createButton: 'Create impact record',
@@ -242,7 +285,13 @@ const cases: DialogCase[] = [
 
 describe.each(cases)('$path dialog', (dialogCase) => {
   it('creates a record through the collection endpoint', async () => {
-    const fetchMock = installCrudFetchMock({ groups: [group], resources: [resource] });
+    const fetchMock = installCrudFetchMock({
+      groups: [group],
+      programs: [program],
+      resourceCategories: [resourceCategory],
+      resources: [resource],
+      thematicAreas: [thematicArea]
+    });
     const user = userEvent.setup();
     renderWithProviders(dialogCase.render(false));
 
@@ -258,7 +307,13 @@ describe.each(cases)('$path dialog', (dialogCase) => {
   });
 
   it('prefills and updates a record through the detail endpoint', async () => {
-    const fetchMock = installCrudFetchMock({ groups: [group], resources: [resource] });
+    const fetchMock = installCrudFetchMock({
+      groups: [group],
+      programs: [program],
+      resourceCategories: [resourceCategory],
+      resources: [resource],
+      thematicAreas: [thematicArea]
+    });
     const user = userEvent.setup();
     renderWithProviders(dialogCase.render(true));
 
@@ -266,6 +321,7 @@ describe.each(cases)('$path dialog', (dialogCase) => {
     expect(field).not.toHaveValue('');
     await user.clear(field);
     await user.type(field, dialogCase.updatedValue);
+    await dialogCase.prepareEdit?.(user);
     await user.click(screen.getByRole('button', { name: dialogCase.editButton }));
 
     await waitFor(() => {
@@ -274,6 +330,45 @@ describe.each(cases)('$path dialog', (dialogCase) => {
       expect(call.path).toBe(`${dialogCase.path}${dialogCase.editId}/`);
       expect(Object.values(call.body)).toContain(dialogCase.updatedValue);
     });
+  });
+});
+
+it('creates a group-owned resource with inherited community location context', async () => {
+  commonCallbacks.onCreated.mockClear();
+  const fetchMock = installCrudFetchMock({
+    communities: [community],
+    programs: [program],
+    resourceCategories: [resourceCategory],
+    thematicAreas: [thematicArea]
+  });
+  const user = userEvent.setup();
+
+  renderWithProviders(
+    <ResourceCreateDialog
+      communityId={community.id}
+      fixedOwner={{ id: group.id, label: group.name, type: 'group' }}
+      {...commonCallbacks}
+    />
+  );
+
+  expect(screen.getByRole('heading', { name: 'Add group-owned resource' })).toBeInTheDocument();
+  expect(await screen.findByText('Mpunge, Uganda')).toBeInTheDocument();
+  expect(screen.getByText('Inherited from the selected community.')).toBeInTheDocument();
+  expect(screen.getByText(group.name)).toBeInTheDocument();
+  expect(screen.getByLabelText(/Site \/ location details/)).toBeInTheDocument();
+
+  await user.type(screen.getByLabelText('Resource name'), 'Group water tank');
+  await selectResourceClassification(user);
+  await user.type(screen.getByLabelText(/Site \/ location details/), 'Landing site store');
+  await user.click(screen.getByRole('button', { name: 'Create resource' }));
+
+  await waitFor(() => expect(commonCallbacks.onCreated).toHaveBeenCalled());
+  const mutation = mutationCall(fetchMock);
+  expect(mutation.body).toMatchObject({
+    community: community.id,
+    location_text: 'Landing site store',
+    owner_id: group.id,
+    owner_type: 'group'
   });
 });
 
@@ -407,8 +502,18 @@ it('prefills and updates group subcounty', async () => {
 it('shows a pending approval result instead of treating it as a saved resource', async () => {
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const url = new URL(String(input), window.location.origin);
       const method = init?.method ?? 'GET';
       if (method === 'GET') {
+        if (url.pathname === '/api/v1/thematic-areas/') {
+          return jsonResponse({ count: 1, next: null, previous: null, results: [thematicArea] });
+        }
+        if (url.pathname === '/api/v1/programs/') {
+          return jsonResponse({ count: 1, next: null, previous: null, results: [program] });
+        }
+        if (url.pathname === '/api/v1/resource-categories/') {
+          return jsonResponse({ count: 1, next: null, previous: null, results: [resourceCategory] });
+        }
         return jsonResponse({ count: 0, next: null, previous: null, results: [] });
       }
       return jsonResponse(
@@ -440,6 +545,7 @@ it('shows a pending approval result instead of treating it as a saved resource',
     />
   );
   await user.type(screen.getByLabelText('Resource name'), 'Approval Resource');
+  await selectResourceClassification(user);
   await user.click(screen.getByRole('button', { name: 'Create resource' }));
 
   expect(await screen.findByText('Submitted for approval')).toBeInTheDocument();

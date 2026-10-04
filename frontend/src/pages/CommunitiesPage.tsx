@@ -10,6 +10,7 @@ import { ActionMenu } from '../components/ActionMenu';
 import { CommunityCreateDialog } from '../components/CommunityCreateDialog';
 import { ListActionError } from '../components/ListActionError';
 import { StatusBadge } from '../components/StatusBadge';
+import { reverseOrdering, SortableTableHeader } from '../components/SortableTableHeader';
 import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/listActions';
 
 const pageSize = 10;
@@ -28,10 +29,11 @@ export function CommunitiesPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [view, setView] = useState<'table' | 'card'>('table');
+  const [ordering, setOrdering] = useState('name');
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCommunity, setEditingCommunity] = useState<Community | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const query = useCommunitiesQuery({ page, page_size: pageSize, search, ordering: 'name' });
+  const query = useCommunitiesQuery({ page, page_size: pageSize, search, ordering });
   const archiveCommunities = useArchiveRecordsMutation('communities', '/api/v1/communities/');
   const communities = query.data?.results ?? [];
   const visibleIds = communities.map((community) => community.id);
@@ -95,6 +97,11 @@ export function CommunitiesPage() {
     setSelectedIds((current) =>
       current.includes(id) ? current.filter((selectedId) => selectedId !== id) : [...current, id]
     );
+  }
+
+  function changeOrdering(columnOrdering: string) {
+    setOrdering((current) => current === columnOrdering ? reverseOrdering(columnOrdering) : columnOrdering);
+    setPage(1);
   }
 
   return (
@@ -187,16 +194,16 @@ export function CommunitiesPage() {
             <thead>
               <tr>
                 <th aria-label="Select community" />
-                <th>Community name</th>
-                <th>Subcounty</th>
-                <th>Residents</th>
-                <th>Groups</th>
-                <th>Members</th>
-                <th>Committees</th>
-                <th>Cooperatives</th>
-                <th>Resources</th>
-                <th>Status</th>
-                <th>Last Updated</th>
+                <SortableTableHeader currentOrdering={ordering} label="Community name" onChange={changeOrdering} ordering="name" />
+                <SortableTableHeader currentOrdering={ordering} label="Subcounty" onChange={changeOrdering} ordering="subcounty_name" />
+                <SortableTableHeader currentOrdering={ordering} label="Residents" onChange={changeOrdering} ordering="resident_count" />
+                <SortableTableHeader currentOrdering={ordering} label="Groups" onChange={changeOrdering} ordering="group_count" />
+                <SortableTableHeader currentOrdering={ordering} label="Members" onChange={changeOrdering} ordering="member_count" />
+                <SortableTableHeader currentOrdering={ordering} label="Committees" onChange={changeOrdering} ordering="committee_count" />
+                <SortableTableHeader currentOrdering={ordering} label="Cooperatives" onChange={changeOrdering} ordering="cooperative_count" />
+                <SortableTableHeader currentOrdering={ordering} label="Resources" onChange={changeOrdering} ordering="resource_count" />
+                <SortableTableHeader currentOrdering={ordering} label="Status" onChange={changeOrdering} ordering="status" />
+                <SortableTableHeader currentOrdering={ordering} label="Last updated" onChange={changeOrdering} ordering="updated_at" />
                 {canManage ? <th>Actions</th> : null}
               </tr>
             </thead>

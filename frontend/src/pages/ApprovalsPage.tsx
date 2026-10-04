@@ -15,6 +15,7 @@ import {
 } from '../components/ApprovalReviewDialog';
 import { ListActionError } from '../components/ListActionError';
 import { StatusBadge } from '../components/StatusBadge';
+import { reverseOrdering, SortableTableHeader } from '../components/SortableTableHeader';
 import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/listActions';
 import { PaginationLabel } from './CommunitiesPage';
 
@@ -69,6 +70,7 @@ export function ApprovalsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<ApprovalStatus | 'all'>('pending');
+  const [ordering, setOrdering] = useState('-submitted_at');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [reviewTarget, setReviewTarget] = useState<{
     action: ApprovalReviewAction;
@@ -79,7 +81,7 @@ export function ApprovalsPage() {
     page_size: pageSize,
     search,
     status: status === 'all' ? undefined : status,
-    ordering: '-submitted_at'
+    ordering
   });
   const archiveApprovals = useArchiveRecordsMutation('approval-requests', '/api/v1/approval-requests/');
   const approvals = query.data?.results ?? [];
@@ -128,6 +130,11 @@ export function ApprovalsPage() {
     setSelectedIds((current) =>
       current.includes(id) ? current.filter((selectedId) => selectedId !== id) : [...current, id]
     );
+  }
+
+  function changeOrdering(columnOrdering: string) {
+    setOrdering((current) => current === columnOrdering ? reverseOrdering(columnOrdering) : columnOrdering);
+    setPage(1);
   }
 
   return (
@@ -228,12 +235,12 @@ export function ApprovalsPage() {
             <thead>
               <tr>
                 <th aria-label="Select approval request" />
-                <th>Submitted item</th>
-                <th>Action</th>
-                <th>Community</th>
-                <th>Status</th>
-                <th>Submitted</th>
-                <th>Reviewed</th>
+                <SortableTableHeader currentOrdering={ordering} label="Submitted item" onChange={changeOrdering} ordering="entity_type" />
+                <SortableTableHeader currentOrdering={ordering} label="Action" onChange={changeOrdering} ordering="action_type" />
+                <SortableTableHeader currentOrdering={ordering} label="Community" onChange={changeOrdering} ordering="community__name" />
+                <SortableTableHeader currentOrdering={ordering} label="Status" onChange={changeOrdering} ordering="status" />
+                <SortableTableHeader currentOrdering={ordering} label="Submitted" onChange={changeOrdering} ordering="submitted_at" />
+                <SortableTableHeader currentOrdering={ordering} label="Reviewed" onChange={changeOrdering} ordering="reviewed_at" />
                 <th>Payload</th>
                 <th>Review actions</th>
               </tr>

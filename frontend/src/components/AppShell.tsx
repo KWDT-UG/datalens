@@ -36,6 +36,13 @@ const navItems = [
   { label: 'Approvals', to: '/approvals', icon: BellIcon, show: canReviewApprovals },
   { label: 'Reports', to: '/reports', icon: ClipboardListIcon },
   {
+    label: 'Resource Classification',
+    to: '/reference-data',
+    icon: CogIcon,
+    show: (user: ReturnType<typeof useAuth>['user']) =>
+      hasCapability(user, capabilities.manageReferenceData)
+  },
+  {
     label: 'Admin',
     to: '/admin',
     icon: CogIcon,
