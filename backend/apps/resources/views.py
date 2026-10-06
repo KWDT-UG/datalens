@@ -331,6 +331,37 @@ class ResourceViewSet(
                     beneficiaries__is_deleted=False,
                 )
             ).distinct()
+        linked_party_type = self.request.query_params.get("linked_party_type")
+        linked_party_id = self.request.query_params.get("linked_party_id")
+        if bool(linked_party_type) != bool(linked_party_id):
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(
+                {
+                    "linked_party": (
+                        "linked_party_type and linked_party_id must be provided "
+                        "together."
+                    )
+                }
+            )
+        if linked_party_type and linked_party_id:
+            from apps.common.models import ResourcePartyType
+
+            allowed_types = {choice for choice, _label in ResourcePartyType.choices}
+            if linked_party_type not in allowed_types:
+                from rest_framework.exceptions import ValidationError
+
+                raise ValidationError(
+                    {"linked_party_type": "Unsupported linked resource party type."}
+                )
+            queryset = queryset.filter(
+                Q(owner_type=linked_party_type, owner_id=linked_party_id)
+                | Q(
+                    beneficiaries__beneficiary_type=linked_party_type,
+                    beneficiaries__beneficiary_id=linked_party_id,
+                    beneficiaries__is_deleted=False,
+                )
+            ).distinct()
         return queryset
 
     @staticmethod

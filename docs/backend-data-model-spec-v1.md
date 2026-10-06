@@ -77,14 +77,18 @@ Validation implemented:
 
 ### GroupActivity
 
-GroupActivity records a dated meeting or training for one Group and Community.
-An optional Committee link identifies committee-specific meetings.
+GroupActivity remains the compatibility name for the community activity record
+introduced through the original Group workspace. Activities may now be for a
+Group, Committee, Cooperative, or Institution and may identify an additional
+organizer, host, partner, or participating audience. The existing API and
+table name are retained so queued offline changes and existing clients keep
+working while the product language moves toward the broader `Activity` term.
 
 Fields implemented:
 
 - `community`
-- `group`
-- optional `committee`
+- optional legacy `group`
+- optional legacy `committee`
 - `activity_type` (`meeting` or `training`)
 - `title`
 - `starts_at` and optional `ends_at`
@@ -103,10 +107,35 @@ meeting minute or report narrative to be considered complete.
 
 Validation implemented:
 
-- group and activity must belong to the same community
+- a supplied legacy group and activity must belong to the same community
 - an optional committee must belong to the same community
-- only meetings may be linked to committees
+- both meetings and trainings may be linked to committees
 - `ends_at` cannot be before `starts_at`
+
+### ActivityParty
+
+ActivityParty identifies who an activity is for and how any additional
+organization is involved.
+
+Fields implemented:
+
+- `activity`
+- `party_type` (`group`, `committee`, `cooperative`, or `institution`)
+- `party_id`
+- `role` (`subject`, `organizer`, `host`, `partner`, or `audience`)
+- shared metadata fields
+
+Every activity must have exactly one active `subject`. All parties must exist
+and belong to the activity Community. The same party/role combination cannot
+be repeated. For backward-compatible writes that omit `parties`, the API
+derives the subject from the legacy Committee when supplied, otherwise from
+the legacy Group. Existing committee-specific records are migrated with the
+Committee as subject and Group as audience; other existing records use the
+Group as subject. `parties` is authoritative when it is supplied. The legacy
+Group and Committee foreign keys are synchronized from it; legacy-only updates
+are translated back into parties. Parent and association writes occur in one
+database transaction. Historical display resolution includes archived parties,
+while write validation accepts active parties only.
 
 ### Member
 

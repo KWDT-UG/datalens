@@ -12,7 +12,11 @@ export function jsonResponse(body: JsonValue, status = 200) {
 
 export function installCrudFetchMock(options?: {
   communities?: object[];
+  committees?: object[];
+  cooperatives?: object[];
   groups?: object[];
+  institutions?: object[];
+  members?: object[];
   programs?: object[];
   resourceCategories?: object[];
   resources?: object[];
@@ -38,6 +42,42 @@ export function installCrudFetchMock(options?: {
           next: null,
           previous: null,
           results: options?.groups ?? []
+        });
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/committees/') {
+        return jsonResponse({
+          count: options?.committees?.length ?? 0,
+          next: null,
+          previous: null,
+          results: options?.committees ?? []
+        });
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/cooperatives/') {
+        return jsonResponse({
+          count: options?.cooperatives?.length ?? 0,
+          next: null,
+          previous: null,
+          results: options?.cooperatives ?? []
+        });
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/institutions/') {
+        return jsonResponse({
+          count: options?.institutions?.length ?? 0,
+          next: null,
+          previous: null,
+          results: options?.institutions ?? []
+        });
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/members/') {
+        return jsonResponse({
+          count: options?.members?.length ?? 0,
+          next: null,
+          previous: null,
+          results: options?.members ?? []
         });
       }
 

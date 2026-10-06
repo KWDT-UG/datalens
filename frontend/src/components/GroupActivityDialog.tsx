@@ -1,11 +1,18 @@
-import { useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useMemo, useState } from 'react';
+import { useFieldArray, useForm } from 'react-hook-form';
 
 import {
+  useCommitteesQuery,
+  useCooperativesQuery,
   useCreateGroupActivityMutation,
+  useGroupsQuery,
+  useInstitutionsQuery,
   useUpdateGroupActivityMutation
 } from '../api/queries';
 import type {
+  ActivityPartyRole,
+  ActivityPartyType,
+  ActivityPartyInput,
   Committee,
   Group,
   GroupActivity,
@@ -16,11 +23,19 @@ import { FormDialog, FormErrorSummary } from './FormDialog';
 type ActivityFormValues = Omit<
   GroupActivityCreateInput,
   | 'committee'
+  | 'group'
+  | 'parties'
   | 'expected_participant_count'
   | 'women_attendance_count'
   | 'men_attendance_count'
 > & {
-  committee: number | '';
+  primary_party_type: ActivityPartyType;
+  primary_party_id: number | '';
+  related_parties: Array<{
+    party_type: ActivityPartyType | '';
+    party_id: number | '';
+    role: Exclude<ActivityPartyRole, 'subject'>;
+  }>;
   expected_participant_count: number | '';
   women_attendance_count: number | '';
   men_attendance_count: number | '';
@@ -43,33 +58,69 @@ function optionalNumber(value: number | '') {
   return value === '' || Number.isNaN(Number(value)) ? null : Number(value);
 }
 
+type NamedParty = { id: number; name: string };
+
+function partyOptions(
+  type: ActivityPartyType,
+  groups: NamedParty[],
+  committees: NamedParty[],
+  cooperatives: NamedParty[],
+  institutions: NamedParty[]
+) {
+  return { group: groups, committee: committees, cooperative: cooperatives, institution: institutions }[type];
+}
+
 export function GroupActivityDialog({
   activity,
   committees,
+  context,
   group,
   onClose,
   template
 }: {
   activity?: GroupActivity;
-  committees: Committee[];
-  group: Group;
+  committees?: Committee[];
+  context?: {
+    party_type: ActivityPartyType;
+    party_id: number;
+    party_name: string;
+    community: number;
+  };
+  group?: Group;
   onClose: () => void;
   template?: GroupActivity;
 }) {
   const source = activity ?? template;
+  const community = context?.community ?? group?.community;
+  const [partySearch, setPartySearch] = useState('');
+  if (!community) {
+    throw new Error('An activity dialog requires a community context.');
+  }
+  const partyParams = { community, page: 1, page_size: 200, ordering: 'name', search: partySearch || undefined };
+  const groupsQuery = useGroupsQuery(partyParams);
+  const committeesQuery = useCommitteesQuery(partyParams);
+  const cooperativesQuery = useCooperativesQuery(partyParams);
+  const institutionsQuery = useInstitutionsQuery(partyParams);
+  const availableCommittees = committeesQuery.data?.results ?? committees ?? [];
+  const sourceParties = source?.parties ?? [];
+  const sourceSubject = sourceParties.find((party) => party.role === 'subject');
+  const sourceRelated = sourceParties.filter((party) => party.role !== 'subject');
+  const defaultSubject = sourceSubject ?? context ?? (group ? {
+    party_type: 'group' as const,
+    party_id: group.id,
+    party_name: group.name
+  } : undefined);
   const createActivity = useCreateGroupActivityMutation();
   const updateActivity = useUpdateGroupActivityMutation();
   const isEditing = Boolean(activity);
   const defaultValues = useMemo<ActivityFormValues>(() => ({
     activity_type: source?.activity_type ?? 'meeting',
     agenda: source?.agenda ?? '',
-    committee: source?.activity_type === 'meeting' ? source.committee ?? '' : '',
-    community: group.community,
+    community,
     decisions_actions: isEditing ? source?.decisions_actions ?? '' : '',
     ends_at: template ? '' : localDateTime(source?.ends_at),
     expected_participant_count: source?.expected_participant_count ?? '',
     facilitator_name: source?.facilitator_name ?? '',
-    group: group.id,
     location_text: source?.location_text ?? '',
     men_attendance_count: isEditing ? source?.men_attendance_count ?? '' : '',
     minutes: isEditing ? source?.minutes ?? '' : '',
@@ -80,15 +131,31 @@ export function GroupActivityDialog({
     status: isEditing ? source?.status ?? 'planned' : 'planned',
     title: source?.title ?? '',
     training_topic: source?.training_topic ?? '',
+    primary_party_type: defaultSubject?.party_type ?? 'group',
+    primary_party_id: defaultSubject?.party_id ?? '',
+    related_parties: sourceRelated.map((party) => ({
+      party_type: party.party_type,
+      party_id: party.party_id,
+      role: party.role === 'subject' ? 'partner' : party.role
+    })),
     women_attendance_count: isEditing ? source?.women_attendance_count ?? '' : ''
-  }), [group, isEditing, source, template]);
+  }), [community, defaultSubject, isEditing, source, sourceRelated, template]);
+  const form = useForm<ActivityFormValues>({ defaultValues });
   const {
+    control,
     formState: { errors },
     handleSubmit,
     register,
+    setValue,
     watch
-  } = useForm<ActivityFormValues>({ defaultValues });
+  } = form;
+  const { append: appendRelatedParty, fields: relatedPartyFields, remove: removeRelatedParty } = useFieldArray({
+    control,
+    name: 'related_parties'
+  });
   const activityType = watch('activity_type');
+  const primaryPartyType = watch('primary_party_type');
+  const primaryPartyTypeField = register('primary_party_type');
   const mutationError = createActivity.error ?? updateActivity.error;
   const isPending = createActivity.isPending || updateActivity.isPending;
 
@@ -102,21 +169,47 @@ export function GroupActivityDialog({
       <form
         className="record-form"
         onSubmit={handleSubmit(async (values) => {
+          const primaryPartyId = Number(values.primary_party_id);
+          const parties: ActivityPartyInput[] = [{
+            party_type: values.primary_party_type,
+            party_id: primaryPartyId,
+            role: 'subject' as const
+          }];
+          values.related_parties.forEach((party) => {
+            if (party.party_type && party.party_id) {
+              parties.push({
+                party_type: party.party_type,
+                party_id: Number(party.party_id),
+                role: party.role
+              });
+            }
+          });
+          const groupParty = parties.find((party) => party.party_type === 'group');
+          const committeeParty = parties.find((party) => party.party_type === 'committee');
+          const {
+            primary_party_type: _primaryPartyType,
+            primary_party_id: _primaryPartyId,
+            related_parties: _relatedParties,
+            ...activityValues
+          } = values;
+          void _primaryPartyType;
+          void _primaryPartyId;
+          void _relatedParties;
           const payload: GroupActivityCreateInput = {
-            ...values,
+            ...activityValues,
             agenda: values.activity_type === 'meeting' ? values.agenda : '',
-            committee: values.activity_type === 'meeting' && values.committee
-              ? Number(values.committee)
-              : null,
+            committee: committeeParty?.party_id ?? null,
             decisions_actions: values.activity_type === 'meeting'
               ? values.decisions_actions
               : '',
             ends_at: values.ends_at ? new Date(values.ends_at).toISOString() : null,
             expected_participant_count: optionalNumber(values.expected_participant_count),
+            group: groupParty?.party_id ?? null,
             men_attendance_count: optionalNumber(values.men_attendance_count),
             minutes: values.activity_type === 'meeting' ? values.minutes : '',
             objectives: values.activity_type === 'training' ? values.objectives : '',
             report_notes: values.activity_type === 'training' ? values.report_notes : '',
+            parties,
             starts_at: new Date(values.starts_at).toISOString(),
             title: values.title.trim(),
             training_topic: values.activity_type === 'training' ? values.training_topic : '',
@@ -180,22 +273,101 @@ export function GroupActivityDialog({
             <span>Facilitator</span>
             <input {...register('facilitator_name')} />
           </label>
-          {activityType === 'meeting' ? (
-            <label className="form-field">
-              <span>Committee (optional)</span>
-              <select {...register('committee')}>
-                <option value="">No committee</option>
-                {committees.map((committee) => (
-                  <option key={committee.id} value={committee.id}>{committee.name}</option>
-                ))}
-              </select>
-            </label>
-          ) : (
+          {activityType === 'training' ? (
             <label className="form-field">
               <span>Training topic</span>
               <input {...register('training_topic')} />
             </label>
-          )}
+          ) : null}
+          <label className="form-field">
+            <span>Activity for</span>
+            <select
+              {...primaryPartyTypeField}
+              onChange={(event) => {
+                void primaryPartyTypeField.onChange(event);
+                setValue('primary_party_id', '');
+              }}
+            >
+              <option value="group">Group</option>
+              <option value="committee">Committee</option>
+              <option value="cooperative">Cooperative</option>
+              <option value="institution">Institution</option>
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Search organizations</span>
+            <input
+              onChange={(event) => setPartySearch(event.target.value)}
+              placeholder="Search names"
+              value={partySearch}
+            />
+          </label>
+          <label className="form-field">
+            <span>Primary organization</span>
+            <select {...register('primary_party_id', { required: 'Choose the primary organization.' })}>
+              <option value="">Choose organization</option>
+              {defaultSubject && defaultSubject.party_type === primaryPartyType ? (
+                <option value={defaultSubject.party_id}>{defaultSubject.party_name || `${primaryPartyType} #${defaultSubject.party_id}`}</option>
+              ) : null}
+              {partyOptions(primaryPartyType, groupsQuery.data?.results ?? [], availableCommittees, cooperativesQuery.data?.results ?? [], institutionsQuery.data?.results ?? []).filter((party) => party.id !== defaultSubject?.party_id).map((party) => (
+                <option key={party.id} value={party.id}>{party.name}</option>
+              ))}
+            </select>
+            {errors.primary_party_id ? <small>{errors.primary_party_id.message}</small> : null}
+          </label>
+          {relatedPartyFields.map((field, index) => {
+            const relatedPartyType = watch(`related_parties.${index}.party_type`);
+            const relatedPartyTypeField = register(`related_parties.${index}.party_type`);
+            return (
+              <div className="form-grid form-field--wide" key={field.id}>
+                <label className="form-field">
+                  <span>Related organization type</span>
+                  <select
+                    {...relatedPartyTypeField}
+                    onChange={(event) => {
+                      void relatedPartyTypeField.onChange(event);
+                      setValue(`related_parties.${index}.party_id`, '');
+                    }}
+                  >
+                    <option value="">Choose type</option>
+                    <option value="group">Group</option>
+                    <option value="committee">Committee</option>
+                    <option value="cooperative">Cooperative</option>
+                    <option value="institution">Institution</option>
+                  </select>
+                </label>
+                <label className="form-field">
+                  <span>Related organization</span>
+                  <select {...register(`related_parties.${index}.party_id`)}>
+                    <option value="">Choose organization</option>
+                    {sourceRelated[index] && sourceRelated[index].party_type === relatedPartyType ? (
+                      <option value={sourceRelated[index].party_id}>{sourceRelated[index].party_name || `${relatedPartyType} #${sourceRelated[index].party_id}`}</option>
+                    ) : null}
+                    {relatedPartyType ? partyOptions(relatedPartyType, groupsQuery.data?.results ?? [], availableCommittees, cooperativesQuery.data?.results ?? [], institutionsQuery.data?.results ?? []).filter((party) => party.id !== sourceRelated[index]?.party_id).map((party) => (
+                      <option key={party.id} value={party.id}>{party.name}</option>
+                    )) : null}
+                  </select>
+                </label>
+                <label className="form-field">
+                  <span>Relationship</span>
+                  <select {...register(`related_parties.${index}.role`)}>
+                    <option value="partner">Partner / with</option>
+                    <option value="organizer">Organizer</option>
+                    <option value="host">Host</option>
+                    <option value="audience">Participating audience</option>
+                  </select>
+                </label>
+                <button className="button button--secondary" type="button" onClick={() => removeRelatedParty(index)}>Remove related organization</button>
+              </div>
+            );
+          })}
+          <button
+            className="button button--secondary"
+            type="button"
+            onClick={() => appendRelatedParty({ party_type: '', party_id: '', role: 'partner' })}
+          >
+            Add related organization
+          </button>
           <label className="form-field">
             <span>Expected participants</span>
             <input min="0" type="number" {...register('expected_participant_count')} />

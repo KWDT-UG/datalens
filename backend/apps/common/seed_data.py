@@ -22,7 +22,13 @@ from apps.common.models import (
 )
 from apps.common.permissions import assign_role, ensure_role_groups
 from apps.communities.models import Community
-from apps.groups.models import Group, GroupActivity
+from apps.groups.models import (
+    ActivityParty,
+    ActivityPartyRole,
+    ActivityPartyType,
+    Group,
+    GroupActivity,
+)
 from apps.impacts.models import ImpactRecord
 from apps.institutions.models import Institution
 from apps.members.models import Member
@@ -688,7 +694,7 @@ def seed_demo_data():
         },
     ]
     for activity_spec in activity_specs:
-        upsert(
+        activity = upsert(
             GroupActivity,
             {
                 "group": groups["KWDT-DEMO-GRP"],
@@ -700,6 +706,46 @@ def seed_demo_data():
                 **activity_spec,
             },
         )
+        desired_parties = (
+            {
+                (
+                    ActivityPartyType.COMMITTEE,
+                    activity.committee_id,
+                    ActivityPartyRole.SUBJECT,
+                ),
+                (
+                    ActivityPartyType.GROUP,
+                    activity.group_id,
+                    ActivityPartyRole.AUDIENCE,
+                ),
+            }
+            if activity.committee_id
+            else {
+                (
+                    ActivityPartyType.GROUP,
+                    activity.group_id,
+                    ActivityPartyRole.SUBJECT,
+                )
+            }
+        )
+        active_parties = {
+            (party.party_type, party.party_id, party.role): party
+            for party in activity.parties.filter(is_deleted=False)
+        }
+        obsolete_ids = [
+            party.pk
+            for key, party in active_parties.items()
+            if key not in desired_parties
+        ]
+        if obsolete_ids:
+            ActivityParty.objects.filter(pk__in=obsolete_ids).update(is_deleted=True)
+        for party_type, party_id, role in desired_parties - set(active_parties):
+            ActivityParty.objects.create(
+                activity=activity,
+                party_type=party_type,
+                party_id=party_id,
+                role=role,
+            )
 
     committee_membership_specs = [
         ("Demo Savings Group Leadership Committee", "001", "Chairperson"),

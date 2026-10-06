@@ -1,5 +1,3 @@
-from datetime import date
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -101,6 +99,14 @@ class ImpactApprovalApiTests(TestCase):
         list_response = self.client.get(reverse("impact-record-list"))
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         self.assertIn("results", list_response.data)
+        filtered_response = self.client.get(
+            reverse("impact-record-list"),
+            {
+                "beneficiary_type": ResourcePartyType.MEMBER,
+                "beneficiary_id": self.member.id,
+            },
+        )
+        self.assertEqual(filtered_response.data["count"], 1)
 
         record_id = create_response.data["id"]
         retrieve_response = self.client.get(

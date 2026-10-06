@@ -16,10 +16,13 @@ import type {
   Committee,
   CommitteeCreateInput,
   CommitteeMembership,
+  CommitteeMembershipInput,
   Community,
   CommunityCreateInput,
   Cooperative,
   CooperativeCreateInput,
+  CooperativeMembership,
+  CooperativeMembershipInput,
   DashboardData,
   DataEnvelope,
   Group,
@@ -618,6 +621,14 @@ export function useInstitutionsQuery(params: ListParams, enabled = true) {
   return useListQuery<Institution>('institutions', '/api/v1/institutions/', params, enabled);
 }
 
+export function useInstitutionQuery(institutionId?: string | number, enabled = true) {
+  return useQuery({
+    queryKey: ['institution', institutionId],
+    queryFn: () => apiGet<Institution>(`/api/v1/institutions/${institutionId}/`),
+    enabled: Boolean(institutionId) && enabled
+  });
+}
+
 export function useCreateInstitutionMutation() {
   return useCreateListMutation<Institution, InstitutionCreateInput>(
     'institutions',
@@ -655,6 +666,22 @@ export function useCommitteeMembershipsQuery(params: ListParams, enabled = true)
   );
 }
 
+export function useCreateCommitteeMembershipMutation() {
+  return useCreateListMutation<CommitteeMembership, CommitteeMembershipInput>(
+    'committee-memberships',
+    '/api/v1/committee-memberships/',
+    'committee_membership'
+  );
+}
+
+export function useUpdateCommitteeMembershipMutation() {
+  return useUpdateListMutation<CommitteeMembership, CommitteeMembershipInput>(
+    'committee-memberships',
+    '/api/v1/committee-memberships/',
+    'committee_membership'
+  );
+}
+
 export function useCreateCommitteeMutation() {
   return useCreateListMutation<Committee, CommitteeCreateInput>(
     'committees',
@@ -673,6 +700,39 @@ export function useUpdateCommitteeMutation() {
 
 export function useCooperativesQuery(params: ListParams, enabled = true) {
   return useListQuery<Cooperative>('cooperatives', '/api/v1/cooperatives/', params, enabled);
+}
+
+export function useCooperativeQuery(cooperativeId?: string | number, enabled = true) {
+  return useQuery({
+    queryKey: ['cooperative', cooperativeId],
+    queryFn: () => apiGet<Cooperative>(`/api/v1/cooperatives/${cooperativeId}/`),
+    enabled: Boolean(cooperativeId) && enabled
+  });
+}
+
+export function useCooperativeMembershipsQuery(params: ListParams, enabled = true) {
+  return useListQuery<CooperativeMembership>(
+    'cooperative-memberships',
+    '/api/v1/cooperative-memberships/',
+    params,
+    enabled
+  );
+}
+
+export function useCreateCooperativeMembershipMutation() {
+  return useCreateListMutation<CooperativeMembership, CooperativeMembershipInput>(
+    'cooperative-memberships',
+    '/api/v1/cooperative-memberships/',
+    'cooperative_membership'
+  );
+}
+
+export function useUpdateCooperativeMembershipMutation() {
+  return useUpdateListMutation<CooperativeMembership, CooperativeMembershipInput>(
+    'cooperative-memberships',
+    '/api/v1/cooperative-memberships/',
+    'cooperative_membership'
+  );
 }
 
 export function useCreateCooperativeMutation() {

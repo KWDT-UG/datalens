@@ -175,6 +175,28 @@ Group activities can be filtered by `community`, `group`, `committee`,
 agenda, group, or committee; and ordered by start/end time, title, status, or
 creation time.
 
+Activity representations include a `parties` array. Each item contains
+`party_type`, `party_id`, `party_name`, and `role`. New clients should submit
+exactly one `subject` and may submit related parties with `organizer`, `host`,
+`partner`, or `audience` roles. Activities can additionally be filtered with
+`party_type`, `party_id`, and `party_role`. `party_type` and `party_id` must be
+provided together; every supplied party criterion is matched against the same
+association row. `parties` is the authoritative relationship representation.
+The `group` and `committee` fields remain available as synchronized nullable
+compatibility projections, and `/group-activities/` remains the stable endpoint
+during the transition to broader activity wording. A legacy-only update to
+`group` or `committee` is translated into the corresponding party set.
+
+Archived organizations retain their names in historical activity responses,
+but cannot be newly attached to an activity. Communications Viewer responses
+omit Institution parties because that role cannot access Institution records.
+
+Resource lists accept `linked_party_type` and `linked_party_id` together to
+return records owned by or benefiting a Group, Member, Cooperative, or
+Institution. The earlier `linked_group` and `linked_member` filters remain
+supported. Impact record lists accept `beneficiary_type` together with
+`beneficiary_id`, enabling organization detail views to load direct impact.
+
 Payment transactions are an exception: they support list, retrieve, and create
 only. Corrections use `POST /api/v1/resource-payment-transactions/{id}/reverse/`.
 
@@ -244,6 +266,9 @@ ordering such as `ordering=last_name,first_name`.
 Committee membership representations include read-only member context for
 roster screens: `member_name`, `member_number`, `member_gender`,
 `member_group_id`, and `member_group_name`.
+
+Cooperative membership representations expose the same read-only member
+context so committee and cooperative rosters can share presentation behavior.
 
 Resource list filters also support `linked_group={id}` and
 `linked_member={id}`. These return resources owned by or benefiting the party;
