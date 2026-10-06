@@ -59,6 +59,51 @@ class GroupActivityStatus(models.TextChoices):
     CANCELLED = "cancelled", "Cancelled"
 
 
+class ActivityPartyType(models.TextChoices):
+    GROUP = "group", "Group"
+    COMMITTEE = "committee", "Committee"
+    COOPERATIVE = "cooperative", "Cooperative"
+    INSTITUTION = "institution", "Institution"
+
+
+class ActivityPartyRole(models.TextChoices):
+    SUBJECT = "subject", "For"
+    ORGANIZER = "organizer", "Organizer"
+    HOST = "host", "Host"
+    PARTNER = "partner", "Partner"
+    AUDIENCE = "audience", "Participating audience"
+
+
+def resolve_activity_party(
+    party_type: str,
+    party_id: int | None,
+    *,
+    include_deleted: bool = True,
+):
+    if not party_id:
+        return None
+    if party_type == ActivityPartyType.GROUP:
+        model = Group
+    elif party_type == ActivityPartyType.COMMITTEE:
+        from apps.participation.models import Committee
+
+        model = Committee
+    elif party_type == ActivityPartyType.COOPERATIVE:
+        from apps.participation.models import Cooperative
+
+        model = Cooperative
+    elif party_type == ActivityPartyType.INSTITUTION:
+        from apps.institutions.models import Institution
+
+        model = Institution
+    else:
+        return None
+    queryset = model.objects.filter(pk=party_id)
+    if not include_deleted:
+        queryset = queryset.filter(is_deleted=False)
+    return queryset.first()
+
+
 class GroupActivity(CoreModel):
     community = models.ForeignKey(
         Community,
@@ -69,6 +114,8 @@ class GroupActivity(CoreModel):
         Group,
         on_delete=models.PROTECT,
         related_name="activities",
+        null=True,
+        blank=True,
     )
     committee = models.ForeignKey(
         "participation.Committee",
@@ -115,8 +162,6 @@ class GroupActivity(CoreModel):
                 errors["committee"] = (
                     "Activity committee must belong to the same community."
                 )
-            if self.activity_type != GroupActivityType.MEETING:
-                errors["committee"] = "Only meetings can be linked to a committee."
         if self.ends_at and self.starts_at and self.ends_at < self.starts_at:
             errors["ends_at"] = "End date and time cannot be before the start."
         if errors:
@@ -124,3 +169,64 @@ class GroupActivity(CoreModel):
 
     def __str__(self) -> str:
         return f"{self.get_activity_type_display()}: {self.title}"
+
+
+class ActivityParty(CoreModel):
+    activity = models.ForeignKey(
+        GroupActivity,
+        on_delete=models.CASCADE,
+        related_name="parties",
+    )
+    party_type = models.CharField(max_length=32, choices=ActivityPartyType.choices)
+    party_id = models.PositiveBigIntegerField()
+    role = models.CharField(max_length=32, choices=ActivityPartyRole.choices)
+
+    class Meta:
+        ordering = ["activity_id", "role", "party_type", "party_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["activity", "party_type", "party_id", "role"],
+                condition=models.Q(is_deleted=False),
+                name="unique_active_activity_party_role",
+            ),
+            models.UniqueConstraint(
+                fields=["activity"],
+                condition=models.Q(role=ActivityPartyRole.SUBJECT, is_deleted=False),
+                name="unique_active_activity_subject",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["party_type", "party_id", "is_deleted"],
+                name="activity_party_lookup_idx",
+            ),
+        ]
+
+    @property
+    def party(self):
+        return resolve_activity_party(self.party_type, self.party_id)
+
+    @property
+    def party_name(self) -> str:
+        party = self.party
+        return getattr(party, "name", "") if party else ""
+
+    def clean(self) -> None:
+        super().clean()
+        party = self.party
+        if party is None:
+            raise ValidationError(
+                {"party_id": "Party could not be found for the selected party type."}
+            )
+        party_community_id = (
+            party.pk
+            if self.party_type == "community"
+            else getattr(party, "community_id", None)
+        )
+        if self.activity_id and party_community_id != self.activity.community_id:
+            raise ValidationError(
+                {"party_id": "Activity party must belong to the same community."}
+            )
+
+    def __str__(self) -> str:
+        return f"{self.activity} -> {self.get_role_display()}: {self.party_name}"

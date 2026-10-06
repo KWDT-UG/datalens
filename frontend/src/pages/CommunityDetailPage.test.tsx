@@ -149,6 +149,27 @@ function installGroupWorkspaceFetchMock() {
       formed_on: '2024-02-01'
     }
   ];
+  const cooperatives = [{
+    id: 60,
+    community: community.id,
+    name: 'Demo Farmers Cooperative',
+    cooperative_type: 'farmers',
+    status: 'active',
+    formed_on: '2024-03-01',
+    description: 'Coordinates member production and sales.'
+  }];
+  const institutions = [{
+    id: 70,
+    community: community.id,
+    code: 'INS-70',
+    name: 'Demo Health Centre',
+    institution_type: 'clinic',
+    status: 'active',
+    contact_name: 'Sarah Contact',
+    phone: '0700111222',
+    email: 'clinic@example.test',
+    location_text: 'Trading centre'
+  }];
   const committeeMemberships = [
     {
       id: 41,
@@ -313,6 +334,21 @@ function installGroupWorkspaceFetchMock() {
       if (url.pathname === '/api/v1/committees/40/') {
         return jsonResponse(committees[0]);
       }
+      if (url.pathname === '/api/v1/cooperatives/60/') {
+        return jsonResponse(cooperatives[0]);
+      }
+      if (url.pathname === '/api/v1/cooperatives/') {
+        return jsonResponse(paginated([]));
+      }
+      if (url.pathname === '/api/v1/cooperative-memberships/') {
+        return jsonResponse(paginated([{ ...committeeMemberships[0], id: 61, cooperative: 60 }]));
+      }
+      if (url.pathname === '/api/v1/institutions/70/') {
+        return jsonResponse(institutions[0]);
+      }
+      if (url.pathname === '/api/v1/institutions/') {
+        return jsonResponse(paginated([]));
+      }
       if (url.pathname === '/api/v1/committee-memberships/') {
         return jsonResponse(paginated(committeeMemberships));
       }
@@ -339,6 +375,21 @@ function renderGroupWorkspace() {
 
   return render(
     <MemoryRouter initialEntries={['/communities/1/groups/2']}>
+      <QueryClientProvider client={queryClient}>
+        <Routes>
+          <Route path="/communities/:communityId/:section/:recordId" element={<CommunityDetailPage />} />
+        </Routes>
+      </QueryClientProvider>
+    </MemoryRouter>
+  );
+}
+
+function renderRecordDetail(path: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: { mutations: { retry: false }, queries: { retry: false } }
+  });
+  return render(
+    <MemoryRouter initialEntries={[path]}>
       <QueryClientProvider client={queryClient}>
         <Routes>
           <Route path="/communities/:communityId/:section/:recordId" element={<CommunityDetailPage />} />
@@ -439,6 +490,21 @@ describe('CommunityDetailPage community summary', () => {
       'Actions'
     ]);
     expect(screen.queryByText('amina@example.test')).not.toBeInTheDocument();
+  });
+});
+
+describe('CommunityDetailPage organization details', () => {
+  it('loads cooperative and institution records directly instead of relying on the list page', async () => {
+    installGroupWorkspaceFetchMock();
+    const cooperativeView = renderRecordDetail('/communities/1/cooperatives/60');
+    expect(await screen.findByRole('heading', { name: 'Demo Farmers Cooperative' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cooperative members' })).toBeInTheDocument();
+    cooperativeView.unmount();
+
+    renderRecordDetail('/communities/1/institutions/70');
+    expect(await screen.findByRole('heading', { name: 'Demo Health Centre' })).toBeInTheDocument();
+    expect(screen.getByText('Sarah Contact')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'clinic@example.test' })).toHaveAttribute('href', 'mailto:clinic@example.test');
   });
 });
 

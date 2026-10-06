@@ -19,7 +19,7 @@ from apps.common.models import (
 )
 from apps.common.permissions import assign_role
 from apps.communities.models import Community
-from apps.groups.models import Group, GroupActivity
+from apps.groups.models import ActivityParty, Group, GroupActivity
 from apps.impacts.models import ImpactRecord
 from apps.institutions.models import Institution
 from apps.members.models import Member
@@ -78,6 +78,30 @@ class ManagementCommandTests(TestCase):
         self.assertEqual(Group.objects.filter(code="KWDT-DEMO-GRP").count(), 1)
         self.assertEqual(Group.objects.count(), 5)
         self.assertEqual(GroupActivity.objects.count(), 4)
+        self.assertEqual(
+            ActivityParty.objects.filter(is_deleted=False).count(),
+            5,
+        )
+        for activity in GroupActivity.objects.all():
+            with self.subTest(activity=activity.title):
+                self.assertEqual(
+                    activity.parties.filter(
+                        role="subject",
+                        is_deleted=False,
+                    ).count(),
+                    1,
+                )
+        committee_activity = GroupActivity.objects.get(
+            title="WASH Committee Review"
+        )
+        self.assertSetEqual(
+            set(
+                committee_activity.parties.filter(is_deleted=False).values_list(
+                    "party_type", "role"
+                )
+            ),
+            {("committee", "subject"), ("group", "audience")},
+        )
         self.assertEqual(Member.objects.filter(member_number="KWDT-DEMO-MEM-001").count(), 1)
         self.assertEqual(Member.objects.count(), 13)
         demo_chairperson = Member.objects.get(member_number="KWDT-DEMO-MEM-001")

@@ -488,8 +488,24 @@ class ResourceApiTests(TestCase):
             reverse("resource-list"),
             {"linked_group": self.group.id},
         )
-        self.assertEqual([row["id"] for row in by_member.data["results"]], [self.resource.id])
-        self.assertEqual([row["id"] for row in by_group.data["results"]], [self.resource.id])
+        by_party = self.client.get(
+            reverse("resource-list"),
+            {"linked_party_type": "group", "linked_party_id": self.group.id},
+        )
+        self.assertEqual(
+            [row["id"] for row in by_member.data["results"]], [self.resource.id]
+        )
+        self.assertEqual(
+            [row["id"] for row in by_group.data["results"]], [self.resource.id]
+        )
+        self.assertEqual(
+            [row["id"] for row in by_party.data["results"]], [self.resource.id]
+        )
+
+        incomplete = self.client.get(
+            reverse("resource-list"), {"linked_party_type": "institution"}
+        )
+        self.assertEqual(incomplete.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_payment_post_is_finance_approved_and_offline_mutation_is_rejected(self):
         self.client.force_authenticate(self.admin_user)

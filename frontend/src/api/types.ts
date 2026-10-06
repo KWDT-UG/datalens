@@ -12,6 +12,9 @@ export interface SyncMetadata {
   client_mutation_id?: string;
   sync_version?: number;
   is_deleted?: boolean;
+  approval_status?: ApprovalStatus | null;
+  pending_approval_request_id?: number | null;
+  approval_history_count?: number;
 }
 
 export interface ApiErrorItem {
@@ -282,6 +285,8 @@ export interface GroupCreateInput {
 
 export type GroupActivityType = 'meeting' | 'training';
 export type GroupActivityStatus = 'planned' | 'completed' | 'cancelled';
+export type ActivityPartyType = 'group' | 'committee' | 'cooperative' | 'institution';
+export type ActivityPartyRole = 'subject' | 'organizer' | 'host' | 'partner' | 'audience';
 export type GroupActivityRecordStatus =
   | 'planned'
   | 'complete'
@@ -292,10 +297,11 @@ export interface GroupActivity extends SyncMetadata {
   id: number;
   community: number;
   community_name?: string;
-  group: number;
+  group?: number | null;
   group_name?: string;
   committee?: number | null;
   committee_name?: string | null;
+  parties: ActivityParty[];
   activity_type: GroupActivityType;
   title: string;
   starts_at: string;
@@ -319,7 +325,7 @@ export interface GroupActivity extends SyncMetadata {
 
 export interface GroupActivityCreateInput {
   community: number;
-  group: number;
+  group?: number | null;
   committee?: number | null;
   activity_type: GroupActivityType;
   title: string;
@@ -338,6 +344,18 @@ export interface GroupActivityCreateInput {
   objectives?: string;
   report_notes?: string;
   notes?: string;
+  parties?: ActivityPartyInput[];
+}
+
+export interface ActivityPartyInput {
+  party_type: ActivityPartyType;
+  party_id: number;
+  role: ActivityPartyRole;
+}
+
+export interface ActivityParty extends ActivityPartyInput {
+  id: number;
+  party_name?: string;
 }
 
 export interface Member extends SyncMetadata {
@@ -453,6 +471,16 @@ export interface CommitteeMembership extends SyncMetadata {
   notes?: string;
 }
 
+export interface CommitteeMembershipInput {
+  committee: number;
+  member: number;
+  role_name?: string;
+  status?: RecordStatus;
+  start_date?: string | null;
+  end_date?: string | null;
+  notes?: string;
+}
+
 export interface Cooperative extends SyncMetadata {
   id: number;
   community: number;
@@ -473,6 +501,32 @@ export interface CooperativeCreateInput {
   description?: string;
   formed_on?: string;
   closed_on?: string;
+}
+
+export interface CooperativeMembership extends SyncMetadata {
+  id: number;
+  cooperative: number;
+  member: number;
+  member_name?: string;
+  member_number?: string;
+  member_gender?: string;
+  member_group_id?: number;
+  member_group_name?: string;
+  role_name?: string;
+  status?: RecordStatus;
+  start_date?: string | null;
+  end_date?: string | null;
+  notes?: string;
+}
+
+export interface CooperativeMembershipInput {
+  cooperative: number;
+  member: number;
+  role_name?: string;
+  status?: RecordStatus;
+  start_date?: string | null;
+  end_date?: string | null;
+  notes?: string;
 }
 
 export interface ResourceThematicArea {

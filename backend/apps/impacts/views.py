@@ -23,7 +23,13 @@ class ImpactRecordViewSet(
 ):
     queryset = ImpactRecord.objects.select_related("resource__community").all()
     serializer_class = ImpactRecordSerializer
-    filter_fields = ("resource", "beneficiary_type", "period_type", "method")
+    filter_fields = (
+        "resource",
+        "beneficiary_type",
+        "beneficiary_id",
+        "period_type",
+        "method",
+    )
     search_fields = ("resource__name", "notes", "period_type")
     ordering_fields = (
         "as_of_date",

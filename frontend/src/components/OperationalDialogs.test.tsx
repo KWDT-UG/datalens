@@ -5,9 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type {
   Committee,
+  CommitteeMembership,
   Community,
   Cooperative,
   Group,
+  GroupActivity,
   ImpactRecord,
   Institution,
   Member,
@@ -28,6 +30,8 @@ import {
   MemberCreateDialog
 } from './CommunityBreakdownCreateDialogs';
 import { ResourceCreateDialog } from './ResourceCreateDialog';
+import { ParticipationMembershipDialog } from './ParticipationMembershipDialog';
+import { GroupActivityDialog } from './GroupActivityDialog';
 
 const community: Community = {
   id: 1,
@@ -470,6 +474,118 @@ it('captures subcounty and resident count in the community form', async () => {
     expect(call.body.subcounty_name).toBe('Ntenjeru');
     expect(call.body.resident_count).toBe(2450);
     expect(call.body.area_name).toBeUndefined();
+  });
+});
+
+it('creates a committee membership with role and participation dates', async () => {
+  const fetchMock = installCrudFetchMock({ members: [member] });
+  const user = userEvent.setup();
+
+  renderWithProviders(
+    <ParticipationMembershipDialog
+      community={community.id}
+      kind="committee"
+      onClose={vi.fn()}
+      parentId={committee.id}
+    />
+  );
+
+  await screen.findByRole('option', { name: 'Grace Member' });
+  await user.selectOptions(screen.getByLabelText('Member'), String(member.id));
+  await user.type(screen.getByLabelText('Role'), 'Treasurer');
+  await user.type(screen.getByLabelText('Start date'), '2026-10-04');
+  await user.click(screen.getByRole('button', { name: 'Save membership' }));
+
+  await waitFor(() => {
+    const call = mutationCall(fetchMock);
+    expect(call.path).toBe('/api/v1/committee-memberships/');
+    expect(call.body).toMatchObject({
+      committee: committee.id,
+      member: member.id,
+      role_name: 'Treasurer',
+      start_date: '2026-10-04'
+    });
+  });
+});
+
+it('updates a membership without losing its disabled member and supports ended status', async () => {
+  const fetchMock = installCrudFetchMock({ members: [member] });
+  const user = userEvent.setup();
+  const membership: CommitteeMembership = {
+    id: 44,
+    committee: committee.id,
+    member: member.id,
+    member_name: 'Grace Member',
+    role_name: 'Treasurer',
+    status: 'ended',
+    start_date: '2025-01-01'
+  };
+
+  renderWithProviders(
+    <ParticipationMembershipDialog
+      community={community.id}
+      kind="committee"
+      membership={membership}
+      onClose={vi.fn()}
+      parentId={committee.id}
+    />
+  );
+
+  expect(screen.getByLabelText('Member')).toHaveValue('Grace Member');
+  expect(screen.getByLabelText('Status')).toHaveValue('ended');
+  await user.click(screen.getByRole('button', { name: 'Save membership' }));
+
+  await waitFor(() => {
+    const call = mutationCall(fetchMock);
+    expect(call.method).toBe('PATCH');
+    expect(call.path).toBe('/api/v1/committee-memberships/44/');
+    expect(call.body.member).toBe(member.id);
+    expect(call.body.status).toBe('ended');
+  });
+});
+
+it('preserves every related organization when editing an activity', async () => {
+  const fetchMock = installCrudFetchMock({
+    committees: [committee],
+    cooperatives: [cooperative],
+    groups: [group],
+    institutions: [institution]
+  });
+  const user = userEvent.setup();
+  const activity: GroupActivity = {
+    id: 45,
+    community: community.id,
+    group: group.id,
+    activity_type: 'meeting',
+    title: 'Multi-party review',
+    starts_at: '2026-10-04T10:00:00Z',
+    status: 'planned',
+    record_status: 'planned',
+    parties: [
+      { id: 1, party_type: 'group', party_id: group.id, role: 'subject' },
+      { id: 2, party_type: 'committee', party_id: committee.id, role: 'organizer' },
+      { id: 3, party_type: 'cooperative', party_id: cooperative.id, role: 'partner' },
+      { id: 4, party_type: 'institution', party_id: institution.id, role: 'host' }
+    ]
+  };
+
+  renderWithProviders(
+    <GroupActivityDialog activity={activity} group={group} onClose={vi.fn()} />
+  );
+
+  expect(screen.getAllByLabelText('Related organization')).toHaveLength(3);
+  await user.selectOptions(screen.getByLabelText('Primary organization'), String(group.id));
+  await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+  await waitFor(() => {
+    const call = mutationCall(fetchMock);
+    expect(call.path).toBe('/api/v1/group-activities/45/');
+    expect(call.body.parties).toEqual([
+      { party_type: 'group', party_id: group.id, role: 'subject' },
+      { party_type: 'committee', party_id: committee.id, role: 'organizer' },
+      { party_type: 'cooperative', party_id: cooperative.id, role: 'partner' },
+      { party_type: 'institution', party_id: institution.id, role: 'host' }
+    ]);
   });
 });
 

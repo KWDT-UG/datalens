@@ -1078,3 +1078,60 @@ Local verification on 2026-10-03:
 - Recorded the separation of Loans from Resource inventory as a working
   architectural direction. It is explicitly provisional until reviewed and
   approved by KWDT leadership stakeholders.
+
+## 2026-10-04 Organization Detail Workspaces and Activity Context
+
+- Institution and Cooperative record routes now fetch the requested record
+  directly. Previously they depended on the record appearing in the current
+  ten-row Community list page, so a bookmark or deep link could incorrectly
+  report a valid record as unavailable.
+- Replaced their generic export-derived detail panels with domain-specific
+  presentations. Cooperatives show lifecycle information, active/former member
+  counts, a contextual member roster, activities, linked Resources/repayment
+  summaries, and direct Impact records. Institutions show contact/location
+  information with actionable phone/email links plus activities, linked
+  Resources/repayment summaries, and direct Impact records.
+- Organization record snapshots surface the current approval state and approval
+  history count when provided by the API, alongside operational status and
+  update time.
+- Cooperative membership API responses now include the same member name,
+  number, gender, and current Group projections used by Committee rosters.
+  Committee details distinguish active and former membership counts. Users
+  with operational management capability can add or edit Committee and
+  Cooperative memberships from the corresponding roster; the shared form
+  captures member, role, status, participation dates, and notes.
+- Generalized the persisted activity context through `ActivityParty`. One
+  Group, Committee, Cooperative, or Institution is the required activity
+  subject; the UI and API both support multiple additional organizations as
+  organizers, hosts, partners, or participating audiences. Both meetings and
+  trainings can be Committee-specific.
+- The existing `GroupActivity` model and `/api/v1/group-activities/` route are
+  retained for offline and API compatibility. Its Group foreign key is now
+  optional, and legacy Group/Committee fields are derived into activity-party
+  relationships when older clients omit the new payload.
+- Existing committee-linked activities are migrated with the Committee as the
+  subject and the former Group as audience. Existing group-only activities use
+  the Group as subject. This is the least surprising mapping because the prior
+  contract explicitly defined the optional Committee as identifying a
+  committee-specific activity.
+- Added validated generic linked-party Resource filtering and direct
+  beneficiary ID filtering for Impact records so organization workspaces use
+  canonical Resource and Impact data instead of inferred or duplicated data.
+- Committees intentionally do not show a Resources tab because Committees are
+  not supported Resource owners or beneficiaries in the current domain model.
+- Adversarial follow-up made `parties` authoritative and keeps legacy Group and
+  Committee fields synchronized for old clients. Party replacement and the
+  activity write are atomic, filters use same-association semantics, archived
+  party names remain visible historically, and list serialization batches
+  polymorphic name resolution. The migration now refuses an unsafe rollback
+  after group-less activities exist rather than failing later at a non-null
+  constraint.
+- Organization activity cards can be reopened to complete or correct a record.
+  Membership edits preserve the fixed member and include the `ended` status.
+  Detail sections distinguish load failures from empty results and disclose
+  pagination truncation; member selection provides server-side search for
+  communities larger than one API page.
+- Demo-data seeding now creates and reconciles the required activity-party
+  relationships as well as the legacy activity fields. This keeps a freshly
+  migrated-and-seeded database consistent with databases whose older activity
+  rows were backfilled by the migration.

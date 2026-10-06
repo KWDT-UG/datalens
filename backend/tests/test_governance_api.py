@@ -252,6 +252,15 @@ class GovernanceApiTests(TestCase):
         self.assertEqual(membership["member_group_id"], self.group.id)
         self.assertEqual(membership["member_group_name"], self.group.name)
 
+        cooperative_response = self.client.get(
+            reverse("cooperative-memberships", kwargs={"pk": self.cooperative.pk})
+        )
+        cooperative_membership = cooperative_response.data[0]
+        self.assertEqual(cooperative_membership["member_name"], "Lina Member")
+        self.assertEqual(cooperative_membership["member_number"], "")
+        self.assertEqual(cooperative_membership["member_group_id"], self.group.id)
+        self.assertEqual(cooperative_membership["member_group_name"], self.group.name)
+
     def test_governance_lists_filter_by_community_for_detail_tabs(self):
         cases = [
             {

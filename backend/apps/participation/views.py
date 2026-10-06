@@ -111,7 +111,10 @@ class CooperativeViewSet(
     def memberships(self, request, pk=None):
         cooperative = self.get_object()
         serializer = CooperativeMembershipSerializer(
-            cooperative.memberships.filter(is_deleted=False),
+            cooperative.memberships.filter(is_deleted=False).select_related(
+                "member",
+                "member__group",
+            ),
             many=True,
             context=self.get_serializer_context(),
         )
@@ -128,6 +131,7 @@ class CooperativeMembershipViewSet(
     queryset = CooperativeMembership.objects.select_related(
         "cooperative",
         "member",
+        "member__group",
     ).all()
     serializer_class = CooperativeMembershipSerializer
     filter_fields = ("cooperative", "member", "status")

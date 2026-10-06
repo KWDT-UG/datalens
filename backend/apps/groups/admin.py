@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Group, GroupActivity
+from .models import ActivityParty, Group, GroupActivity
 
 
 @admin.register(Group)
@@ -29,3 +29,10 @@ class GroupActivityAdmin(admin.ModelAdmin):
     )
     list_filter = ("activity_type", "status", "community")
     search_fields = ("title", "group__name", "facilitator_name", "location_text")
+
+
+@admin.register(ActivityParty)
+class ActivityPartyAdmin(admin.ModelAdmin):
+    list_display = ("activity", "party_type", "party_name", "role")
+    list_filter = ("party_type", "role")
+    search_fields = ("activity__title",)

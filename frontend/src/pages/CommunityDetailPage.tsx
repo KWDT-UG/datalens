@@ -7,6 +7,8 @@ import {
   useCommitteeMembershipsQuery,
   useCommitteeQuery,
   useCommitteesQuery,
+  useCooperativeMembershipsQuery,
+  useCooperativeQuery,
   useCommunityQuery,
   useCooperativesQuery,
   useGroupMembersQuery,
@@ -15,15 +17,18 @@ import {
   useGroupsQuery,
   useArchiveRecordsMutation,
   useImpactRecordsQuery,
+  useInstitutionQuery,
   useInstitutionsQuery,
   useMemberQuery,
   useMembersQuery,
   useResourcesQuery
 } from '../api/queries';
 import type {
+  ActivityPartyType,
   Committee,
   CommitteeMembership,
   Cooperative,
+  CooperativeMembership,
   Group,
   GroupActivity,
   ImpactRecord,
@@ -45,6 +50,7 @@ import { CommunityCreateDialog } from '../components/CommunityCreateDialog';
 import { ListActionError } from '../components/ListActionError';
 import { ResourceCreateDialog } from '../components/ResourceCreateDialog';
 import { GroupActivityDialog } from '../components/GroupActivityDialog';
+import { ParticipationMembershipDialog } from '../components/ParticipationMembershipDialog';
 import { StatusBadge } from '../components/StatusBadge';
 import { SortableTableHeader } from '../components/SortableTableHeader';
 import { useAuth } from '../auth/AuthContext';
@@ -556,6 +562,8 @@ type BreakdownRecordDetailPageProps = {
   activeSection: SectionKey;
   canManage: boolean;
   committeeMemberships: CommitteeMembership[];
+  committeeMembershipsCount: number;
+  committeeMembershipsError: boolean;
   committeeMembershipsLoading: boolean;
   communityName: string;
   communityId: number;
@@ -581,6 +589,8 @@ function BreakdownRecordDetailPage({
   activeSection,
   canManage,
   committeeMemberships,
+  committeeMembershipsCount,
+  committeeMembershipsError,
   committeeMembershipsLoading,
   communityId,
   communityName,
@@ -686,6 +696,18 @@ function BreakdownRecordDetailPage({
                   <StatusBadge status={record.status} />
                 </>
               ) : null}
+              {record.approval_status ? (
+                <>
+                  <span>Approval</span>
+                  <StatusBadge status={record.approval_status} />
+                </>
+              ) : null}
+              {record.approval_history_count ? (
+                <>
+                  <span>Approval history</span>
+                  <strong>{formatCount(record.approval_history_count)}</strong>
+                </>
+              ) : null}
               <span>Updated</span>
               <strong>{formatDateTime(syncUpdatedAt(record))}</strong>
             </aside>
@@ -694,9 +716,22 @@ function BreakdownRecordDetailPage({
                 <MemberDetailContent member={record as Member} />
               ) : activeSection === 'committees' ? (
                 <CommitteeDetailContent
+                  canManage={canManage}
                   committee={record as Committee}
                   memberships={committeeMemberships}
+                  membershipsCount={committeeMembershipsCount}
+                  membershipsError={committeeMembershipsError}
                   membershipsLoading={committeeMembershipsLoading}
+                />
+              ) : activeSection === 'cooperatives' ? (
+                <CooperativeDetailContent
+                  canManage={canManage}
+                  cooperative={record as Cooperative}
+                />
+              ) : activeSection === 'institutions' ? (
+                <InstitutionDetailContent
+                  canManage={canManage}
+                  institution={record as Institution}
                 />
               ) : (
                 <GenericRecordDetail activeSection={activeSection} record={record} />
@@ -2043,14 +2078,28 @@ function MemberDetailContent({ member }: { member: Member }) {
 }
 
 function CommitteeDetailContent({
+  canManage,
   committee,
   memberships,
+  membershipsCount,
+  membershipsError,
   membershipsLoading
 }: {
+  canManage: boolean;
   committee: Committee;
   memberships: CommitteeMembership[];
+  membershipsCount: number;
+  membershipsError: boolean;
   membershipsLoading: boolean;
 }) {
+  const [membershipDialog, setMembershipDialog] = useState<CommitteeMembership | 'create' | null>(null);
+  const activeMembershipsQuery = useCommitteeMembershipsQuery({
+    committee: committee.id,
+    status: 'active',
+    page: 1,
+    page_size: 1
+  });
+  const activeMembershipCount = activeMembershipsQuery.data?.count;
   return (
     <>
       <DetailSection title="Committee details">
@@ -2058,16 +2107,19 @@ function CommitteeDetailContent({
           <DetailItem label="Type" value={formatLabel(committee.committee_type)} />
           <DetailItem label="Formed" value={formatDate(committee.formed_on)} />
           <DetailItem label="Closed" value={formatDate(committee.closed_on)} />
-          <DetailItem label="Members" value={membershipsLoading ? 'Loading...' : formatCount(memberships.length)} />
+          <DetailItem label="Active members" value={membershipsLoading || activeMembershipsQuery.isLoading ? 'Loading...' : formatCount(activeMembershipCount)} />
+          <DetailItem label="Former members" value={membershipsLoading || activeMembershipsQuery.isLoading ? 'Loading...' : formatCount(Math.max(0, membershipsCount - (activeMembershipCount ?? 0)))} />
         </dl>
         {committee.description ? <p className="record-detail__notes">{committee.description}</p> : null}
       </DetailSection>
       <DetailSection title="Committee members">
+        {canManage ? <button className="button button--secondary" type="button" onClick={() => setMembershipDialog('create')}>Add member</button> : null}
         {membershipsLoading ? <div className="state-box">Loading committee members...</div> : null}
-        {!membershipsLoading && memberships.length === 0 ? (
+        {membershipsError ? <div className="state-box state-box--error">Committee members could not be loaded. Try again.</div> : null}
+        {!membershipsLoading && !membershipsError && memberships.length === 0 ? (
           <div className="state-box">No members are recorded for this committee yet.</div>
         ) : null}
-        {!membershipsLoading && memberships.length > 0 ? (
+        {!membershipsLoading && !membershipsError && memberships.length > 0 ? (
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -2078,6 +2130,7 @@ function CommitteeDetailContent({
                   <th>Gender</th>
                   <th>Joined</th>
                   <th>Status</th>
+                  {canManage ? <th>Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -2100,14 +2153,236 @@ function CommitteeDetailContent({
                     <td>{formatLabel(membership.member_gender)}</td>
                     <td>{formatDate(membership.start_date)}</td>
                     <td><StatusBadge status={membership.status} /></td>
+                    {canManage ? <td><button className="table-link" type="button" onClick={() => setMembershipDialog(membership)}>Edit</button></td> : null}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : null}
+        {membershipsCount > memberships.length ? <p className="state-box">Showing {memberships.length} of {membershipsCount} memberships.</p> : null}
       </DetailSection>
+      <EntityActivitiesSection
+        canManage={canManage}
+        community={committee.community}
+        partyId={committee.id}
+        partyName={committee.name}
+        partyType="committee"
+      />
+      {membershipDialog ? (
+        <ParticipationMembershipDialog
+          community={committee.community}
+          kind="committee"
+          membership={membershipDialog === 'create' ? undefined : membershipDialog}
+          onClose={() => setMembershipDialog(null)}
+          parentId={committee.id}
+        />
+      ) : null}
     </>
+  );
+}
+
+function CooperativeDetailContent({
+  canManage,
+  cooperative
+}: {
+  canManage: boolean;
+  cooperative: Cooperative;
+}) {
+  const membershipsQuery = useCooperativeMembershipsQuery(
+    { cooperative: cooperative.id, page: 1, page_size: 200, ordering: 'start_date' }
+  );
+  const activeMembershipsQuery = useCooperativeMembershipsQuery(
+    { cooperative: cooperative.id, status: 'active', page: 1, page_size: 1 }
+  );
+  const memberships = membershipsQuery.data?.results ?? [];
+  const activeMembershipCount = activeMembershipsQuery.data?.count;
+  const membershipCount = membershipsQuery.data?.count ?? memberships.length;
+  return (
+    <>
+      <DetailSection title="Cooperative overview">
+        <dl className="record-detail__grid">
+          <DetailItem label="Type" value={formatLabel(cooperative.cooperative_type)} />
+          <DetailItem label="Formed" value={formatDate(cooperative.formed_on)} />
+          <DetailItem label="Closed" value={formatDate(cooperative.closed_on)} />
+          <DetailItem label="Active members" value={membershipsQuery.isLoading || activeMembershipsQuery.isLoading ? 'Loading...' : formatCount(activeMembershipCount)} />
+          <DetailItem label="Former members" value={membershipsQuery.isLoading || activeMembershipsQuery.isLoading ? 'Loading...' : formatCount(Math.max(0, membershipCount - (activeMembershipCount ?? 0)))} />
+        </dl>
+        {cooperative.description ? <p className="record-detail__notes">{cooperative.description}</p> : null}
+      </DetailSection>
+      <MembershipRoster
+        canManage={canManage}
+        community={cooperative.community}
+        emptyLabel="No members are recorded for this cooperative yet."
+        isLoading={membershipsQuery.isLoading}
+        isError={membershipsQuery.isError}
+        memberships={memberships}
+        membershipCount={membershipCount}
+        parentId={cooperative.id}
+        title="Cooperative members"
+      />
+      <EntityActivitiesSection canManage={canManage} community={cooperative.community} partyId={cooperative.id} partyName={cooperative.name} partyType="cooperative" />
+      <EntityResourcesSection community={cooperative.community} partyId={cooperative.id} partyName={cooperative.name} partyType="cooperative" />
+      <EntityImpactSection partyId={cooperative.id} partyType="cooperative" />
+    </>
+  );
+}
+
+function InstitutionDetailContent({
+  canManage,
+  institution
+}: {
+  canManage: boolean;
+  institution: Institution;
+}) {
+  return (
+    <>
+      <DetailSection title="Institution overview">
+        <dl className="record-detail__grid">
+          <DetailItem label="Code" value={institution.code || 'Not recorded'} />
+          <DetailItem label="Type" value={formatLabel(institution.institution_type)} />
+          <DetailItem label="Contact" value={institution.contact_name || 'Not recorded'} />
+          <DetailItem label="Phone" value={institution.phone ? <a href={`tel:${institution.phone}`}>{institution.phone}</a> : 'Not recorded'} />
+          <DetailItem label="Email" value={institution.email ? <a href={`mailto:${institution.email}`}>{institution.email}</a> : 'Not recorded'} />
+          <DetailItem label="Location" value={institution.location_text || 'Not recorded'} />
+        </dl>
+        {institution.notes ? <p className="record-detail__notes">{institution.notes}</p> : null}
+      </DetailSection>
+      <EntityActivitiesSection canManage={canManage} community={institution.community} partyId={institution.id} partyName={institution.name} partyType="institution" />
+      <EntityResourcesSection community={institution.community} partyId={institution.id} partyName={institution.name} partyType="institution" />
+      <EntityImpactSection partyId={institution.id} partyType="institution" />
+    </>
+  );
+}
+
+function MembershipRoster({
+  canManage,
+  community,
+  emptyLabel,
+  isLoading,
+  isError,
+  memberships,
+  membershipCount,
+  parentId,
+  title
+}: {
+  canManage: boolean;
+  community: number;
+  emptyLabel: string;
+  isLoading: boolean;
+  isError: boolean;
+  memberships: CooperativeMembership[];
+  membershipCount: number;
+  parentId: number;
+  title: string;
+}) {
+  const [membershipDialog, setMembershipDialog] = useState<CooperativeMembership | 'create' | null>(null);
+  return (
+    <DetailSection title={title}>
+      {canManage ? <button className="button button--secondary" type="button" onClick={() => setMembershipDialog('create')}>Add member</button> : null}
+      {isLoading ? <div className="state-box">Loading members...</div> : null}
+      {isError ? <div className="state-box state-box--error">Members could not be loaded. Try again.</div> : null}
+      {!isLoading && !isError && memberships.length === 0 ? <div className="state-box">{emptyLabel}</div> : null}
+      {!isLoading && !isError && memberships.length > 0 ? (
+        <div className="table-wrap"><table className="data-table">
+          <thead><tr><th>Member</th><th>Group</th><th>Role</th><th>Gender</th><th>Joined</th><th>Status</th>{canManage ? <th>Actions</th> : null}</tr></thead>
+          <tbody>{memberships.map((membership) => (
+            <tr key={membership.id}>
+              <td><Link to={`/communities/${community}/members/${membership.member}`}>{membership.member_name || `Member #${membership.member}`}</Link>{membership.member_number ? <small className="table-cell-note">{membership.member_number}</small> : null}</td>
+              <td>{membership.member_group_id ? <Link to={`/communities/${community}/groups/${membership.member_group_id}`}>{membership.member_group_name || `Group #${membership.member_group_id}`}</Link> : 'Not recorded'}</td>
+              <td>{membership.role_name || 'Member'}</td>
+              <td>{formatLabel(membership.member_gender)}</td>
+              <td>{formatDate(membership.start_date)}</td>
+              <td><StatusBadge status={membership.status} /></td>
+              {canManage ? <td><button className="table-link" type="button" onClick={() => setMembershipDialog(membership)}>Edit</button></td> : null}
+            </tr>
+          ))}</tbody>
+        </table></div>
+      ) : null}
+      {membershipCount > memberships.length ? <p className="state-box">Showing {memberships.length} of {membershipCount} memberships.</p> : null}
+      {membershipDialog ? (
+        <ParticipationMembershipDialog
+          community={community}
+          kind="cooperative"
+          membership={membershipDialog === 'create' ? undefined : membershipDialog}
+          onClose={() => setMembershipDialog(null)}
+          parentId={parentId}
+        />
+      ) : null}
+    </DetailSection>
+  );
+}
+
+function EntityActivitiesSection({ canManage, community, partyId, partyName, partyType }: {
+  canManage: boolean;
+  community: number;
+  partyId: number;
+  partyName: string;
+  partyType: ActivityPartyType;
+}) {
+  const [dialogActivity, setDialogActivity] = useState<GroupActivity | 'create' | null>(null);
+  const query = useGroupActivitiesQuery({ party_type: partyType, party_id: partyId, page: 1, page_size: 100, ordering: '-starts_at' });
+  const activities = query.data?.results ?? [];
+  return (
+    <DetailSection title="Trainings & meetings">
+      {canManage ? <button className="button button--secondary" type="button" onClick={() => setDialogActivity('create')}>Add activity</button> : null}
+      {query.isLoading ? <div className="state-box">Loading activities...</div> : null}
+      {query.isError ? <div className="state-box state-box--error">Activities could not be loaded. Try again.</div> : null}
+      {!query.isLoading && !query.isError && activities.length === 0 ? <div className="state-box">No trainings or meetings are linked yet.</div> : null}
+      {activities.length > 0 ? <div className="resource-party-list">{activities.map((activity) => (
+        <article key={activity.id}>
+          <span><strong>{activity.title}</strong>{formatLabel(activity.activity_type)} · {formatDate(activity.starts_at)}</span>
+          <small>{(activity.parties ?? []).map((party) => `${formatLabel(party.role)}: ${party.party_name || `${formatLabel(party.party_type)} #${party.party_id}`}`).join(' · ')}</small>
+          {canManage ? <button className="table-link" type="button" onClick={() => setDialogActivity(activity)}>Edit activity</button> : null}
+        </article>
+      ))}</div> : null}
+      {(query.data?.count ?? 0) > activities.length ? <p className="state-box">Showing {activities.length} of {query.data?.count} activities.</p> : null}
+      {dialogActivity ? (
+        <GroupActivityDialog
+          activity={dialogActivity === 'create' ? undefined : dialogActivity}
+          context={{ community, party_id: partyId, party_name: partyName, party_type: partyType }}
+          onClose={() => setDialogActivity(null)}
+        />
+      ) : null}
+    </DetailSection>
+  );
+}
+
+function EntityResourcesSection({ community, partyId, partyName, partyType }: {
+  community: number;
+  partyId: number;
+  partyName: string;
+  partyType: 'cooperative' | 'institution';
+}) {
+  const query = useResourcesQuery({ community, linked_party_type: partyType, linked_party_id: partyId, page: 1, page_size: 100, ordering: 'name' });
+  const resources = query.data?.results ?? [];
+  return (
+    <DetailSection title="Resources and repayments">
+      {query.isLoading ? <div className="state-box">Loading linked resources...</div> : null}
+      {query.isError ? <div className="state-box state-box--error">Linked resources could not be loaded. Try again.</div> : null}
+      {!query.isLoading && !query.isError && resources.length === 0 ? <div className="state-box">No resources are linked to {partyName}.</div> : null}
+      <div className="resource-party-list">{resources.map((resource) => (
+        <Link key={resource.id} state={{ resourceOrigin: { label: partyName, path: `/communities/${community}/${partyType === 'cooperative' ? 'cooperatives' : 'institutions'}/${partyId}` } }} to={`/resources/${resource.id}`}>
+          <span><strong>{resource.name}</strong>{formatLabel(resource.resource_type)} · {resource.owner_type === partyType && resource.owner_id === partyId ? 'Owner' : 'Beneficiary'}</span>
+          <small>{resource.payment_summary ? `${formatMoney(resource.payment_summary.total_paid, resource.payment_summary.currency)} paid · ${formatMoney(resource.payment_summary.remaining_amount, resource.payment_summary.currency)} remaining` : formatLabel(resource.status)}</small>
+        </Link>
+      ))}</div>
+      {(query.data?.count ?? 0) > resources.length ? <p className="state-box">Showing {resources.length} of {query.data?.count} linked resources.</p> : null}
+    </DetailSection>
+  );
+}
+
+function EntityImpactSection({ partyId, partyType }: { partyId: number; partyType: 'cooperative' | 'institution' }) {
+  const query = useImpactRecordsQuery({ beneficiary_type: partyType, beneficiary_id: partyId, page: 1, page_size: 100, ordering: '-as_of_date' });
+  const records = query.data?.results ?? [];
+  return (
+    <DetailSection title="Impact">
+      {query.isLoading ? <div className="state-box">Loading impact records...</div> : null}
+      {query.isError ? <div className="state-box state-box--error">Impact records could not be loaded. Try again.</div> : null}
+      {!query.isLoading && !query.isError && records.length === 0 ? <div className="state-box">No direct impact records are linked yet.</div> : null}
+      {records.length > 0 ? <div className="table-wrap"><table className="data-table"><thead><tr><th>As of</th><th>Beneficiaries</th><th>Households</th><th>Members</th><th>Method</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td>{formatDate(record.as_of_date)}</td><td>{formatCount(record.beneficiary_count)}</td><td>{formatCount(record.household_count)}</td><td>{formatCount(record.member_count)}</td><td>{formatLabel(record.method)}</td></tr>)}</tbody></table></div> : null}
+      {(query.data?.count ?? 0) > records.length ? <p className="state-box">Showing {records.length} of {query.data?.count} impact records.</p> : null}
+    </DetailSection>
   );
 }
 
@@ -2231,6 +2506,14 @@ export function CommunityDetailPage() {
     selectedRecordId ?? undefined,
     activeSection === 'committees' && Boolean(selectedRecordId)
   );
+  const cooperativeDetailQuery = useCooperativeQuery(
+    selectedRecordId ?? undefined,
+    activeSection === 'cooperatives' && Boolean(selectedRecordId)
+  );
+  const institutionDetailQuery = useInstitutionQuery(
+    selectedRecordId ?? undefined,
+    activeSection === 'institutions' && Boolean(selectedRecordId)
+  );
   const selectedRecord =
     activeSection === 'groups'
       ? groupDetailQuery.data ?? selectedRecordFromPage
@@ -2238,7 +2521,11 @@ export function CommunityDetailPage() {
         ? memberDetailQuery.data ?? selectedRecordFromPage
         : activeSection === 'committees'
           ? committeeDetailQuery.data ?? selectedRecordFromPage
-          : selectedRecordFromPage;
+          : activeSection === 'cooperatives'
+            ? cooperativeDetailQuery.data ?? selectedRecordFromPage
+            : activeSection === 'institutions'
+              ? institutionDetailQuery.data ?? selectedRecordFromPage
+              : selectedRecordFromPage;
   const selectedCommitteeMembershipParams = useMemo(
     () => ({
       committee: selectedRecordId ?? undefined,
@@ -2358,7 +2645,11 @@ export function CommunityDetailPage() {
         ? memberDetailQuery.isLoading
         : activeSection === 'committees'
           ? committeeDetailQuery.isLoading
-          : sectionQuery.isLoading;
+          : activeSection === 'cooperatives'
+            ? cooperativeDetailQuery.isLoading
+            : activeSection === 'institutions'
+              ? institutionDetailQuery.isLoading
+              : sectionQuery.isLoading;
   const pageCount = Math.max(1, Math.ceil((sectionQuery.data?.count ?? 0) / sectionPageSize));
   const archiveConfig = archiveConfigs[activeSection];
   const archiveRecords = useArchiveRecordsMutation(archiveConfig.key, archiveConfig.path);
@@ -2736,6 +3027,8 @@ export function CommunityDetailPage() {
           activeSection={activeSection}
           canManage={canManage}
           committeeMemberships={selectedCommitteeMemberships}
+          committeeMembershipsCount={selectedCommitteeMembershipsQuery.data?.count ?? selectedCommitteeMemberships.length}
+          committeeMembershipsError={selectedCommitteeMembershipsQuery.isError}
           committeeMembershipsLoading={selectedCommitteeMembershipsQuery.isLoading}
           communityId={community.id}
           communityName={community.name}
