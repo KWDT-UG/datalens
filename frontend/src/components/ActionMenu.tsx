@@ -9,12 +9,13 @@ export type ActionMenuItem = {
 };
 
 type ActionMenuProps = {
+  ariaLabel?: string;
   items: ActionMenuItem[];
   label?: string;
   variant?: 'muted' | 'secondary';
 };
 
-export function ActionMenu({ items, label = 'Actions', variant = 'muted' }: ActionMenuProps) {
+export function ActionMenu({ ariaLabel, items, label = 'Actions', variant = 'muted' }: ActionMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -48,6 +49,7 @@ export function ActionMenu({ items, label = 'Actions', variant = 'muted' }: Acti
       <button
         className={`button button--${variant}`}
         type="button"
+        aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => setOpen((current) => !current)}

@@ -34,10 +34,6 @@ export function toggleVisibleSelection(current: number[], visible: number[]) {
   return Array.from(selected);
 }
 
-export function archivePrompt(itemName: string, count: number) {
-  return `Archive ${count} selected ${count === 1 ? itemName : `${itemName}s`}?`;
-}
-
 function escapeCsv(value: CsvValue) {
   const text = String(value ?? '');
   return `"${text.replace(/"/g, '""')}"`;

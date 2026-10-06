@@ -35,6 +35,7 @@ MANAGE_USERS = "manage_users"
 MANAGE_ROLES = "manage_roles"
 MANAGE_SETTINGS = "manage_settings"
 MANAGE_REFERENCE_DATA = "manage_reference_data"
+MVP_DELETE_PERMANENTLY = "mvp_delete_permanently"
 
 ROLE_CAPABILITIES = {
     UserRole.FIELD_OFFICER: {
@@ -116,7 +117,9 @@ ROLE_CAPABILITIES = {
     },
 }
 
-ALL_CAPABILITIES = set().union(*ROLE_CAPABILITIES.values())
+ALL_CAPABILITIES = set().union(*ROLE_CAPABILITIES.values()) | {
+    MVP_DELETE_PERMANENTLY,
+}
 # Temporary stakeholder role for end-to-end MVP evaluation. Keep this assignment
 # explicit so it can be audited and removed without changing permanent job roles.
 ROLE_CAPABILITIES[UserRole.MVP_FULL_ACCESS] = set(ALL_CAPABILITIES)
@@ -253,6 +256,11 @@ class RoleActionAccess(IsAuthenticated):
         if not super().has_permission(request, view):
             return False
 
+        if getattr(view, "action", "") in {
+            "permanent_delete",
+            "permanent_delete_preview",
+        }:
+            return user_has_capability(request.user, MVP_DELETE_PERMANENTLY)
         if request.method in SAFE_METHODS:
             if user_role_names(request.user) == {UserRole.COMMUNICATIONS_VIEWER}:
                 return (

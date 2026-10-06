@@ -391,7 +391,8 @@ class GroupActivityApiTests(TestCase):
             },
             format="json",
         )
-        self.assertEqual(edit.status_code, status.HTTP_200_OK, edit.data)
+        self.assertEqual(edit.status_code, status.HTTP_400_BAD_REQUEST, edit.data)
+        self.assertIn("parties", edit.data)
 
         new_link = self.client.post(
             reverse("group-activity-list"),

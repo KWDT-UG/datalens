@@ -148,6 +148,9 @@ def apply_approval_request(approval_request, user_id=None):
         return serializer.save(**save_kwargs)
 
     if approval_request.action_type == ApprovalActionType.DELETE:
+        from apps.common.deletion import ensure_archive_allowed
+
+        ensure_archive_allowed(instance)
         instance.is_deleted = True
         update_fields = ["is_deleted", "updated_at"]
         if user_id is not None:

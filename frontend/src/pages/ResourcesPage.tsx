@@ -1,9 +1,11 @@
 import { SearchIcon, UploadIcon } from '@patternfly/react-icons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
+  BatchArchiveError,
   useArchiveRecordsMutation,
+  usePermanentDeleteMutation,
   useProgramsQuery,
   useResourceCategoriesQuery,
   useResourcesQuery,
@@ -13,11 +15,13 @@ import type { Resource } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
+import { ArchiveRecordsDialog, type ArchiveRecordTarget } from '../components/ArchiveRecordsDialog';
 import { ListActionError } from '../components/ListActionError';
+import { PermanentDeleteDialog } from '../components/PermanentDeleteDialog';
 import { ResourceCreateDialog } from '../components/ResourceCreateDialog';
 import { reverseOrdering, SortableTableHeader } from '../components/SortableTableHeader';
 import { StatusBadge } from '../components/StatusBadge';
-import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/listActions';
+import { downloadCsv, toggleVisibleSelection } from '../utils/listActions';
 import { formatQuantity } from '../utils/formatQuantity';
 import { PaginationLabel } from './CommunitiesPage';
 
@@ -58,6 +62,7 @@ export function ResourcesPage() {
   const { user } = useAuth();
   const canManage = hasCapability(user, capabilities.manageResources);
   const canArchive = hasCapability(user, capabilities.archiveResources);
+  const canDeletePermanently = hasCapability(user, capabilities.mvpDeletePermanently);
   const canExport = hasCapability(user, capabilities.export);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -68,6 +73,8 @@ export function ResourcesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [archiveTargets, setArchiveTargets] = useState<ArchiveRecordTarget[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<ArchiveRecordTarget | null>(null);
   const query = useResourcesQuery({
     page,
     page_size: pageSize,
@@ -81,6 +88,7 @@ export function ResourcesPage() {
   const programsQuery = useProgramsQuery(thematicArea, Boolean(thematicArea));
   const resourceCategoriesQuery = useResourceCategoriesQuery(program, Boolean(program));
   const archiveResources = useArchiveRecordsMutation('resources', '/api/v1/resources/');
+  const deleteResource = usePermanentDeleteMutation('resources', '/api/v1/resources/');
   const resources = query.data?.results ?? [];
   const visibleIds = resources.map((resource) => resource.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
@@ -99,7 +107,7 @@ export function ResourcesPage() {
     ...(canArchive ? [{
       label: `Archive selected (${selectedIds.length})`,
       disabled: selectedIds.length === 0 || archiveResources.isPending,
-      onSelect: () => void archiveSelectedResources(),
+      onSelect: openSelectedArchiveDialog,
       tone: 'danger' as const
     }] : [])
   ];
@@ -128,17 +136,48 @@ export function ResourcesPage() {
     );
   }
 
-  async function archiveSelectedResources() {
-    if (!window.confirm(archivePrompt('resource', selectedIds.length))) {
-      return;
-    }
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [ordering, page, program, resourceCategory, search, thematicArea]);
 
+  function openSelectedArchiveDialog() {
+    openArchiveDialog(resources
+      .filter((resource) => selectedIds.includes(resource.id))
+      .map((resource) => ({ id: resource.id, label: resource.name })));
+  }
+
+  function openArchiveDialog(targets: ArchiveRecordTarget[]) {
+    archiveResources.reset();
+    setArchiveTargets(targets);
+  }
+
+  function closeArchiveDialog() {
+    archiveResources.reset();
+    setArchiveTargets([]);
+  }
+
+  async function confirmArchiveResources() {
     try {
-      await archiveResources.mutateAsync(selectedIds);
+      await archiveResources.mutateAsync(archiveTargets.map((target) => target.id));
       setSelectedIds([]);
-    } catch {
-      // The archive error state is rendered below.
+      setArchiveTargets([]);
+    } catch (error) {
+      if (error instanceof BatchArchiveError) {
+        setSelectedIds(error.failedIds);
+        setArchiveTargets((current) => current.filter((target) => error.failedIds.includes(target.id)));
+      }
     }
+  }
+
+  function openDeleteDialog(target: ArchiveRecordTarget) {
+    deleteResource.reset();
+    setDeleteTarget(target);
+  }
+
+  async function confirmPermanentDelete() {
+    if (!deleteTarget) return;
+    await deleteResource.mutateAsync(deleteTarget.id);
+    setDeleteTarget(null);
   }
 
   function toggleSelected(id: number) {
@@ -286,7 +325,7 @@ export function ResourcesPage() {
                 <th>Financial position</th>
                 <SortableTableHeader currentOrdering={ordering} label="Status" onChange={changeOrdering} ordering="status" />
                 <SortableTableHeader currentOrdering={ordering} label="Acquired" onChange={changeOrdering} ordering="acquired_on" />
-                <th>Actions</th>
+                {canManage || canArchive || canDeletePermanently ? <th>Actions</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -313,17 +352,25 @@ export function ResourcesPage() {
                     <StatusBadge status={resource.status} />
                   </td>
                   <td>{formatDate(resource.acquired_on)}</td>
-                  <td>
-                    <div className="row-actions">
-                      {canManage ? <button
-                        className="button button--secondary"
-                        type="button"
-                        onClick={() => setEditingResource(resource)}
-                      >
-                        Edit
-                      </button> : null}
-                    </div>
-                  </td>
+                  {canManage || canArchive || canDeletePermanently ? <td>
+                    <ActionMenu
+                      ariaLabel={`Actions for ${resource.name}`}
+                      variant="secondary"
+                      items={[
+                        ...(canManage ? [{ label: 'Edit', onSelect: () => setEditingResource(resource) }] : []),
+                        ...(canArchive ? [{
+                          label: 'Archive',
+                          onSelect: () => openArchiveDialog([{ id: resource.id, label: resource.name }]),
+                          tone: 'danger' as const
+                        }] : []),
+                        ...(canDeletePermanently ? [{
+                          label: 'Delete permanently',
+                          onSelect: () => openDeleteDialog({ id: resource.id, label: resource.name }),
+                          tone: 'danger' as const
+                        }] : [])
+                      ]}
+                    />
+                  </td> : null}
                 </tr>
               ))}
             </tbody>
@@ -348,6 +395,30 @@ export function ResourcesPage() {
           onCreated={() => {
             setEditingResource(null);
           }}
+        />
+      ) : null}
+      {archiveTargets.length > 0 ? (
+        <ArchiveRecordsDialog
+          entityName="resource"
+          error={archiveResources.error}
+          isPending={archiveResources.isPending}
+          onClose={closeArchiveDialog}
+          onConfirm={confirmArchiveResources}
+          path="/api/v1/resources/"
+          targets={archiveTargets}
+        />
+      ) : null}
+      {deleteTarget ? (
+        <PermanentDeleteDialog
+          error={deleteResource.error}
+          isPending={deleteResource.isPending}
+          onClose={() => {
+            deleteResource.reset();
+            setDeleteTarget(null);
+          }}
+          onConfirm={confirmPermanentDelete}
+          path="/api/v1/resources/"
+          target={deleteTarget}
         />
       ) : null}
     </section>

@@ -1,10 +1,12 @@
 from django.contrib import admin
 
+from apps.common.admin import CoreModelAdminMixin
+
 from .models import ApprovalRequest
 
 
 @admin.register(ApprovalRequest)
-class ApprovalRequestAdmin(admin.ModelAdmin):
+class ApprovalRequestAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = (
         "entity_type",
         "entity_id",

@@ -22,7 +22,12 @@ from apps.common.models import (
 from apps.communities.models import Community
 
 
-def resolve_resource_party(party_type: str, party_id: int | None):
+def resolve_resource_party(
+    party_type: str,
+    party_id: int | None,
+    *,
+    include_deleted: bool = True,
+):
     if not party_id:
         return None
 
@@ -47,10 +52,10 @@ def resolve_resource_party(party_type: str, party_id: int | None):
     else:
         return None
 
-    try:
-        return model.objects.get(pk=party_id)
-    except model.DoesNotExist:
-        return None
+    queryset = model.objects.filter(pk=party_id)
+    if not include_deleted:
+        queryset = queryset.filter(is_deleted=False)
+    return queryset.first()
 
 
 def resource_party_community_id(party_type: str, party) -> int | None:
@@ -224,7 +229,11 @@ class Resource(CoreModel):
             errors["resource_category"] = (
                 "Resource category must belong to the selected program."
             )
-        owner = resolve_resource_party(self.owner_type, self.owner_id)
+        owner = resolve_resource_party(
+            self.owner_type,
+            self.owner_id,
+            include_deleted=False,
+        )
         if owner is None:
             errors["owner_id"] = "Owner could not be found for the selected owner type."
         else:
@@ -274,7 +283,11 @@ class ResourceBeneficiary(CoreModel):
     def clean(self) -> None:
         super().clean()
         errors = {}
-        beneficiary = resolve_resource_party(self.beneficiary_type, self.beneficiary_id)
+        beneficiary = resolve_resource_party(
+            self.beneficiary_type,
+            self.beneficiary_id,
+            include_deleted=False,
+        )
         if beneficiary is None:
             errors["beneficiary_id"] = (
                 "Beneficiary could not be found for the selected beneficiary type."
@@ -440,6 +453,7 @@ class ResourcePaymentObligation(CoreModel):
         responsible_party = resolve_resource_party(
             self.responsible_party_type,
             self.responsible_party_id,
+            include_deleted=False,
         )
         if responsible_party is None:
             errors["responsible_party_id"] = "Responsible party could not be found."
@@ -624,9 +638,16 @@ class ResourcePaymentTransaction(CoreModel):
         if bool(self.received_from_type) != bool(self.received_from_id):
             errors["received_from_id"] = "Received-from type and id must be supplied together."
         if self.received_from_type and self.received_from_id:
-            party = resolve_resource_party(self.received_from_type, self.received_from_id)
+            party = resolve_resource_party(
+                self.received_from_type,
+                self.received_from_id,
+            )
             if party is None:
                 errors["received_from_id"] = "Received-from party could not be found."
+            elif party.is_deleted:
+                errors["received_from_id"] = (
+                    "Received-from party is archived. Restore it first."
+                )
             elif resource_party_community_id(self.received_from_type, party) != self.obligation.resource.community_id:
                 errors["received_from_id"] = "Received-from party must belong to the resource community."
         if self.entry_type == PaymentEntryType.REVERSAL:

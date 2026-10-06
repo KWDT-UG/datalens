@@ -292,14 +292,6 @@ class GroupActivitySerializer(
                 {"parties": "Exactly one activity party must have the subject role."}
             )
         seen = set()
-        existing = (
-            {
-                (party.party_type, party.party_id, party.role)
-                for party in self.instance.parties.filter(is_deleted=False)
-            }
-            if self.instance is not None
-            else set()
-        )
         for party_data in parties:
             key = (
                 party_data["party_type"],
@@ -317,18 +309,8 @@ class GroupActivitySerializer(
                 include_deleted=False,
             )
             if party is None:
-                if key in existing:
-                    party = resolve_activity_party(
-                        party_data["party_type"], party_data["party_id"]
-                    )
-                if party is not None:
-                    if getattr(party, "community_id", None) != community.pk:
-                        raise serializers.ValidationError(
-                            {"parties": "Activity parties must belong to the same community."}
-                        )
-                    continue
                 raise serializers.ValidationError(
-                    {"parties": "An activity party could not be found."}
+                    {"parties": "An active activity party could not be found."}
                 )
             if getattr(party, "community_id", None) != community.pk:
                 raise serializers.ValidationError(

@@ -23,7 +23,11 @@ type CommunityCreateDialogProps = {
 const statusOptions = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
-  { value: 'archived', label: 'Archived' }
+  {
+    value: 'archived',
+    label: 'Archived (legacy status; use the Archive action)',
+    disabled: true
+  }
 ];
 
 export function CommunityCreateDialog({
@@ -156,7 +160,7 @@ export function CommunityCreateDialog({
             <span>Status</span>
             <select {...register('status')}>
               {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
+                <option key={option.value} value={option.value} disabled={option.disabled}>
                   {option.label}
                 </option>
               ))}

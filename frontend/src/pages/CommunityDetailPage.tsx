@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import {
+  BatchArchiveError,
   useCommitteeMembershipsQuery,
   useCommitteeQuery,
   useCommitteesQuery,
@@ -21,6 +22,7 @@ import {
   useInstitutionsQuery,
   useMemberQuery,
   useMembersQuery,
+  usePermanentDeleteMutation,
   useResourcesQuery
 } from '../api/queries';
 import type {
@@ -46,8 +48,10 @@ import {
   MemberCreateDialog
 } from '../components/CommunityBreakdownCreateDialogs';
 import { ActionMenu } from '../components/ActionMenu';
+import { ArchiveRecordsDialog, type ArchiveRecordTarget } from '../components/ArchiveRecordsDialog';
 import { CommunityCreateDialog } from '../components/CommunityCreateDialog';
 import { ListActionError } from '../components/ListActionError';
+import { PermanentDeleteDialog } from '../components/PermanentDeleteDialog';
 import { ResourceCreateDialog } from '../components/ResourceCreateDialog';
 import { GroupActivityDialog } from '../components/GroupActivityDialog';
 import { ParticipationMembershipDialog } from '../components/ParticipationMembershipDialog';
@@ -2430,6 +2434,7 @@ export function CommunityDetailPage() {
   const canManage = hasCapability(user, manageCapability);
   const canManageCommunity = hasCapability(user, capabilities.manageOperations);
   const canArchive = hasCapability(user, archiveCapability);
+  const canDeletePermanently = hasCapability(user, capabilities.mvpDeletePermanently);
   const canExport = hasCapability(user, capabilities.export);
   const visibleSections = user?.roles.includes('communications_viewer')
     ? sections.filter((item) => !['members', 'institutions'].includes(item.key))
@@ -2456,6 +2461,8 @@ export function CommunityDetailPage() {
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [editingImpactRecord, setEditingImpactRecord] = useState<ImpactRecord | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [archiveTargets, setArchiveTargets] = useState<ArchiveRecordTarget[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<ArchiveRecordTarget | null>(null);
   const query = useCommunityQuery(communityId);
   const community = query.data;
   const listParams = useMemo(
@@ -2653,6 +2660,7 @@ export function CommunityDetailPage() {
   const pageCount = Math.max(1, Math.ceil((sectionQuery.data?.count ?? 0) / sectionPageSize));
   const archiveConfig = archiveConfigs[activeSection];
   const archiveRecords = useArchiveRecordsMutation(archiveConfig.key, archiveConfig.path);
+  const deleteRecord = usePermanentDeleteMutation(archiveConfig.key, archiveConfig.path);
   const visibleIds = rows.map((row) => row.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
   const listActions = [
@@ -2669,7 +2677,7 @@ export function CommunityDetailPage() {
     {
       label: `Archive selected (${selectedIds.length})`,
       disabled: selectedIds.length === 0 || archiveRecords.isPending,
-      onSelect: () => void archiveSelectedRecords(),
+      onSelect: openSelectedArchiveDialog,
       tone: 'danger' as const
     }] : [])
   ];
@@ -2688,7 +2696,13 @@ export function CommunityDetailPage() {
     setEditingResource(null);
     setEditingImpactRecord(null);
     setSelectedIds([]);
+    setArchiveTargets([]);
+    setDeleteTarget(null);
   }, [activeSection, communityId]);
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [ordering, page, search]);
 
   function openRecordDetail(rowId: number) {
     if (activeSection === 'resources') {
@@ -2735,18 +2749,46 @@ export function CommunityDetailPage() {
     );
   }
 
-  async function archiveSelectedRecords() {
-    const label =
-      selectedIds.length === 1 ? archiveConfig.itemName : `${archiveConfig.itemName}s`;
-    if (!window.confirm(`Archive ${selectedIds.length} selected ${label}?`)) {
-      return;
-    }
+  function openSelectedArchiveDialog() {
+    openArchiveDialog(rows
+      .filter((row) => selectedIds.includes(row.id))
+      .map((row) => ({ id: row.id, label: row.label })));
+  }
 
+  function openArchiveDialog(targets: ArchiveRecordTarget[]) {
+    archiveRecords.reset();
+    setArchiveTargets(targets);
+  }
+
+  function closeArchiveDialog() {
+    archiveRecords.reset();
+    setArchiveTargets([]);
+  }
+
+  async function confirmArchiveRecords() {
     try {
-      await archiveRecords.mutateAsync(selectedIds);
+      await archiveRecords.mutateAsync(archiveTargets.map((target) => target.id));
       setSelectedIds([]);
-    } catch {
-      // The archive error state is rendered below.
+      setArchiveTargets([]);
+    } catch (error) {
+      if (error instanceof BatchArchiveError) {
+        setSelectedIds(error.failedIds);
+        setArchiveTargets((current) => current.filter((target) => error.failedIds.includes(target.id)));
+      }
+    }
+  }
+
+  function openDeleteDialog(target: ArchiveRecordTarget) {
+    deleteRecord.reset();
+    setDeleteTarget(target);
+  }
+
+  async function confirmPermanentDelete() {
+    if (!deleteTarget) return;
+    await deleteRecord.mutateAsync(deleteTarget.id);
+    setDeleteTarget(null);
+    if (selectedRecordId === deleteTarget.id) {
+      navigate(`/communities/${communityId}/${activeSection}`);
     }
   }
 
@@ -2922,102 +2964,28 @@ export function CommunityDetailPage() {
   }
 
   function renderRowActions(rowId: number) {
-    if (!canManage) {
-      return null;
-    }
-    if (activeSection === 'groups') {
-      const group = (records as Group[]).find((item) => item.id === rowId);
-      return group ? (
-        <button
-          className="button button--secondary"
-          type="button"
-          onClick={() => setEditingGroup(group)}
-        >
-          Edit
-        </button>
-      ) : null;
-    }
-    if (activeSection === 'members') {
-      const member = (records as Member[]).find((item) => item.id === rowId);
-      return member ? (
-        <button
-          className="button button--secondary"
-          type="button"
-          onClick={() => setEditingMember(member)}
-        >
-          Edit
-        </button>
-      ) : null;
-    }
-    if (activeSection === 'institutions') {
-      const institution = (records as Institution[]).find((item) => item.id === rowId);
-      return institution ? (
-        <button
-          className="button button--secondary"
-          type="button"
-          onClick={() => setEditingInstitution(institution)}
-        >
-          Edit
-        </button>
-      ) : null;
-    }
-    if (activeSection === 'committees') {
-      const committee = (records as Committee[]).find((item) => item.id === rowId);
-      return committee ? (
-        <button
-          className="button button--secondary"
-          type="button"
-          onClick={() => setEditingCommittee(committee)}
-        >
-          Edit
-        </button>
-      ) : null;
-    }
-    if (activeSection === 'cooperatives') {
-      const cooperative = (records as Cooperative[]).find((item) => item.id === rowId);
-      return cooperative ? (
-        <button
-          className="button button--secondary"
-          type="button"
-          onClick={() => setEditingCooperative(cooperative)}
-        >
-          Edit
-        </button>
-      ) : null;
-    }
-    if (activeSection === 'resources') {
-      const resource = (records as Resource[]).find((item) => item.id === rowId);
-      if (!resource) {
-        return null;
-      }
-      return (
-        <div className="row-actions">
-          <button className="button button--secondary" type="button" onClick={() => setEditingResource(resource)}>
-            Edit
-          </button>
-        </div>
-      );
-    }
-
-    if (activeSection === 'impact') {
-      const impactRecord = (records as ImpactRecord[]).find((item) => item.id === rowId);
-      if (!impactRecord) {
-        return null;
-      }
-      return (
-        <div className="row-actions">
-          <button
-            className="button button--secondary"
-            type="button"
-            onClick={() => setEditingImpactRecord(impactRecord)}
-          >
-            Edit
-          </button>
-        </div>
-      );
-    }
-
-    return null;
+    const record = records.find((item) => item.id === rowId);
+    const row = rows.find((item) => item.id === rowId);
+    if (!record || !row || (!canManage && !canArchive && !canDeletePermanently)) return null;
+    return (
+      <ActionMenu
+        ariaLabel={`Actions for ${row.label}`}
+        variant="secondary"
+        items={[
+          ...(canManage ? [{ label: 'Edit', onSelect: () => editRecord(record) }] : []),
+          ...(canArchive ? [{
+            label: 'Archive',
+            onSelect: () => openArchiveDialog([{ id: row.id, label: row.label }]),
+            tone: 'danger' as const
+          }] : []),
+          ...(canDeletePermanently ? [{
+            label: 'Delete permanently',
+            onSelect: () => openDeleteDialog({ id: row.id, label: row.label }),
+            tone: 'danger' as const
+          }] : [])
+        ]}
+      />
+    );
   }
 
   if (selectedRecordId && community) {
@@ -3225,7 +3193,7 @@ export function CommunityDetailPage() {
                               </th>
                             );
                           })}
-                          {canManage ? <th>Actions</th> : null}
+                          {canManage || canArchive || canDeletePermanently ? <th>Actions</th> : null}
                         </tr>
                       </thead>
                       <tbody>
@@ -3252,7 +3220,7 @@ export function CommunityDetailPage() {
                                 ) : cell}
                               </td>
                             ))}
-                            {canManage ? (
+                            {canManage || canArchive || canDeletePermanently ? (
                               <td>{renderRowActions(row.id)}</td>
                             ) : null}
                           </tr>
@@ -3266,6 +3234,30 @@ export function CommunityDetailPage() {
           </div>
           {renderCreateDialog()}
           {renderEditDialog()}
+          {archiveTargets.length > 0 ? (
+            <ArchiveRecordsDialog
+              entityName={archiveConfig.itemName}
+              error={archiveRecords.error}
+              isPending={archiveRecords.isPending}
+              onClose={closeArchiveDialog}
+              onConfirm={confirmArchiveRecords}
+              path={archiveConfig.path}
+              targets={archiveTargets}
+            />
+          ) : null}
+          {deleteTarget ? (
+            <PermanentDeleteDialog
+              error={deleteRecord.error}
+              isPending={deleteRecord.isPending}
+              onClose={() => {
+                deleteRecord.reset();
+                setDeleteTarget(null);
+              }}
+              onConfirm={confirmPermanentDelete}
+              path={archiveConfig.path}
+              target={deleteTarget}
+            />
+          ) : null}
           {canManageCommunity && editCommunityOpen ? (
             <CommunityCreateDialog
               community={community}

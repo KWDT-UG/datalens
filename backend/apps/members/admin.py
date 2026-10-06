@@ -1,10 +1,12 @@
 from django.contrib import admin
 
+from apps.common.admin import CoreModelAdminMixin
+
 from .models import Member
 
 
 @admin.register(Member)
-class MemberAdmin(admin.ModelAdmin):
+class MemberAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = (
         "member_number",
         "first_name",

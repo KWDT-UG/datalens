@@ -1,10 +1,12 @@
 from django.contrib import admin
 
+from apps.common.admin import CoreModelAdminMixin
+
 from .models import ImpactRecord
 
 
 @admin.register(ImpactRecord)
-class ImpactRecordAdmin(admin.ModelAdmin):
+class ImpactRecordAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = (
         "resource",
         "beneficiary_type",

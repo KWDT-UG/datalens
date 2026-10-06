@@ -1,7 +1,8 @@
 import { SearchIcon, UploadIcon } from '@patternfly/react-icons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
+  BatchArchiveError,
   useApprovalRequestsQuery,
   useArchiveRecordsMutation
 } from '../api/queries';
@@ -9,6 +10,7 @@ import type { ApprovalRequest, ApprovalStatus } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
+import { ArchiveRecordsDialog, type ArchiveRecordTarget } from '../components/ArchiveRecordsDialog';
 import {
   ApprovalReviewDialog,
   type ApprovalReviewAction
@@ -16,7 +18,7 @@ import {
 import { ListActionError } from '../components/ListActionError';
 import { StatusBadge } from '../components/StatusBadge';
 import { reverseOrdering, SortableTableHeader } from '../components/SortableTableHeader';
-import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/listActions';
+import { downloadCsv, toggleVisibleSelection } from '../utils/listActions';
 import { PaginationLabel } from './CommunitiesPage';
 
 const pageSize = 10;
@@ -72,6 +74,7 @@ export function ApprovalsPage() {
   const [status, setStatus] = useState<ApprovalStatus | 'all'>('pending');
   const [ordering, setOrdering] = useState('-submitted_at');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [archiveTargets, setArchiveTargets] = useState<ArchiveRecordTarget[]>([]);
   const [reviewTarget, setReviewTarget] = useState<{
     action: ApprovalReviewAction;
     approval: ApprovalRequest;
@@ -104,7 +107,7 @@ export function ApprovalsPage() {
     {
       label: `Archive selected (${selectedIds.length})`,
       disabled: selectedIds.length === 0 || archiveApprovals.isPending,
-      onSelect: () => void archiveSelectedApprovals(),
+      onSelect: openSelectedArchiveDialog,
       tone: 'danger' as const
     }] : [])
   ];
@@ -113,16 +116,40 @@ export function ApprovalsPage() {
     downloadCsv('approval-requests-current-page.csv', approvalExportRows(approvals));
   }
 
-  async function archiveSelectedApprovals() {
-    if (!window.confirm(archivePrompt('approval request', selectedIds.length))) {
-      return;
-    }
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [ordering, page, search, status]);
 
+  function approvalLabel(approval: ApprovalRequest) {
+    return approval.target_display ?? `${formatLabel(approval.entity_type)} #${approval.entity_id ?? 'new'}`;
+  }
+
+  function openSelectedArchiveDialog() {
+    openArchiveDialog(approvals
+      .filter((approval) => selectedIds.includes(approval.id))
+      .map((approval) => ({ id: approval.id, label: approvalLabel(approval) })));
+  }
+
+  function openArchiveDialog(targets: ArchiveRecordTarget[]) {
+    archiveApprovals.reset();
+    setArchiveTargets(targets);
+  }
+
+  function closeArchiveDialog() {
+    archiveApprovals.reset();
+    setArchiveTargets([]);
+  }
+
+  async function confirmArchiveApprovals() {
     try {
-      await archiveApprovals.mutateAsync(selectedIds);
+      await archiveApprovals.mutateAsync(archiveTargets.map((target) => target.id));
       setSelectedIds([]);
-    } catch {
-      // The archive error state is rendered below.
+      setArchiveTargets([]);
+    } catch (error) {
+      if (error instanceof BatchArchiveError) {
+        setSelectedIds(error.failedIds);
+        setArchiveTargets((current) => current.filter((target) => error.failedIds.includes(target.id)));
+      }
     }
   }
 
@@ -279,7 +306,8 @@ export function ApprovalsPage() {
                     <td>{formatDate(approval.reviewed_at)}</td>
                     <td>{summarizePayload(approval.submitted_payload)}</td>
                     <td>
-                      {canReview ? <div className="row-actions">
+                      <div className="row-actions">
+                      {canReview ? <>
                         <button
                           className="button button--muted"
                           type="button"
@@ -304,7 +332,19 @@ export function ApprovalsPage() {
                         >
                           Supersede
                         </button>
-                      </div> : <span>View only</span>}
+                      </> : !canArchive ? <span>View only</span> : null}
+                      {canArchive ? (
+                        <ActionMenu
+                          ariaLabel={`More actions for approval request ${approval.id}`}
+                          variant="secondary"
+                          items={[{
+                            label: 'Archive',
+                            onSelect: () => openArchiveDialog([{ id: approval.id, label: approvalLabel(approval) }]),
+                            tone: 'danger'
+                          }]}
+                        />
+                      ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -320,6 +360,17 @@ export function ApprovalsPage() {
           action={reviewTarget.action}
           approval={reviewTarget.approval}
           onClose={() => setReviewTarget(null)}
+        />
+      ) : null}
+      {archiveTargets.length > 0 ? (
+        <ArchiveRecordsDialog
+          entityName="approval request"
+          error={archiveApprovals.error}
+          isPending={archiveApprovals.isPending}
+          onClose={closeArchiveDialog}
+          onConfirm={confirmArchiveApprovals}
+          path="/api/v1/approval-requests/"
+          targets={archiveTargets}
         />
       ) : null}
     </section>

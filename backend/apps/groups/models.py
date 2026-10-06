@@ -213,7 +213,11 @@ class ActivityParty(CoreModel):
 
     def clean(self) -> None:
         super().clean()
-        party = self.party
+        party = resolve_activity_party(
+            self.party_type,
+            self.party_id,
+            include_deleted=False,
+        )
         if party is None:
             raise ValidationError(
                 {"party_id": "Party could not be found for the selected party type."}

@@ -496,8 +496,8 @@ export function useArchiveRecordsMutation(key: string, path: string) {
   const userId = useOptionalAuth()?.user?.id;
 
   return useMutation({
-    mutationFn: (ids: number[]) =>
-      Promise.all(
+    mutationFn: async (ids: number[]) => {
+      const results = await Promise.allSettled(
         ids.map((id) =>
           executeOrQueue({
             action: 'delete',
@@ -508,14 +508,35 @@ export function useArchiveRecordsMutation(key: string, path: string) {
             execute: () => apiDelete(`${path}${id}/`)
           })
         )
-      ),
-    onSuccess: () => {
+      );
+      const failedIds = results.flatMap((result, index) => result.status === 'rejected' ? [ids[index]] : []);
+      const successfulIds = results.flatMap((result, index) => result.status === 'fulfilled' ? [ids[index]] : []);
+      if (failedIds.length > 0) {
+        const firstFailure = results.find((result) => result.status === 'rejected');
+        throw new BatchArchiveError(failedIds, successfulIds, firstFailure?.status === 'rejected' ? firstFailure.reason : undefined);
+      }
+      return { successfulIds };
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: [key] });
       queryClient.invalidateQueries({ queryKey: ['communities'] });
       queryClient.invalidateQueries({ queryKey: ['community'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     }
   });
+}
+
+export class BatchArchiveError extends Error {
+  failedIds: number[];
+  successfulIds: number[];
+
+  constructor(failedIds: number[], successfulIds: number[], cause: unknown) {
+    const detail = cause instanceof Error ? cause.message : 'The selected record could not be archived.';
+    super(failedIds.length === 1 ? detail : `${failedIds.length} records could not be archived. ${detail}`);
+    this.name = 'BatchArchiveError';
+    this.failedIds = failedIds;
+    this.successfulIds = successfulIds;
+  }
 }
 
 export function useRestoreRecordsMutation(key: string, path: string) {
@@ -525,6 +546,15 @@ export function useRestoreRecordsMutation(key: string, path: string) {
     mutationFn: (ids: number[]) =>
       Promise.all(ids.map((id) => apiPost(`${path}${id}/restore/`, {}))),
     onSuccess: () => invalidateOperationalQueries(queryClient, key)
+  });
+}
+
+export function usePermanentDeleteMutation(key: string, path: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`${path}${id}/permanent-delete/`),
+    onSettled: () => invalidateOperationalQueries(queryClient, key)
   });
 }
 

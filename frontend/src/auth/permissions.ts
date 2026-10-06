@@ -22,7 +22,8 @@ export const capabilities = {
   manageUsers: 'manage_users',
   manageRoles: 'manage_roles',
   manageSettings: 'manage_settings',
-  manageReferenceData: 'manage_reference_data'
+  manageReferenceData: 'manage_reference_data',
+  mvpDeletePermanently: 'mvp_delete_permanently'
 } as const;
 
 export function hasCapability(user: AuthUser | null, capability: string) {

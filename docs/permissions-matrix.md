@@ -31,6 +31,7 @@ archive_impact
 restore_operations
 restore_resources
 restore_impact
+mvp_delete_permanently
 submit_for_approval
 review_approvals
 review_impact_approvals
@@ -151,3 +152,11 @@ Data Lens role.
 - Restore is a direct, explicit action guarded by the matching restore
   capability. Viewing archived records is also restricted to archive/restore
   capable roles.
+- Archive is reversible, non-cascading, and dependency-aware. Authorization is
+  checked independently of relationship safety: even an authorized archive is
+  rejected with `409 archive_blocked` while active structural dependents exist.
+  Restore is similarly rejected until required parents are active.
+- `mvp_delete_permanently` is a temporary test-data cleanup capability assigned
+  only to `mvp_full_access` and Django staff/superusers. Permanent deletion is
+  irreversible, typed-confirmation protected, and blocked by every stored
+  relationship. It is not part of the intended production role matrix.

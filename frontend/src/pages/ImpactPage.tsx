@@ -1,22 +1,26 @@
 import { SearchIcon, UploadIcon } from '@patternfly/react-icons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
+  BatchArchiveError,
   useArchiveRecordsMutation,
   useCommunitiesQuery,
   useImpactByCommunityQuery,
   useImpactByResourceQuery,
   useImpactRecordsQuery,
-  useImpactSummaryQuery
+  useImpactSummaryQuery,
+  usePermanentDeleteMutation
 } from '../api/queries';
 import type { ImpactRecord } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
+import { ArchiveRecordsDialog, type ArchiveRecordTarget } from '../components/ArchiveRecordsDialog';
 import { ImpactRecordCreateDialog } from '../components/CommunityBreakdownCreateDialogs';
 import { ListActionError } from '../components/ListActionError';
+import { PermanentDeleteDialog } from '../components/PermanentDeleteDialog';
 import { reverseOrdering, SortableTableHeader } from '../components/SortableTableHeader';
-import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/listActions';
+import { downloadCsv, toggleVisibleSelection } from '../utils/listActions';
 import { PaginationLabel } from './CommunitiesPage';
 
 const pageSize = 10;
@@ -56,6 +60,7 @@ export function ImpactPage() {
   const { user } = useAuth();
   const canManage = hasCapability(user, capabilities.manageImpact);
   const canArchive = hasCapability(user, capabilities.archiveImpact);
+  const canDeletePermanently = hasCapability(user, capabilities.mvpDeletePermanently);
   const canExport = hasCapability(user, capabilities.export);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -65,6 +70,8 @@ export function ImpactPage() {
   const [ordering, setOrdering] = useState('-as_of_date');
   const [editingImpactRecord, setEditingImpactRecord] = useState<ImpactRecord | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [archiveTargets, setArchiveTargets] = useState<ArchiveRecordTarget[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<ArchiveRecordTarget | null>(null);
   const reportParams = {
     community: community || undefined,
     period_start: periodStart || undefined,
@@ -83,6 +90,7 @@ export function ImpactPage() {
   const byResourceQuery = useImpactByResourceQuery(reportParams);
   const recordsQuery = useImpactRecordsQuery(listParams);
   const archiveRecords = useArchiveRecordsMutation('impact-records', '/api/v1/impact-records/');
+  const deleteRecord = usePermanentDeleteMutation('impact-records', '/api/v1/impact-records/');
   const records = recordsQuery.data?.results ?? [];
   const pageCount = useMemo(
     () => Math.max(1, Math.ceil((recordsQuery.data?.count ?? 0) / pageSize)),
@@ -105,7 +113,7 @@ export function ImpactPage() {
     {
       label: `Archive selected (${selectedIds.length})`,
       disabled: selectedIds.length === 0 || archiveRecords.isPending,
-      onSelect: () => void archiveSelectedRecords(),
+      onSelect: openSelectedArchiveDialog,
       tone: 'danger' as const
     }] : [])
   ];
@@ -114,17 +122,52 @@ export function ImpactPage() {
     downloadCsv('impact-records-current-page.csv', impactExportRows(records));
   }
 
-  async function archiveSelectedRecords() {
-    if (!window.confirm(archivePrompt('impact record', selectedIds.length))) {
-      return;
-    }
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [community, ordering, page, periodEnd, periodStart, search]);
 
+  function impactLabel(impact: ImpactRecord) {
+    return `${impact.resource_name ?? 'Resource'} · ${formatDate(impact.as_of_date)}`;
+  }
+
+  function openSelectedArchiveDialog() {
+    openArchiveDialog(records
+      .filter((record) => selectedIds.includes(record.id))
+      .map((record) => ({ id: record.id, label: impactLabel(record) })));
+  }
+
+  function openArchiveDialog(targets: ArchiveRecordTarget[]) {
+    archiveRecords.reset();
+    setArchiveTargets(targets);
+  }
+
+  function closeArchiveDialog() {
+    archiveRecords.reset();
+    setArchiveTargets([]);
+  }
+
+  async function confirmArchiveRecords() {
     try {
-      await archiveRecords.mutateAsync(selectedIds);
+      await archiveRecords.mutateAsync(archiveTargets.map((target) => target.id));
       setSelectedIds([]);
-    } catch {
-      // The archive error state is rendered below.
+      setArchiveTargets([]);
+    } catch (error) {
+      if (error instanceof BatchArchiveError) {
+        setSelectedIds(error.failedIds);
+        setArchiveTargets((current) => current.filter((target) => error.failedIds.includes(target.id)));
+      }
     }
+  }
+
+  function openDeleteDialog(target: ArchiveRecordTarget) {
+    deleteRecord.reset();
+    setDeleteTarget(target);
+  }
+
+  async function confirmPermanentDelete() {
+    if (!deleteTarget) return;
+    await deleteRecord.mutateAsync(deleteTarget.id);
+    setDeleteTarget(null);
   }
 
   function toggleSelected(id: number) {
@@ -278,7 +321,7 @@ export function ImpactPage() {
                 <SortableTableHeader currentOrdering={ordering} label="Institutions" onChange={changeOrdering} ordering="institution_count" />
                 <SortableTableHeader currentOrdering={ordering} label="Method" onChange={changeOrdering} ordering="method" />
                 <SortableTableHeader currentOrdering={ordering} label="Updated" onChange={changeOrdering} ordering="updated_at" />
-                <th>Actions</th>
+                {canManage || canArchive || canDeletePermanently ? <th>Actions</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -301,17 +344,25 @@ export function ImpactPage() {
                   <td>{formatCount(impact.institution_count)}</td>
                   <td>{formatLabel(impact.method)}</td>
                   <td>{formatDate(impact.updated_at)}</td>
-                  <td>
-                    <div className="row-actions">
-                      {canManage ? <button
-                        className="button button--secondary"
-                        type="button"
-                        onClick={() => setEditingImpactRecord(impact)}
-                      >
-                        Edit
-                      </button> : null}
-                    </div>
-                  </td>
+                  {canManage || canArchive || canDeletePermanently ? <td>
+                    <ActionMenu
+                      ariaLabel={`Actions for impact record ${impact.id}`}
+                      variant="secondary"
+                      items={[
+                        ...(canManage ? [{ label: 'Edit', onSelect: () => setEditingImpactRecord(impact) }] : []),
+                        ...(canArchive ? [{
+                          label: 'Archive',
+                          onSelect: () => openArchiveDialog([{ id: impact.id, label: impactLabel(impact) }]),
+                          tone: 'danger' as const
+                        }] : []),
+                        ...(canDeletePermanently ? [{
+                          label: 'Delete permanently',
+                          onSelect: () => openDeleteDialog({ id: impact.id, label: impactLabel(impact) }),
+                          tone: 'danger' as const
+                        }] : [])
+                      ]}
+                    />
+                  </td> : null}
                 </tr>
               ))}
             </tbody>
@@ -327,6 +378,30 @@ export function ImpactPage() {
           onCreated={() => {
             setEditingImpactRecord(null);
           }}
+        />
+      ) : null}
+      {archiveTargets.length > 0 ? (
+        <ArchiveRecordsDialog
+          entityName="impact record"
+          error={archiveRecords.error}
+          isPending={archiveRecords.isPending}
+          onClose={closeArchiveDialog}
+          onConfirm={confirmArchiveRecords}
+          path="/api/v1/impact-records/"
+          targets={archiveTargets}
+        />
+      ) : null}
+      {deleteTarget ? (
+        <PermanentDeleteDialog
+          error={deleteRecord.error}
+          isPending={deleteRecord.isPending}
+          onClose={() => {
+            deleteRecord.reset();
+            setDeleteTarget(null);
+          }}
+          onConfirm={confirmPermanentDelete}
+          path="/api/v1/impact-records/"
+          target={deleteTarget}
         />
       ) : null}
     </section>
