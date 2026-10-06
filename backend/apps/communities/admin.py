@@ -1,10 +1,12 @@
 from django.contrib import admin
 
+from apps.common.admin import CoreModelAdminMixin
+
 from .models import Community
 
 
 @admin.register(Community)
-class CommunityAdmin(admin.ModelAdmin):
+class CommunityAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = (
         "name",
         "subcounty_name",

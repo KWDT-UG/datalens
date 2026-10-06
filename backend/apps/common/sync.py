@@ -20,6 +20,7 @@ from apps.approvals.policy import (
 )
 from apps.approvals.serializers import ApprovalRequestSerializer
 from apps.approvals.services import APPROVAL_ENTITY_REGISTRY
+from apps.common.deletion import ArchiveConflict
 from apps.common.models import (
     ApprovalActionType,
     ApprovalSubmissionSource,
@@ -453,6 +454,18 @@ class SyncPushView(APIView):
                     user=request.user if request.user.is_authenticated else None,
                     client_mutation_id=client_mutation_id,
                 )
+            except ArchiveConflict as exc:
+                self.release_mutation(receipt)
+                conflicts.append(
+                    {
+                        "index": index,
+                        "entity_type": entity_type,
+                        "id": entity_id,
+                        "code": "archive_blocked",
+                        "archive_preview": exc.detail["archive_preview"],
+                    }
+                )
+                continue
             except ValidationError as exc:
                 self.release_mutation(receipt)
                 errors.append(
@@ -665,18 +678,12 @@ class SyncPushView(APIView):
             return serializer.save(**save_kwargs)
 
         if action == ApprovalActionType.DELETE:
-            instance.is_deleted = True
-            update_fields = ["is_deleted", "updated_at"]
-            if user_id is not None:
-                instance.updated_by_user_id = user_id
-                update_fields.append("updated_by_user_id")
-            if hasattr(instance, "sync_version"):
-                instance.sync_version += 1
-                update_fields.append("sync_version")
-            if client_mutation_id:
-                instance.client_mutation_id = client_mutation_id
-                update_fields.append("client_mutation_id")
-            instance.save(update_fields=update_fields)
-            return instance
+            from apps.common.deletion import archive_instance
+
+            return archive_instance(
+                instance,
+                user_id=user_id,
+                client_mutation_id=client_mutation_id,
+            )
 
         raise ValidationError({"action": "Unsupported sync action."})

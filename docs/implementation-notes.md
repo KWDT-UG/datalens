@@ -343,10 +343,49 @@ models: `client_created_at`, `client_updated_at`, `client_mutation_id`,
 `sync_version`, and `is_deleted`. The conflict-resolution and queue behavior
 described as deferred here was implemented on 2026-06-07.
 
-Assumption: Delete operations use soft-delete semantics by setting
-`is_deleted=true`. List endpoints filter soft-deleted records by default and
-allow `include_deleted` for development/admin inspection. This preserves future
-flexibility while product delete semantics remain unresolved.
+Decision (2026-10-05): Normal production deletion uses reversible archive
+semantics by setting `is_deleted=true` and performs no recursive archive.
+`GET {detail}/deletion-preview/` separates active structural
+blockers from retained history/reference warnings for confirmation UI. DELETE,
+approval application, and offline sync all recheck blockers before writing;
+the direct path locks and rechecks transactionally. Blocked operations return a
+machine-readable `409 archive_blocked`. Restore rejects archived FK and
+polymorphic parents with `409 restore_blocked`, preventing an active child from
+being exposed under an archived parent. Lists continue to hide archived rows by
+default and privileged inspection can use `include_deleted=1`.
+
+All approval-aware model serializers share archived-parent FK validation.
+Creates and relationship-changing updates cannot attach to an archived
+`CoreModel`; unrelated partial updates of legacy rows remain possible so data
+can be corrected without temporarily reactivating an entire hierarchy.
+Polymorphic owner, beneficiary, responsible-party, and activity-party links are
+also rejected when the target is archived while historical display resolution
+continues to find the retained label.
+
+Adversarial residual: concrete foreign keys have database constraints and the
+archive path locks and rechecks the parent row. Polymorphic `type`/`id` links do
+not have database-enforced foreign keys, so two precisely concurrent requests
+could still race between party validation and persistence. The current MVP
+closes deterministic stale-parent writes and rechecks archive operations, but a
+future hardening slice should put polymorphic party validation and persistence
+behind a shared transaction/locking service if write concurrency increases.
+
+The older `status="archived"` enum value remains accepted for API and stored-data
+compatibility, but it is only a business-status label and does not hide a row.
+Create/edit forms allow Active and Inactive; an existing legacy Archived value
+is shown as a disabled compatibility option. The product's Archive action is
+therefore not confused with a status update.
+
+Correction (2026-10-05): stakeholder MVP evaluation also needs true cleanup of
+redundant test data. A separate `mvp_delete_permanently` capability is granted
+only to the temporary `mvp_full_access` role and Django staff/superusers. The UI
+exposes “Delete permanently” independently of Archive and requires the operator
+to type `DELETE`. `permanent-delete-preview` counts every stored relationship,
+including archived children and retained history; any relationship returns
+`409 delete_blocked`. The final delete locks, rechecks, and removes only the
+selected row, with no cascade. Approval requests themselves intentionally do
+not expose permanent deletion. This capability and UI action should be removed
+or reassessed before production authorization is finalized.
 
 Assumption: API access uses a centralized authenticated-only permission class,
 `AuthenticatedAccess`, with no hard-coded role logic. This keeps permissions

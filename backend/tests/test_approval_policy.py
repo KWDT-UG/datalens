@@ -48,21 +48,26 @@ class ApprovalPolicyTests(TestCase):
     def test_operational_updates_are_direct_but_archives_are_queued(self):
         field_officer = self.user_with_role(UserRole.FIELD_OFFICER)
         self.client.force_authenticate(field_officer)
+        archive_target = Group.objects.create(
+            community=self.community,
+            code="ARCHIVE-QUEUE",
+            name="Archive Queue Group",
+        )
 
         update_response = self.client.patch(
-            reverse("group-detail", kwargs={"pk": self.group.pk}),
+            reverse("group-detail", kwargs={"pk": archive_target.pk}),
             {"meeting_day": "Thursday"},
             format="json",
         )
         archive_response = self.client.delete(
-            reverse("group-detail", kwargs={"pk": self.group.pk})
+            reverse("group-detail", kwargs={"pk": archive_target.pk})
         )
 
         self.assertEqual(update_response.status_code, status.HTTP_200_OK)
         self.assertEqual(archive_response.status_code, status.HTTP_202_ACCEPTED)
-        self.group.refresh_from_db()
-        self.assertEqual(self.group.meeting_day, "Thursday")
-        self.assertFalse(self.group.is_deleted)
+        archive_target.refresh_from_db()
+        self.assertEqual(archive_target.meeting_day, "Thursday")
+        self.assertFalse(archive_target.is_deleted)
         self.assertEqual(
             archive_response.data["approval_request"]["review_scope"],
             ApprovalReviewScope.STANDARD,

@@ -2,7 +2,11 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.common.models import CoreModel, ImpactMethod, ResourcePartyType
-from apps.resources.models import Resource, resource_party_community_id, resolve_resource_party
+from apps.resources.models import (
+    Resource,
+    resource_party_community_id,
+    resolve_resource_party,
+)
 
 
 class ImpactRecord(CoreModel):
@@ -50,6 +54,7 @@ class ImpactRecord(CoreModel):
             beneficiary = resolve_resource_party(
                 self.beneficiary_type,
                 self.beneficiary_id,
+                include_deleted=False,
             )
             if beneficiary is None:
                 errors["beneficiary_id"] = (

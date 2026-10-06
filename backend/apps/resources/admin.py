@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from apps.common.admin import CoreModelAdminMixin
+
 from .models import (
     Program,
     Resource,
@@ -14,21 +16,21 @@ from .models import (
 
 
 @admin.register(ThematicArea)
-class ThematicAreaAdmin(admin.ModelAdmin):
+class ThematicAreaAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = ("code", "name", "status")
     list_filter = ("status",)
     search_fields = ("code", "name", "description")
 
 
 @admin.register(Program)
-class ProgramAdmin(admin.ModelAdmin):
+class ProgramAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = ("code", "name", "thematic_area", "status", "display_order")
     list_filter = ("status", "thematic_area")
     search_fields = ("code", "name", "description", "thematic_area__name")
 
 
 @admin.register(ResourceCategory)
-class ResourceCategoryAdmin(admin.ModelAdmin):
+class ResourceCategoryAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = (
         "code",
         "name",
@@ -42,7 +44,7 @@ class ResourceCategoryAdmin(admin.ModelAdmin):
 
 
 @admin.register(Resource)
-class ResourceAdmin(admin.ModelAdmin):
+class ResourceAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = (
         "name",
         "community",
@@ -65,7 +67,7 @@ class ResourceAdmin(admin.ModelAdmin):
 
 
 @admin.register(ResourceBeneficiary)
-class ResourceBeneficiaryAdmin(admin.ModelAdmin):
+class ResourceBeneficiaryAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = (
         "resource",
         "beneficiary_type",
@@ -77,28 +79,28 @@ class ResourceBeneficiaryAdmin(admin.ModelAdmin):
 
 
 @admin.register(ResourceThematicArea)
-class ResourceThematicAreaAdmin(admin.ModelAdmin):
+class ResourceThematicAreaAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = ("resource", "thematic_area", "is_primary")
     list_filter = ("is_primary", "thematic_area")
     search_fields = ("resource__name", "thematic_area__name", "thematic_area__code")
 
 
 @admin.register(ResourceStatusEvent)
-class ResourceStatusEventAdmin(admin.ModelAdmin):
+class ResourceStatusEventAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = ("resource", "event_type", "effective_at", "recorded_by_user_id")
     list_filter = ("event_type",)
     search_fields = ("resource__name", "notes")
 
 
 @admin.register(ResourcePaymentObligation)
-class ResourcePaymentObligationAdmin(admin.ModelAdmin):
+class ResourcePaymentObligationAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = ("resource", "obligation_type", "principal_amount", "currency", "status")
     list_filter = ("obligation_type", "status", "currency")
     search_fields = ("resource__name", "terms_notes")
 
 
 @admin.register(ResourcePaymentTransaction)
-class ResourcePaymentTransactionAdmin(admin.ModelAdmin):
+class ResourcePaymentTransactionAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = ("obligation", "entry_type", "amount", "effective_on")
     list_filter = ("entry_type", "effective_on")
     search_fields = ("obligation__resource__name", "reference", "voucher_number")

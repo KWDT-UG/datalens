@@ -1,17 +1,19 @@
 import { SearchIcon, UploadIcon } from '@patternfly/react-icons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { useArchiveRecordsMutation, useCommunitiesQuery } from '../api/queries';
+import { BatchArchiveError, useArchiveRecordsMutation, useCommunitiesQuery, usePermanentDeleteMutation } from '../api/queries';
 import type { Community } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { capabilities, hasCapability } from '../auth/permissions';
 import { ActionMenu } from '../components/ActionMenu';
+import { ArchiveRecordsDialog, type ArchiveRecordTarget } from '../components/ArchiveRecordsDialog';
 import { CommunityCreateDialog } from '../components/CommunityCreateDialog';
 import { ListActionError } from '../components/ListActionError';
+import { PermanentDeleteDialog } from '../components/PermanentDeleteDialog';
 import { StatusBadge } from '../components/StatusBadge';
 import { reverseOrdering, SortableTableHeader } from '../components/SortableTableHeader';
-import { archivePrompt, downloadCsv, toggleVisibleSelection } from '../utils/listActions';
+import { downloadCsv, toggleVisibleSelection } from '../utils/listActions';
 
 const pageSize = 10;
 
@@ -25,6 +27,7 @@ export function CommunitiesPage() {
   const { user } = useAuth();
   const canManage = hasCapability(user, capabilities.manageOperations);
   const canArchive = hasCapability(user, capabilities.archiveOperations);
+  const canDeletePermanently = hasCapability(user, capabilities.mvpDeletePermanently);
   const canExport = hasCapability(user, capabilities.export);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -33,8 +36,11 @@ export function CommunitiesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCommunity, setEditingCommunity] = useState<Community | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [archiveTargets, setArchiveTargets] = useState<ArchiveRecordTarget[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<ArchiveRecordTarget | null>(null);
   const query = useCommunitiesQuery({ page, page_size: pageSize, search, ordering });
   const archiveCommunities = useArchiveRecordsMutation('communities', '/api/v1/communities/');
+  const deleteCommunity = usePermanentDeleteMutation('communities', '/api/v1/communities/');
   const communities = query.data?.results ?? [];
   const visibleIds = communities.map((community) => community.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
@@ -53,7 +59,7 @@ export function CommunitiesPage() {
     ...(canArchive ? [{
       label: `Archive selected (${selectedIds.length})`,
       disabled: selectedIds.length === 0 || archiveCommunities.isPending,
-      onSelect: () => void archiveSelectedCommunities(),
+      onSelect: openSelectedArchiveDialog,
       tone: 'danger' as const
     }] : [])
   ];
@@ -80,16 +86,48 @@ export function CommunitiesPage() {
     );
   }
 
-  async function archiveSelectedCommunities() {
-    if (!window.confirm(archivePrompt('community', selectedIds.length))) {
-      return;
-    }
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [ordering, page, search]);
 
+  function openSelectedArchiveDialog() {
+    openArchiveDialog(communities
+      .filter((community) => selectedIds.includes(community.id))
+      .map((community) => ({ id: community.id, label: community.name })));
+  }
+
+  function openArchiveDialog(targets: ArchiveRecordTarget[]) {
+    archiveCommunities.reset();
+    setArchiveTargets(targets);
+  }
+
+  function closeArchiveDialog() {
+    archiveCommunities.reset();
+    setArchiveTargets([]);
+  }
+
+  function openDeleteDialog(target: ArchiveRecordTarget) {
+    deleteCommunity.reset();
+    setDeleteTarget(target);
+  }
+
+  async function confirmPermanentDelete() {
+    if (!deleteTarget) return;
+    await deleteCommunity.mutateAsync(deleteTarget.id);
+    setDeleteTarget(null);
+  }
+
+  async function confirmArchiveCommunities() {
+    const ids = archiveTargets.map((target) => target.id);
     try {
-      await archiveCommunities.mutateAsync(selectedIds);
+      await archiveCommunities.mutateAsync(ids);
       setSelectedIds([]);
-    } catch {
-      // The archive error state is rendered below.
+      setArchiveTargets([]);
+    } catch (error) {
+      if (error instanceof BatchArchiveError) {
+        setSelectedIds(error.failedIds);
+        setArchiveTargets((current) => current.filter((target) => error.failedIds.includes(target.id)));
+      }
     }
   }
 
@@ -204,7 +242,7 @@ export function CommunitiesPage() {
                 <SortableTableHeader currentOrdering={ordering} label="Resources" onChange={changeOrdering} ordering="resource_count" />
                 <SortableTableHeader currentOrdering={ordering} label="Status" onChange={changeOrdering} ordering="status" />
                 <SortableTableHeader currentOrdering={ordering} label="Last updated" onChange={changeOrdering} ordering="updated_at" />
-                {canManage ? <th>Actions</th> : null}
+                {canManage || canArchive || canDeletePermanently ? <th>Actions</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -234,15 +272,25 @@ export function CommunitiesPage() {
                     <StatusBadge status={community.status} />
                   </td>
                   <td>{community.updated_at ? new Date(community.updated_at).toLocaleDateString() : 'Not recorded'}</td>
-                  {canManage ? (
+                  {canManage || canArchive || canDeletePermanently ? (
                     <td>
-                      <button
-                        className="button button--secondary"
-                        type="button"
-                        onClick={() => setEditingCommunity(community)}
-                      >
-                        Edit
-                      </button>
+                      <ActionMenu
+                        ariaLabel={`Actions for ${community.name}`}
+                        variant="secondary"
+                        items={[
+                          ...(canManage ? [{ label: 'Edit', onSelect: () => setEditingCommunity(community) }] : []),
+                          ...(canArchive ? [{
+                            label: 'Archive',
+                            onSelect: () => openArchiveDialog([{ id: community.id, label: community.name }]),
+                            tone: 'danger' as const
+                          }] : []),
+                          ...(canDeletePermanently ? [{
+                            label: 'Delete permanently',
+                            onSelect: () => openDeleteDialog({ id: community.id, label: community.name }),
+                            tone: 'danger' as const
+                          }] : [])
+                        ]}
+                      />
                     </td>
                   ) : null}
                 </tr>
@@ -255,21 +303,44 @@ export function CommunitiesPage() {
       {!query.isLoading && !query.isError && communities.length > 0 && view === 'card' ? (
         <div className="community-grid">
           {communities.map((community) => (
-            <Link className="community-card" key={community.id} to={`/communities/${community.id}/groups`}>
-              <span className="community-card__meta">{formatLocation(community) || 'Location not recorded'}</span>
-              <strong>{community.name}</strong>
-              <p>{community.notes || 'Community profile and breakdown details are ready to view.'}</p>
-              <div className="community-card__counts">
-                <span>
-                  {community.resident_count == null
-                    ? 'Residents not recorded'
-                    : `${community.resident_count.toLocaleString()} residents`}
-                </span>
-                <span>{community.member_count ?? 0} members</span>
-                <span>{community.group_count ?? 0} groups</span>
-                <span>{community.resource_count ?? 0} resources</span>
-              </div>
-            </Link>
+            <article className="community-card" key={community.id}>
+              <Link className="community-card__link" to={`/communities/${community.id}/groups`}>
+                <span className="community-card__meta">{formatLocation(community) || 'Location not recorded'}</span>
+                <strong>{community.name}</strong>
+                <p>{community.notes || 'Community profile and breakdown details are ready to view.'}</p>
+                <div className="community-card__counts">
+                  <span>
+                    {community.resident_count == null
+                      ? 'Residents not recorded'
+                      : `${community.resident_count.toLocaleString()} residents`}
+                  </span>
+                  <span>{community.member_count ?? 0} members</span>
+                  <span>{community.group_count ?? 0} groups</span>
+                  <span>{community.resource_count ?? 0} resources</span>
+                </div>
+              </Link>
+              {canManage || canArchive || canDeletePermanently ? (
+                <div className="community-card__actions">
+                  <ActionMenu
+                    ariaLabel={`Actions for ${community.name}`}
+                    variant="secondary"
+                    items={[
+                      ...(canManage ? [{ label: 'Edit', onSelect: () => setEditingCommunity(community) }] : []),
+                      ...(canArchive ? [{
+                        label: 'Archive',
+                        onSelect: () => openArchiveDialog([{ id: community.id, label: community.name }]),
+                        tone: 'danger' as const
+                      }] : []),
+                      ...(canDeletePermanently ? [{
+                        label: 'Delete permanently',
+                        onSelect: () => openDeleteDialog({ id: community.id, label: community.name }),
+                        tone: 'danger' as const
+                      }] : [])
+                    ]}
+                  />
+                </div>
+              ) : null}
+            </article>
           ))}
         </div>
       ) : null}
@@ -280,6 +351,30 @@ export function CommunitiesPage() {
           community={editingCommunity}
           onClose={() => setEditingCommunity(null)}
           onSaved={() => setEditingCommunity(null)}
+        />
+      ) : null}
+      {archiveTargets.length > 0 ? (
+        <ArchiveRecordsDialog
+          entityName="community"
+          error={archiveCommunities.error}
+          isPending={archiveCommunities.isPending}
+          onClose={closeArchiveDialog}
+          onConfirm={confirmArchiveCommunities}
+          path="/api/v1/communities/"
+          targets={archiveTargets}
+        />
+      ) : null}
+      {deleteTarget ? (
+        <PermanentDeleteDialog
+          error={deleteCommunity.error}
+          isPending={deleteCommunity.isPending}
+          onClose={() => {
+            deleteCommunity.reset();
+            setDeleteTarget(null);
+          }}
+          onConfirm={confirmPermanentDelete}
+          path="/api/v1/communities/"
+          target={deleteTarget}
         />
       ) : null}
     </section>

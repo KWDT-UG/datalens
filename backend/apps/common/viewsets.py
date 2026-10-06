@@ -23,31 +23,49 @@ class AuditFieldsMixin:
 
 
 class SoftDeleteMixin:
+    allow_permanent_delete = True
+
+    @action(detail=True, methods=["get"], url_path="deletion-preview")
+    def deletion_preview(self, request, *args, **kwargs):
+        """Describe archive consequences for a client confirmation dialog."""
+
+        from apps.common.deletion import archive_preview
+
+        return Response(archive_preview(self.get_object()))
+
+    @action(detail=True, methods=["get"], url_path="permanent-delete-preview")
+    def permanent_delete_preview(self, request, *args, **kwargs):
+        if not self.allow_permanent_delete:
+            raise ValidationError({"delete": "Permanent deletion is unavailable."})
+        from apps.common.deletion import permanent_delete_preview
+
+        return Response(permanent_delete_preview(self.get_object()))
+
+    @action(detail=True, methods=["delete"], url_path="permanent-delete")
+    def permanent_delete(self, request, *args, **kwargs):
+        if not self.allow_permanent_delete:
+            raise ValidationError({"delete": "Permanent deletion is unavailable."})
+        from apps.common.deletion import permanently_delete_instance
+
+        permanently_delete_instance(self.get_object())
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def perform_destroy(self, instance):
-        instance.is_deleted = True
+        from apps.common.deletion import archive_instance
+
         user_id = self.request.user.pk if self.request.user.is_authenticated else None
-        instance.updated_by_user_id = user_id
-        update_fields = ["is_deleted", "updated_by_user_id", "updated_at"]
-        if hasattr(instance, "sync_version"):
-            instance.sync_version += 1
-            update_fields.append("sync_version")
-        instance.save(update_fields=update_fields)
+        archive_instance(instance, user_id=user_id)
 
     @action(detail=True, methods=["post"])
     def restore(self, request, *args, **kwargs):
         instance = self.get_object()
         if not instance.is_deleted:
             raise ValidationError({"is_deleted": "Record is not archived."})
-        instance.is_deleted = False
-        instance.updated_by_user_id = (
-            request.user.pk if request.user.is_authenticated else None
-        )
-        update_fields = ["is_deleted", "updated_by_user_id", "updated_at"]
-        if hasattr(instance, "sync_version"):
-            instance.sync_version += 1
-            update_fields.append("sync_version")
+        from apps.common.deletion import restore_instance
+
+        user_id = request.user.pk if request.user.is_authenticated else None
         try:
-            instance.save(update_fields=update_fields)
+            instance = restore_instance(instance, user_id=user_id)
         except IntegrityError as exc:
             raise ValidationError(
                 {"restore": "Record conflicts with an active record."}
@@ -115,6 +133,12 @@ class ApprovalPolicyMixin:
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        from apps.common.deletion import ensure_archive_allowed
+
+        # Fast feedback prevents knowingly queueing an impossible approval.
+        # Direct writes and approval application both repeat this check while
+        # holding a row lock to close the preview/confirmation race window.
+        ensure_archive_allowed(instance)
         queued_response = self._queue_if_required(
             serializer=None,
             action_type=ApprovalActionType.DELETE,

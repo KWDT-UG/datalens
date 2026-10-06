@@ -611,7 +611,7 @@ Behavior implemented:
 
 ## Shared Metadata
 
-Implemented on the first four models:
+Implemented on the MVP domain models through the shared `CoreModel` base:
 
 - `created_at`
 - `updated_at`
@@ -625,6 +625,29 @@ Implemented on the first four models:
 
 These fields prepare the backend for future audit and offline-sync behavior
 without finalizing the sync engine.
+
+### Archive and relationship integrity
+
+`is_deleted` is a reversible archive marker, not a hard-delete flag. Domain
+records are never recursively deleted or archived. Before setting it, the
+service classifies active relationships as either:
+
+- structural dependencies, which block archive until they are archived or
+  reassigned; or
+- historical/reference records, which remain stored and are disclosed as
+  non-blocking warnings.
+
+Restore performs the inverse integrity check: every concrete foreign-key and
+polymorphic parent must be active before the child can return to active views.
+New or changed relationships cannot target an archived parent. The legacy
+`status="archived"` enum remains a business-status value for compatibility;
+only `is_deleted=true` removes a row from normal API lists.
+
+For MVP data cleanup, an explicitly privileged permanent-delete operation may
+physically remove a record only when it has no stored relationships of any kind.
+Archived children and retained history still block deletion, ensuring the
+operation never relies on database cascade behavior. This temporary capability
+is separate from the production archive lifecycle.
 
 ### SyncMutationReceipt
 

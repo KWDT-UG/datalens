@@ -1,10 +1,12 @@
 from django.contrib import admin
 
+from apps.common.admin import CoreModelAdminMixin
+
 from .models import ActivityParty, Group, GroupActivity
 
 
 @admin.register(Group)
-class GroupAdmin(admin.ModelAdmin):
+class GroupAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = (
         "code",
         "name",
@@ -19,7 +21,7 @@ class GroupAdmin(admin.ModelAdmin):
 
 
 @admin.register(GroupActivity)
-class GroupActivityAdmin(admin.ModelAdmin):
+class GroupActivityAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = (
         "title",
         "activity_type",
@@ -32,7 +34,7 @@ class GroupActivityAdmin(admin.ModelAdmin):
 
 
 @admin.register(ActivityParty)
-class ActivityPartyAdmin(admin.ModelAdmin):
+class ActivityPartyAdmin(CoreModelAdminMixin, admin.ModelAdmin):
     list_display = ("activity", "party_type", "party_name", "role")
     list_filter = ("party_type", "role")
     search_fields = ("activity__title",)

@@ -169,6 +169,37 @@ Each endpoint supports:
 - partial update
 - delete as soft delete through `is_deleted`
 - restore through `POST /api/v1/{collection}/{id}/restore/`
+- archive impact preview through
+  `GET /api/v1/{collection}/{id}/deletion-preview/`
+- MVP-only permanent-delete preview through
+  `GET /api/v1/{collection}/{id}/permanent-delete-preview/`
+- MVP-only permanent deletion through
+  `DELETE /api/v1/{collection}/{id}/permanent-delete/`
+
+The standard collection `DELETE` archives and never hard-deletes or recursively
+archives related records. The archive preview
+returns `can_archive`, `blockers`, and `warnings`, plus a server-authored
+`confirmation_message`. Active structural references are blockers; retained
+history/reference records are warnings. Clients must show confirmation and
+should load a fresh preview immediately before issuing `DELETE`. The server
+rechecks immediately before writing; a newly detected relationship produces
+`409 Conflict` with code `archive_blocked` and a fresh `archive_preview`.
+
+Restore also preserves relationship integrity. If a parent or polymorphic
+owner/beneficiary is still archived, restore returns `409 Conflict` with code
+`restore_blocked` and `restore_blockers`; restore the parent first.
+Creates and relationship-changing updates likewise reject archived foreign-key
+or polymorphic parents with a field-level `400` validation error. Unrelated
+partial updates remain available for legacy rows with archived concrete
+foreign-key parents; polymorphic links are revalidated on update.
+
+Permanent deletion is a separate, temporary MVP cleanup action. It requires
+`mvp_delete_permanently`, is never queued offline or submitted for approval,
+and is unavailable for approval-request records. It is allowed only when the
+preview finds zero stored relationships, including archived children,
+historical evidence, financial records, user assignments, and approval history.
+The UI requires the operator to type `DELETE`; the server then locks, rechecks,
+and physically removes only the selected row. It never cascades.
 
 Group activities can be filtered by `community`, `group`, `committee`,
 `activity_type`, and `status`; searched by title, location, facilitator, topic,

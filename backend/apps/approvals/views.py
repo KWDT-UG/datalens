@@ -48,6 +48,7 @@ class ApprovalRequestViewSet(
     SimpleFilterMixin,
     ModelViewSet,
 ):
+    allow_permanent_delete = False
     queryset = ApprovalRequest.objects.select_related("community").all()
     serializer_class = ApprovalRequestSerializer
     filter_fields = (

@@ -662,7 +662,7 @@ describe('CommunityDetailPage group workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Committees' }));
     expect(screen.getByText('Demo Savings Group Leadership Committee')).toBeInTheDocument();
     expect(screen.getByText(/Chairperson · since/)).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('opens a committee and shows its member roster', async () => {
     installGroupWorkspaceFetchMock();

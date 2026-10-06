@@ -71,7 +71,11 @@ type StringFields<T> = {
 const recordStatusOptions = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
-  { value: 'archived', label: 'Archived' }
+  {
+    value: 'archived',
+    label: 'Archived (legacy status; use the Archive action)',
+    disabled: true
+  }
 ];
 
 const memberStatusOptions = [
@@ -224,7 +228,7 @@ export function GroupCreateDialog({
             <span>Status</span>
             <select {...register('status')}>
               {recordStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
+                <option key={option.value} value={option.value} disabled={option.disabled}>
                   {option.label}
                 </option>
               ))}
@@ -735,7 +739,7 @@ function ParticipationCreateDialog({
             <span>Status</span>
             <select {...register('status')}>
               {recordStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
+                <option key={option.value} value={option.value} disabled={option.disabled}>
                   {option.label}
                 </option>
               ))}
