@@ -100,9 +100,10 @@ User create/update also accepts `assigned_districts`,
 `assigned_community_ids`, and `assigned_thematic_area_ids`.
 
 The role list includes the temporary `mvp_full_access` role for authorized MVP
-evaluation. It contains every product capability, remains subject to approval
-queuing and self-review restrictions, and is not a replacement for permanent
-job-role design.
+evaluation. It contains every product capability. Non-financial top-level
+Resource creates and updates apply directly for this role and retain normal
+audit metadata; all other approval policy and self-review restrictions remain.
+The role is not a replacement for permanent job-role design.
 
 Role updates atomically replace the current Data Lens group and do not revoke
 existing authentication tokens. A subsequent `GET /api/v1/auth/me/` therefore
@@ -512,6 +513,11 @@ Approval enforcement is:
 - repayment obligations, payments, and reversals are queued for finance review
 - impact mutations are queued for impact review
 - superusers retain a break-glass direct-write bypass
+
+Temporary evaluation exception: `mvp_full_access` applies top-level,
+non-financial Resource creates and updates directly with the authenticated
+user recorded in the standard audit fields. Resource financial changes,
+resource-related child records, archives, and deletes remain queued.
 
 Financial transaction posting is intentionally online-only in this slice.
 `sync/push` rejects `resource_payment_transaction` mutations, while authorized

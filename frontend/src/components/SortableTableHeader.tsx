@@ -16,11 +16,13 @@ export function orderingDirection(currentOrdering: string, columnOrdering: strin
 }
 
 export function SortableTableHeader({
+  className,
   currentOrdering,
   label,
   onChange,
   ordering
 }: {
+  className?: string;
   currentOrdering: string;
   label: string;
   onChange: (ordering: string) => void;
@@ -29,7 +31,7 @@ export function SortableTableHeader({
   const direction = orderingDirection(currentOrdering, ordering);
 
   return (
-    <th aria-sort={direction ?? 'none'}>
+    <th aria-sort={direction ?? 'none'} className={className}>
       <button
         aria-label={`Sort by ${label}${direction ? `, currently ${direction}` : ''}`}
         className={`sortable-header${direction ? ` is-${direction}` : ''}`}

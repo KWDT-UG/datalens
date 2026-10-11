@@ -395,6 +395,9 @@ class SyncPushView(APIView):
                 if decision.required and not user_can_bypass_approval(
                     request.user,
                     entity_type,
+                    action_type=action,
+                    payload=payload,
+                    instance=instance,
                 ):
                     if not user_has_capability(request.user, SUBMIT_FOR_APPROVAL):
                         raise ValidationError(

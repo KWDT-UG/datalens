@@ -226,12 +226,35 @@ def _related_community_id(model, object_id):
     ).first()
 
 
-def user_can_bypass_approval(user, entity_type):
-    """Financial records require review for every user except superusers."""
+def user_can_bypass_approval(
+    user,
+    entity_type,
+    *,
+    action_type=None,
+    payload=None,
+    instance=None,
+):
+    """Return whether this user may apply the specific change directly."""
 
     if entity_type in FINANCIAL_RESOURCE_ENTITIES:
         return bool(user and user.is_authenticated and user.is_superuser)
-    from apps.common.permissions import user_is_mvp_staff_admin
+    from apps.common.models import UserRole
+    from apps.common.permissions import (
+        user_has_any_role,
+        user_is_mvp_staff_admin,
+    )
+
+    if (
+        entity_type == "resource"
+        and action_type in {ApprovalActionType.CREATE, ApprovalActionType.UPDATE}
+        and user_has_any_role(user, {UserRole.MVP_FULL_ACCESS})
+        and not resource_change_is_financial(
+            action_type=action_type,
+            payload=payload or {},
+            instance=instance,
+        )
+    ):
+        return True
 
     return user_is_mvp_staff_admin(user)
 

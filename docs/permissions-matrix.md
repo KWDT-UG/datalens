@@ -54,10 +54,12 @@ all capabilities.
 role per user for MVP.
 
 `mvp_full_access` is a temporary, explicitly assigned evaluation role. It does
-not change the scope of permanent job roles, does not bypass approval queuing,
-and does not allow users to review their own submissions. Limit its use to
-authorized stakeholders, prefer demo or sanitized data, and remove or redesign
-the role before production launch.
+not change the scope of permanent job roles. Its non-financial resource creates
+and updates apply directly, while financial resource changes, resource-related
+records, archives/deletes, impact changes, and other approval-gated mutations
+remain queued. It does not allow users to review their own submissions. Limit
+its use to authorized stakeholders, prefer demo or sanitized data, and remove
+or redesign the role before production launch.
 
 Role replacement is atomic and preserves the user's active authentication
 tokens. An existing account can therefore be switched to `mvp_full_access` and
@@ -87,6 +89,11 @@ effective navigation and capabilities.
 | Resource financial value change | Queued | Finance |
 | Impact record create/update/delete | Queued | Impact |
 | Thematic area/program/category create/update | Applied directly for authorized reference-data managers | None |
+
+As a temporary evaluation exception, `mvp_full_access` applies top-level,
+non-financial Resource creates and updates directly. Standard audit metadata is
+still recorded. This exception does not apply to resource financial values,
+resource-related child records, payments, archives, or deletes.
 
 Resource financial review applies when `value_amount` is set on create, when
 `value_amount` or `value_currency` changes, and when a valued resource is

@@ -310,11 +310,11 @@ export function ResourcesPage() {
 
       {!query.isLoading && !query.isError && resources.length > 0 ? (
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table data-table--sticky-identity data-table--selectable">
             <thead>
               <tr>
-                <th aria-label="Select resource" />
-                <SortableTableHeader currentOrdering={ordering} label="Resource name" onChange={changeOrdering} ordering="name" />
+                <th aria-label="Select resource" className="data-table__select" />
+                <SortableTableHeader className="data-table__identity" currentOrdering={ordering} label="Resource name" onChange={changeOrdering} ordering="name" />
                 <SortableTableHeader currentOrdering={ordering} label="Community" onChange={changeOrdering} ordering="community__name" />
                 <SortableTableHeader currentOrdering={ordering} label="Thematic area" onChange={changeOrdering} ordering="program__thematic_area__name" />
                 <SortableTableHeader currentOrdering={ordering} label="Program" onChange={changeOrdering} ordering="program__name" />
@@ -331,7 +331,7 @@ export function ResourcesPage() {
             <tbody>
               {resources.map((resource) => (
                 <tr key={resource.id}>
-                  <td>
+                  <td className="data-table__select">
                     {canArchive ? <input
                       type="checkbox"
                       checked={selectedIds.includes(resource.id)}
@@ -339,7 +339,7 @@ export function ResourcesPage() {
                       onChange={() => toggleSelected(resource.id)}
                     /> : null}
                   </td>
-                  <td><Link className="table-link" to={`/resources/${resource.id}`}>{resource.name}</Link></td>
+                  <td className="data-table__identity"><Link className="table-link" to={`/resources/${resource.id}`}>{resource.name}</Link></td>
                   <td>{resource.community_name ?? 'Not recorded'}</td>
                   <td>{formatThemes(resource)}</td>
                   <td>{resource.program_name ?? 'Not recorded'}</td>
