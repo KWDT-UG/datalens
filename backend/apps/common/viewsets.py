@@ -203,7 +203,13 @@ class ApprovalPolicyMixin:
             raise PermissionDenied(
                 "User cannot change sensitive resource financial values."
             )
-        if user_can_bypass_approval(self.request.user, entity_type):
+        if user_can_bypass_approval(
+            self.request.user,
+            entity_type,
+            action_type=action_type,
+            payload=payload,
+            instance=instance,
+        ):
             return None
 
         decision = approval_policy_for_change(

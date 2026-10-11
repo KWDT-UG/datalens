@@ -1,5 +1,33 @@
 # Implementation Notes
 
+## 2026-10-10 Mobile Table Identity Columns
+
+Update: horizontally scrollable tables with interactive record identities now
+keep the identity column visible at every viewport width, including after an
+orientation change. Selectable tables also pin their checkbox column and offset
+the identity column so the controls do not overlap. Explicit column classes are
+used instead of positional selectors because table shapes and
+permission-dependent columns vary across the product.
+
+The sticky cells use theme surfaces, stacking order, and a boundary shadow to
+preserve readability and keyboard focus while users inspect right-side columns
+and actions. Identity width is bounded only on narrow screens; wider layouts
+retain their natural content width. Compact report tables without an interactive
+record identity intentionally retain normal scrolling behavior.
+
+## 2026-10-10 MVP Full-Access Resource Writes
+
+Decision: the temporary `mvp_full_access` evaluation role applies top-level,
+non-financial Resource creates and updates directly. These writes continue to
+record `created_by_user_id`, `updated_by_user_id`, `created_at`, and
+`updated_at` through the existing audit model and viewset mixins.
+
+Safety boundary: financial Resource changes, resource-related child records,
+payment records, archives/deletes, impact mutations, and changes by permanent
+job roles remain approval-gated. This is an explicit evaluation exception, not
+a general weakening of the approval policy, and should be reviewed when the
+temporary role is removed or redesigned before production launch.
+
 ## 2026-06-21 Interactive dashboard programme lens
 
 Update: the dashboard now exposes real programme-aware data rather than visual

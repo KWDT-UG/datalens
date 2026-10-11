@@ -228,11 +228,11 @@ export function CommunitiesPage() {
 
       {!query.isLoading && !query.isError && communities.length > 0 && view === 'table' ? (
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table data-table--sticky-identity data-table--selectable">
             <thead>
               <tr>
-                <th aria-label="Select community" />
-                <SortableTableHeader currentOrdering={ordering} label="Community name" onChange={changeOrdering} ordering="name" />
+                <th aria-label="Select community" className="data-table__select" />
+                <SortableTableHeader className="data-table__identity" currentOrdering={ordering} label="Community name" onChange={changeOrdering} ordering="name" />
                 <SortableTableHeader currentOrdering={ordering} label="Subcounty" onChange={changeOrdering} ordering="subcounty_name" />
                 <SortableTableHeader currentOrdering={ordering} label="Residents" onChange={changeOrdering} ordering="resident_count" />
                 <SortableTableHeader currentOrdering={ordering} label="Groups" onChange={changeOrdering} ordering="group_count" />
@@ -248,7 +248,7 @@ export function CommunitiesPage() {
             <tbody>
               {communities.map((community) => (
                 <tr key={community.id}>
-                  <td>
+                  <td className="data-table__select">
                     {canArchive ? (
                       <input
                         type="checkbox"
@@ -258,7 +258,7 @@ export function CommunitiesPage() {
                       />
                     ) : null}
                   </td>
-                  <td>
+                  <td className="data-table__identity">
                     <Link to={`/communities/${community.id}/groups`}>{community.name}</Link>
                   </td>
                   <td>{community.subcounty_name || 'Not recorded'}</td>

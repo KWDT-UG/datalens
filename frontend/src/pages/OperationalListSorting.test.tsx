@@ -69,6 +69,13 @@ describe('operational list sorting', () => {
 
     renderWithProviders(<ResourcesPage />);
     const table = await screen.findByRole('table');
+    expect(table).toHaveClass('data-table--sticky-identity', 'data-table--selectable');
+    expect(within(table).getByRole('columnheader', { name: 'Select resource' }))
+      .toHaveClass('data-table__select');
+    expect(within(table).getByRole('columnheader', { name: 'Resource name' }))
+      .toHaveClass('data-table__identity');
+    expect(within(table).getByRole('link', { name: 'Borehole' }).closest('td'))
+      .toHaveClass('data-table__identity');
     expect(within(table).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
       '',
       'Resource name',

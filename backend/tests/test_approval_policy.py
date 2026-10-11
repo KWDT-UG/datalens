@@ -112,24 +112,63 @@ class ApprovalPolicyTests(TestCase):
         self.resource.refresh_from_db()
         self.assertEqual(self.resource.name, "Proposed Resource Name")
 
-    def test_mvp_full_access_user_cannot_review_own_submission(self):
+    def test_mvp_full_access_resource_writes_apply_directly_with_audit(self):
         user = self.user_with_role(UserRole.MVP_FULL_ACCESS)
         self.client.force_authenticate(user)
 
-        response = self.client.patch(
-            reverse("resource-detail", kwargs={"pk": self.resource.pk}),
-            {"name": "Full Access Proposal"},
+        create_response = self.client.post(
+            reverse("resource-list"),
+            {
+                "community": self.community.pk,
+                "owner_type": ResourcePartyType.GROUP,
+                "owner_id": self.group.pk,
+                "name": "Full Access Resource",
+            },
             format="json",
         )
-        approval_id = response.data["approval_request"]["id"]
-        approve_response = self.client.post(
-            reverse("approval-request-approve", kwargs={"pk": approval_id}),
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        created_resource = Resource.objects.get(pk=create_response.data["id"])
+        self.assertEqual(created_resource.created_by_user_id, user.pk)
+        self.assertEqual(created_resource.updated_by_user_id, user.pk)
+        self.assertIsNotNone(created_resource.created_at)
+        self.assertIsNotNone(created_resource.updated_at)
+
+        update_response = self.client.patch(
+            reverse("resource-detail", kwargs={"pk": self.resource.pk}),
+            {"name": "Full Access Resource Update"},
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
-        self.assertEqual(approve_response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("reviewer", approve_response.data)
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.resource.refresh_from_db()
+        self.assertEqual(self.resource.name, "Full Access Resource Update")
+        self.assertEqual(self.resource.updated_by_user_id, user.pk)
+        self.assertFalse(
+            ApprovalRequest.objects.filter(submitted_by_user_id=user.pk).exists()
+        )
+
+    def test_mvp_full_access_financial_update_and_archive_remain_queued(self):
+        user = self.user_with_role(UserRole.MVP_FULL_ACCESS)
+        self.client.force_authenticate(user)
+
+        financial_response = self.client.patch(
+            reverse("resource-detail", kwargs={"pk": self.resource.pk}),
+            {"value_amount": "250000.00", "value_currency": "UGX"},
+            format="json",
+        )
+        archive_response = self.client.delete(
+            reverse("resource-detail", kwargs={"pk": self.resource.pk})
+        )
+
+        self.assertEqual(financial_response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(
+            financial_response.data["approval_request"]["review_scope"],
+            ApprovalReviewScope.FINANCE,
+        )
+        self.assertEqual(archive_response.status_code, status.HTTP_202_ACCEPTED)
+        self.resource.refresh_from_db()
+        self.assertIsNone(self.resource.value_amount)
+        self.assertFalse(self.resource.is_deleted)
 
     def test_resource_value_change_requires_finance_review(self):
         submitter = self.user_with_role(UserRole.RESOURCE_PROCUREMENT_OFFICER)

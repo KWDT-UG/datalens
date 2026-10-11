@@ -977,6 +977,8 @@ h2 {
 
 .table-wrap {
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .data-table {
@@ -1059,6 +1061,55 @@ h2 {
 
 .table-link:hover {
   text-decoration: underline;
+}
+
+.data-table--sticky-identity .data-table__identity,
+.data-table--selectable .data-table__select {
+  position: sticky;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.data-table--sticky-identity .data-table__identity {
+  left: 0;
+  box-shadow: 8px 0 10px -10px var(--shadow);
+}
+
+.data-table--selectable .data-table__select {
+  left: 0;
+  width: 46px;
+  min-width: 46px;
+  max-width: 46px;
+}
+
+.data-table--selectable .data-table__identity {
+  left: 46px;
+}
+
+.data-table--sticky-identity thead .data-table__identity,
+.data-table--selectable thead .data-table__select {
+  z-index: 3;
+}
+
+.data-table--sticky-identity tr.is-selected .data-table__identity,
+.data-table--selectable tr.is-selected .data-table__select {
+  background: color-mix(in srgb, var(--blue) 10%, var(--surface));
+}
+
+@media (max-width: 900px) {
+  .data-table--sticky-identity .data-table__identity {
+    max-width: min(56vw, 240px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .data-table--sticky-identity .data-table__identity > a,
+  .data-table--sticky-identity .data-table__identity > button {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+  }
 }
 
 .pagination-label {

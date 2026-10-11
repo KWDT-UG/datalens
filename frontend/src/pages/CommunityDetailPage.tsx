@@ -1204,10 +1204,10 @@ function GroupMembersTab({
       ) : (
         <>
           <div className="table-wrap">
-            <table className="data-table group-members-roster__table">
+            <table className="data-table data-table--sticky-identity group-members-roster__table">
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th className="data-table__identity">Name</th>
                   <th>Member number</th>
                   <th>Positions</th>
                   <th>Phone</th>
@@ -1219,7 +1219,7 @@ function GroupMembersTab({
               <tbody>
                 {visibleMembers.map((member) => (
                   <tr key={member.id}>
-                    <td>
+                    <td className="data-table__identity">
                       <Link
                         className="table-link"
                         state={{ parentGroup: { id: group.id, name: group.name } } satisfies MemberDetailNavigationState}
@@ -1362,10 +1362,10 @@ function GroupResourcesTab({
         <div className="state-box">No group resources match this search.</div>
       ) : (
         <div className="table-wrap">
-          <table className="data-table group-resources-table">
+          <table className="data-table data-table--sticky-identity group-resources-table">
             <thead>
               <tr>
-                <SortableTableHeader currentOrdering={ordering} label="Resource" onChange={changeOrdering} ordering="name" />
+                <SortableTableHeader className="data-table__identity" currentOrdering={ordering} label="Resource" onChange={changeOrdering} ordering="name" />
                 <SortableTableHeader currentOrdering={ordering} label="Thematic area" onChange={changeOrdering} ordering="program__thematic_area__name" />
                 <SortableTableHeader currentOrdering={ordering} label="Program" onChange={changeOrdering} ordering="program__name" />
                 <SortableTableHeader currentOrdering={ordering} label="Category" onChange={changeOrdering} ordering="resource_category__name" />
@@ -1379,7 +1379,7 @@ function GroupResourcesTab({
             <tbody>
               {visibleResources.map((resource) => (
                 <tr key={resource.id}>
-                  <td>
+                  <td className="data-table__identity">
                     <Link
                       className="table-link"
                       state={{ resourceOrigin: {
@@ -2125,10 +2125,10 @@ function CommitteeDetailContent({
         ) : null}
         {!membershipsLoading && !membershipsError && memberships.length > 0 ? (
           <div className="table-wrap">
-            <table className="data-table">
+            <table className="data-table data-table--sticky-identity">
               <thead>
                 <tr>
-                  <th>Member</th>
+                  <th className="data-table__identity">Member</th>
                   <th>Group</th>
                   <th>Role</th>
                   <th>Gender</th>
@@ -2140,7 +2140,7 @@ function CommitteeDetailContent({
               <tbody>
                 {memberships.map((membership) => (
                   <tr key={membership.id}>
-                    <td>
+                    <td className="data-table__identity">
                       <Link to={`/communities/${committee.community}/members/${membership.member}`}>
                         {membership.member_name || `Member #${membership.member}`}
                       </Link>
@@ -2288,11 +2288,11 @@ function MembershipRoster({
       {isError ? <div className="state-box state-box--error">Members could not be loaded. Try again.</div> : null}
       {!isLoading && !isError && memberships.length === 0 ? <div className="state-box">{emptyLabel}</div> : null}
       {!isLoading && !isError && memberships.length > 0 ? (
-        <div className="table-wrap"><table className="data-table">
-          <thead><tr><th>Member</th><th>Group</th><th>Role</th><th>Gender</th><th>Joined</th><th>Status</th>{canManage ? <th>Actions</th> : null}</tr></thead>
+        <div className="table-wrap"><table className="data-table data-table--sticky-identity">
+          <thead><tr><th className="data-table__identity">Member</th><th>Group</th><th>Role</th><th>Gender</th><th>Joined</th><th>Status</th>{canManage ? <th>Actions</th> : null}</tr></thead>
           <tbody>{memberships.map((membership) => (
             <tr key={membership.id}>
-              <td><Link to={`/communities/${community}/members/${membership.member}`}>{membership.member_name || `Member #${membership.member}`}</Link>{membership.member_number ? <small className="table-cell-note">{membership.member_number}</small> : null}</td>
+              <td className="data-table__identity"><Link to={`/communities/${community}/members/${membership.member}`}>{membership.member_name || `Member #${membership.member}`}</Link>{membership.member_number ? <small className="table-cell-note">{membership.member_number}</small> : null}</td>
               <td>{membership.member_group_id ? <Link to={`/communities/${community}/groups/${membership.member_group_id}`}>{membership.member_group_name || `Group #${membership.member_group_id}`}</Link> : 'Not recorded'}</td>
               <td>{membership.role_name || 'Member'}</td>
               <td>{formatLabel(membership.member_gender)}</td>
@@ -3167,10 +3167,10 @@ export function CommunityDetailPage() {
 
                 <div className="table-wrap">
                   {rows.length > 0 ? (
-                    <table className="data-table">
+                    <table className="data-table data-table--sticky-identity data-table--selectable">
                       <thead>
                         <tr>
-                          <th aria-label={`Select ${tableConfig.itemName}`} />
+                          <th aria-label={`Select ${tableConfig.itemName}`} className="data-table__select" />
                           {tableConfig.columns.map((column) => {
                             const direction = column.ordering
                               ? orderingDirection(ordering, column.ordering)
@@ -3178,6 +3178,7 @@ export function CommunityDetailPage() {
                             return (
                               <th
                                 aria-sort={column.ordering ? direction ?? 'none' : undefined}
+                                className={column === tableConfig.columns[0] ? 'data-table__identity' : undefined}
                                 key={column.label}
                               >
                                 {column.ordering ? (
@@ -3199,7 +3200,7 @@ export function CommunityDetailPage() {
                       <tbody>
                         {rows.map((row) => (
                           <tr className={row.id === selectedRecordId ? 'is-selected' : ''} key={row.id}>
-                            <td>
+                            <td className="data-table__select">
                               {canArchive ? <input
                                 type="checkbox"
                                 checked={selectedIds.includes(row.id)}
@@ -3208,7 +3209,7 @@ export function CommunityDetailPage() {
                               /> : null}
                             </td>
                             {row.cells.map((cell, index) => (
-                              <td key={`${row.id}-${tableConfig.columns[index].label}`}>
+                              <td className={index === 0 ? 'data-table__identity' : undefined} key={`${row.id}-${tableConfig.columns[index].label}`}>
                                 {index === 0 ? (
                                   <button
                                     className="table-link"
